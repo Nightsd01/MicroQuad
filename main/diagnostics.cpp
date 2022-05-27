@@ -1,8 +1,5 @@
 #include "diagnostics.h"
 
-#include "FS.h"
-#include "SD.h"
-#include "SPI.h"
 #include "Arduino.h"
 
 #define SD_CS_PIN 12
@@ -141,10 +138,14 @@ DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsPath) {
 
 void DiagnosticsWriter::writeDiagnostics(String line)
 {
-    unsigned long time1 = micros();
-    if (!_diagnosticsFile.print(line)) {
+    unsigned long time1 = millis();
+    if (!_diagnosticsFile.print(String(time1) + ": " + line + "\n")) {
         Serial.println("DIAGNOSTICS ERROR: Failed to write diagnostics data");
         return;
     }
-    Serial.println("Wrote diags in %lu milliseconds", millis() - time1);
+    if (millis() - _lastFileWrite > 500) {
+        _diagnosticsFile.flush();
+        _lastFileWrite = millis();
+    }
+    Serial.println("Wrote diags in " + String(millis() - time1) + " ms");
 }

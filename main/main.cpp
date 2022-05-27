@@ -154,7 +154,7 @@ float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gra
 
 QuadcopterController *controller;
 DiagnosticsWriter *diags;
-#define DIAGNOSTICS_PATH "/diagnostics"
+#define DIAGNOSTICS_PATH "/diags"
 
 // Interrupt Detection Routine
 volatile bool mpuInterrupt = false;
@@ -400,7 +400,7 @@ void loop() {
     initController();
   }
   
-  // updateClientTelemetryIfNeeded();
+  updateClientTelemetryIfNeeded();
   
   if (!dmpReady) {
     Serial.println("DMP NOT READY");
