@@ -1,0 +1,9 @@
+make --dry-run --always-make --keep-going --print-directory
+make: Entering directory `/Users/bradhesse/AccelerometerTest2'
+make: Leaving directory `/Users/bradhesse/AccelerometerTest2'
+ 
+Makefile:6: /make/project.mk: No such file or directory
+make: *** No rule to make target `/make/project.mk'.
+make: Failed to remake makefile `/make/project.mk'.
+make: *** No targets specified and no makefile found.  Stop.
+

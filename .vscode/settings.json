@@ -1,0 +1,30 @@
+{
+    "C_Cpp.intelliSenseEngine": "Tag Parser",
+    "idf.adapterTargetName": "esp32",
+    "idf.customExtraPaths": "/Users/bradhesse/.espressif/tools/xtensa-esp32-elf/esp-2020r3-8.4.0/xtensa-esp32-elf/bin:/Users/bradhesse/.espressif/tools/xtensa-esp32s2-elf/esp-2020r3-8.4.0/xtensa-esp32s2-elf/bin:/Users/bradhesse/.espressif/tools/xtensa-esp32s3-elf/esp-2020r3-8.4.0/xtensa-esp32s3-elf/bin:/Users/bradhesse/.espressif/tools/riscv32-esp-elf/1.24.0.123_64eb9ff-8.4.0/riscv32-esp-elf/bin:/Users/bradhesse/.espressif/tools/esp32ulp-elf/2.28.51-esp-20191205/esp32ulp-elf-binutils/bin:/Users/bradhesse/.espressif/tools/esp32s2ulp-elf/2.28.51-esp-20191205/esp32s2ulp-elf-binutils/bin:/Users/bradhesse/.espressif/tools/openocd-esp32/v0.10.0-esp32-20210401/openocd-esp32/bin",
+    "idf.customExtraVars": "{\"OPENOCD_SCRIPTS\":\"/Users/bradhesse/.espressif/tools/openocd-esp32/v0.10.0-esp32-20210401/openocd-esp32/share/openocd/scripts\"}",
+    "idf.espIdfPath": "/Users/bradhesse/esp/esp-idf",
+    "idf.espAdfPath": "/Users/bradhesse/.espressif/esp-adf",
+    "idf.espMdfPath": "/Users/bradhesse/.espressif/esp-mdf",
+    "idf.port": "/dev/cu.usbserial-AU00WHL7",
+    "idf.pythonBinPath": "/Users/bradhesse/.espressif/python_env/idf4.3_py2.7_env/bin/python",
+    "idf.toolsPath": "/Users/bradhesse/.espressif",
+    "files.associations": {
+        "array": "cpp",
+        "deque": "cpp",
+        "list": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "vector": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp",
+        "regex": "cpp",
+        "*.inc": "cpp",
+        "core-macros.h": "c",
+        "system_error": "cpp",
+        "*.ipp": "cpp",
+        "*.tcc": "cpp",
+        "fstream": "cpp"
+    }
+}
