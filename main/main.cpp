@@ -20,6 +20,16 @@
 
 #include "diagnostics.h"
 
+#include <FastLED.h>
+
+// How many leds in your strip?
+#define NUM_LEDS 1
+#define DATA_PIN 32
+#define CLOCK_PIN 13
+
+// Define the array of leds
+CRGB leds[NUM_LEDS];
+
 #define ACCEL_INTERRUPT_PIN 35
 
 #define SERVICE_UUID "ab0828b1-198e-4351-b779-901fa0e0371e"
@@ -78,6 +88,11 @@ const int motorPins[4] = {33, 25, 26, 27};
 
 bool resetFlag = false;
 
+static void updateArmStatus(void) {
+  leds[0] = armed ? CRGB::Red : CRGB::Green;
+  FastLED.show();
+}
+
 class MyServerCallbacks : public BLEServerCallbacks
 {
     void onConnect(BLEServer *server)
@@ -91,6 +106,7 @@ class MyServerCallbacks : public BLEServerCallbacks
         Serial.println("Disconnected");
         deviceConnected = false;
         armed = false;
+        updateArmStatus();
     }
 };
 
@@ -126,6 +142,7 @@ class MessageCallbacks : public BLECharacteristicCallbacks
         } else if (characteristic->getUUID().equals(armCharacteristic->getUUID())) {
           uint8_t *armData = characteristic->getData();
           armed = armData[0];
+          updateArmStatus();
           if (armed) {
             Serial.println("ARMED");
           } else {
@@ -149,7 +166,7 @@ uint16_t fifoCount;     // count of all bytes currently in FIFO
 uint8_t fifoBuffer[512]; // FIFO storage buffer
 
 VectorFloat gravity;    // [x, y, z]            gravity vector
-Quaternion q;           // [w, x, y, z]         quaternion container
+Quaternion quat;           // [w, x, y, z]         quaternion container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 QuadcopterController *controller;
@@ -190,6 +207,8 @@ void setup() {
     const unsigned long initializationTime = millis();
     Serial.begin(115200);
     Serial.println("BEGAN APP");
+  
+    FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
 
     initController();
     
@@ -436,9 +455,9 @@ void loop() {
 
     // NOTE TO SELF:
     // The pitch and roll axes are flipped
-    mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+    mpu.dmpGetQuaternion(&quat, fifoBuffer);
+    mpu.dmpGetGravity(&gravity, &quat);
+    mpu.dmpGetYawPitchRoll(ypr, &quat, &gravity);
 
 //    Serial.println("Accel yaw = " + String(ypr[0] * (180.0f / (M_PI * 2.0)) + 90.0f) + ", pitch = " + String(ypr[1] * (180.0f / (M_PI * 2.0)) + 90.0f) + ", roll = " + String(ypr[2] * (180.0f / (M_PI * 2.0)) + 90.0f));
 
