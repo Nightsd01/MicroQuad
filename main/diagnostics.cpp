@@ -53,6 +53,7 @@ DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsDirPath, int sdCardC
     }
 
     String fullPath = String(diagnosticsDirPath) + "/diags_" + String(diagnosticsCount) + ".txt";
+    Serial.println("RECORDING DIAGNOSTIC DATA TO " + fullPath);
     _diagnosticsFile = SD.open(fullPath, FILE_WRITE);
     if (!_diagnosticsFile) {
         Serial.println("DIAGNOSTICS ERROR: FAILED TO OPEN DIAGNOSTICS FILE AT " + fullPath);

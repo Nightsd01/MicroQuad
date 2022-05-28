@@ -26,6 +26,7 @@
         "*.ipp": "cpp",
         "*.tcc": "cpp",
         "fstream": "cpp",
-        "random": "cpp"
+        "random": "cpp",
+        "sstream": "cpp"
     }
 }

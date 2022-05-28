@@ -2,6 +2,7 @@
 #define QUADCOPTERCONTROLLER_H
 
 #include "PIDController.h"
+#include "DebugHelper.h"
 
 #include <stdint.h>
 
@@ -18,8 +19,8 @@ struct motor_outputs_t {
 };
 
 struct stick_input_values_t {
-    uint8_t x;
-    uint8_t y;
+    double x;
+    double y;
 };
 
 struct controller_values_t {
@@ -69,6 +70,7 @@ class QuadcopterController
     public:
         // Call this in arduino setup()
         QuadcopterController(quadcopter_config_t config,
+                             DebugHelper *debugHelper,
                              unsigned long timeMillis,
                              double minThrottle = 1000.0f,
                              double maxThrottle = 2000.0f);
@@ -92,12 +94,17 @@ class QuadcopterController
         // motor 1 = index 0, motor 2 = index 1, etc.
         motor_outputs_t calculateOutputs(position_values_t imuValues,
                                          controller_values_t controllerValues,
-                                         unsigned long timeMillis);
+                                         unsigned long timeMillis,
+                                         bool recordData);
+
+        void startMonitoringPID(void);
+
+        void reset(unsigned long timestamp);
 
     private:
-        PIDController _yawController;
-        PIDController _pitchController;
-        PIDController _rollController;
+        PIDController *_yawController;
+        PIDController *_pitchController;
+        PIDController *_rollController;
         double _throttle;
         float _throttleScaling;
         double _minThrottle;
@@ -105,6 +112,9 @@ class QuadcopterController
         double _previousUpdateMillis;
         quadcopter_config_t _config;
         position_values_t _controlScalingValues;
+        bool _monitoringPid;
+        DebugHelper *_debugHelper;
+        unsigned long _startTime;
 };
 
 #endif

@@ -1,4 +1,5 @@
 #include <QuadcopterController.h>
+#include <DebugHelper.h>
 
 // uses MPU6050 digital motion processor for smooth accelerometer readings
 #include <I2Cdev.h>
@@ -20,13 +21,17 @@
 
 #include "diagnostics.h"
 
-#include <FastLED.h>
+#include "servoControl.h"
+
+// #include <FastLED.h>
 
 // LED Setup
-#define NUM_LEDS 1
-#define DATA_PIN 32
-#define CLOCK_PIN 13
-CRGB leds[NUM_LEDS];
+// #define NUM_LEDS 1
+// #define DATA_PIN 32
+// #define CLOCK_PIN 13
+// CRGB leds[NUM_LEDS];
+
+#define NUM_MOTORS 4
 
 // Accelerometer i2c pin definition
 #define ACCEL_INTERRUPT_PIN 35
@@ -37,6 +42,9 @@ CRGB leds[NUM_LEDS];
 #define ARM_CHARACTERISTIC_UUID "baf0bcca-634f-11eb-ae93-0242ac130002"
 #define TELEM_CHARACTERISTIC_UUID "e35f992e-5e7c-11eb-ae93-0242ac130002"
 #define RESET_CHARACTERISTIC_UUID "489d3a76-6fdf-11eb-9439-0242ac130002"
+#define MOTOR_DEBUG_CHARACTERISTIC_UUID "dec9fad6-0cf9-11ec-82a8-0242ac130003"
+#define CALIBRATION_CHARACTERISTIC_UUID "498e876e-0dd2-11ec-82a8-0242ac130003"
+#define DEBUG_CHARACTERISTIC_UUID "f0a0afee-0983-4691-adc5-02ee803f5418"
 
 #define DEVINFO_UUID (uint16_t)0x180a
 #define DEVINFO_MANUFACTURER_UUID (uint16_t)0x2a29
@@ -58,10 +66,15 @@ CRGB leds[NUM_LEDS];
 
 #define MIN_THROTTLE 1015
 
+#define ARM_MICROSECONDS 1000.0f
+
 BLECharacteristic *controlCharacteristic;
 BLECharacteristic *telemetryCharacteristic;
 BLECharacteristic *armCharacteristic;
 BLECharacteristic *resetCharacteristic;
+BLECharacteristic *motorDebugCharacteristic;
+BLECharacteristic *calibrationCharacteristic;
+BLECharacteristic *debugCharacteristic;
 
 float yawValue = 0;
 float throttleValue = 0;
@@ -79,13 +92,144 @@ long long lastTelemetryUpdateTimeMillis = 0;
 motor_outputs_t previousMotorOutputs;
 bool setMotorOutputs = false;
 
-const int motorPins[4] = {33, 25, 26, 27};
+const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_33, GPIO_NUM_25, GPIO_NUM_26, GPIO_NUM_27};
 
 bool resetFlag = false;
 
+#define MPU_6050_I2C_ADDR 0x69
+
+bool motorDebugEnabled = false;
+double motorDebugValues[4] = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
+
+bool startMonitoringPid = false;
+
+static volatile bool interruptLock = false;
+
+bool sendDebugData = false;
+bool recordDebugData = false;
+
+servoControl motors[NUM_MOTORS];
+
+std::vector<std::string> split(std::string to_split, std::string delimiter) {
+    size_t pos = 0;
+    std::vector<std::string> matches{};
+    do {
+        pos = to_split.find(delimiter);
+        int change_end;
+        if (pos == std::string::npos) {
+            pos = to_split.length() - 1;
+            change_end = 1;
+        }
+        else {
+            change_end = 0;
+        }
+        matches.push_back(to_split.substr(0, pos+change_end));
+
+        to_split.erase(0, pos+1);
+
+    }
+    while (!to_split.empty());
+    return matches;
+
+}
+
+class MessageCallbacks : public BLECharacteristicCallbacks
+{
+    void onWrite(BLECharacteristic *characteristic)
+    {
+        interruptLock = true;
+        if (characteristic->getUUID().equals(controlCharacteristic->getUUID())) {
+          std::string data = characteristic->getValue();
+          char *str = (char *)malloc((strlen(data.c_str()) * sizeof(char)) + 10);
+          strcpy(str, data.c_str());
+          char *ptr = strtok(str, ",");
+
+          int i = 0;
+          while (ptr != NULL) {
+            double val = strtod(ptr, NULL);
+            if (i == 0) {
+              throttleValue = val;
+            } else if (i == 1) {
+              yawValue = val;
+            } else if (i == 2) {
+              pitchValue = val;
+            } else {
+              rollValue = val;
+            }
+            i++;
+            ptr = strtok(NULL, ",");
+          }
+
+          free(str);
+
+          updateParams = true;
+        } else if (characteristic->getUUID().equals(armCharacteristic->getUUID())) {
+          uint8_t *armData = characteristic->getData();
+          armed = armData[0];
+          if (armed) {
+            Serial.println("ARMED");
+          } else {
+            Serial.println("DISARMED");
+          }
+        } else if (characteristic->getUUID().equals(resetCharacteristic->getUUID())) {
+          Serial.println("SET RESET FLAG");
+          resetFlag = true;
+        } else if (characteristic->getUUID().equals(motorDebugCharacteristic->getUUID())) {
+          std::string value = characteristic->getValue();
+          std::vector<std::string> components = split(value, ":");
+          if (components.size() == 0) {
+            Serial.println("ERROR: Incorrect motor debug packet (1)");
+            return;
+          }
+          if (components[0] == "motordebug_enabled") {
+            if (components.size() == 1) {
+              Serial.println("ERROR: Incorrect motor debug packet (2)");
+              return;
+            }
+            std::string value = components[1];
+            motorDebugEnabled = value == "1";
+            Serial.println("Changing motor debug status to " + String(motorDebugEnabled ? "enabled" : "disabled"));
+          } else if (components[0] == "motordebug_value") {
+            if (components.size() < 3) {
+              Serial.println("ERROR: Incorrect motor debug packet (3)");
+              return;
+            }
+            int motorNumber = atoi(components[1].c_str()) - 1;
+            int motorValue = atoi(components[2].c_str());
+            double motorWriteValue = ((((double)motorValue) / 255.0f) * 1000.0f) + 1000.0f;
+            Serial.println("Updating motor " + String(motorNumber) + " to " + String(motorWriteValue));
+            motorDebugValues[motorNumber] = motorWriteValue;
+          } else {
+            Serial.println("ERROR: Incorrect motor debug packet (4)");
+            return;
+          }
+        } else if (characteristic->getUUID().equals(calibrationCharacteristic->getUUID())) {
+          Serial.println("CALIBRATING");
+          // ESP_LOGI(TAG, "Calibrating MPU");
+          // mpud::raw_axes_t accelBias, gyroBias;
+          // ESP_ERROR_CHECK(MPU.computeOffsets(&accelBias, &gyroBias));
+          // ESP_ERROR_CHECK(MPU.setAccelOffset(accelBias));
+          // ESP_ERROR_CHECK(MPU.setGyroOffset(gyroBias));
+          // calibrateMPU();
+        } else if (characteristic->getUUID().equals(debugCharacteristic->getUUID())) {
+          if (characteristic->getValue() == "request") {
+            Serial.println("Recording debug data transmission");
+            sendDebugData = true;
+          } else if (characteristic->getValue() == "record:1") {
+            Serial.println("Recording debug data start");
+            recordDebugData = true;
+          } else if (characteristic->getValue() == "record:0") {
+            Serial.println("Recording debug data stop");
+            recordDebugData = false;
+          }
+        }
+        interruptLock = false;
+    }
+};
+
 static void updateArmStatus(void) {
-  leds[0] = armed ? CRGB::Red : CRGB::Green;
-  FastLED.show();
+  // leds[0] = armed ? CRGB::Red : CRGB::Green;
+  // FastLED.show();
 }
 
 class MyServerCallbacks : public BLEServerCallbacks
@@ -105,52 +249,7 @@ class MyServerCallbacks : public BLEServerCallbacks
     }
 };
 
-class MessageCallbacks : public BLECharacteristicCallbacks
-{
-    void onWrite(BLECharacteristic *characteristic)
-    {
-        if (characteristic->getUUID().equals(controlCharacteristic->getUUID())) {
-          std::string data = characteristic->getValue();
-          char *str = (char *)malloc((strlen(data.c_str()) * sizeof(char)) + 10);
-          strcpy(str, data.c_str());
-          char *ptr = strtok(str, ",");
-
-          int i = 0;
-          while (ptr != NULL) {
-            float val = strtof(ptr, NULL);
-            if (i == 0) {
-              throttleValue = val;
-            } else if (i == 1) {
-              yawValue = val;
-            } else if (i == 2) {
-              pitchValue = val;
-            } else {
-              rollValue = val;
-            }
-            i++;
-            ptr = strtok(NULL, ",");
-          }
-  
-          free(str);
-          
-          updateParams = true;
-        } else if (characteristic->getUUID().equals(armCharacteristic->getUUID())) {
-          uint8_t *armData = characteristic->getData();
-          armed = armData[0];
-          updateArmStatus();
-          if (armed) {
-            Serial.println("ARMED");
-          } else {
-            Serial.println("DISARMED");
-          }
-        } else if (characteristic->getUUID().equals(resetCharacteristic->getUUID())) {
-          Serial.println("SET RESET FLAG");
-          resetFlag = true;
-        }
-    }
-};
-
-MPU6050 mpu(0x69);
+MPU6050 mpu(MPU_6050_I2C_ADDR);
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -165,6 +264,7 @@ Quaternion quat;           // [w, x, y, z]         quaternion container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 QuadcopterController *controller;
+DebugHelper *helper;
 DiagnosticsWriter *diags;
 
 #define SD_CS_PIN 12
@@ -180,23 +280,27 @@ void dmpDataReady() {
 static void initController()
 {
   delete controller;
-  controller = new QuadcopterController({
-    .yawGains = {
-      .proportionalGain = 0.0f,
-      .integralGain = 0.0f,
-      .derivativeGain = 0.0f,
+  controller = new QuadcopterController(
+    {
+      .yawGains = {
+        .proportionalGain = 0.0f,
+        .integralGain = 0.0f,
+        .derivativeGain = 0.0f,
+      },
+      .pitchGains = {
+        .proportionalGain = 1.0f,
+        .integralGain = 0.001f,
+        .derivativeGain = 0.1f,
+      },
+      .rollGains = {
+        .proportionalGain = 1.0f,
+        .integralGain = 0.001f,
+        .derivativeGain = 0.1f,
+      },
     },
-    .pitchGains = {
-      .proportionalGain = 1.0f,
-      .integralGain = 0.001f,
-      .derivativeGain = 0.1f,
-    },
-    .rollGains = {
-      .proportionalGain = 1.0f,
-      .integralGain = 0.001f,
-      .derivativeGain = 0.1f,
-    },
-  }, 0);
+    helper, 
+    0
+  );
 }
 
 // Initial setup
@@ -205,10 +309,18 @@ void setup() {
     Serial.begin(115200);
     Serial.println("BEGAN APP");
   
-    FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
+    // FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
 
     initController();
+
+    Serial.println("Setting up motor outputs");
     
+    for (int i = 0; i < NUM_MOTORS; i++) {
+      motors[i].attach(motorPins[i]);
+      motors[i].write(map(ARM_MICROSECONDS, 1000, 2000, 0, 180));
+    }
+    vTaskDelay(1000 / portTICK_RATE_MS);
+
     Wire.begin();
     Wire.setClock(400000);
 
@@ -225,6 +337,7 @@ void setup() {
         Serial.println("No SD card attached");
         return;
     }
+    helper = new DebugHelper();
 
     Serial.print("SD Card Type: ");
     if(cardType == CARD_MMC){
@@ -237,41 +350,46 @@ void setup() {
         Serial.println("UNKNOWN");
     }
 
-    Serial.println("Setting up motor outputs");
-    
-    for (int i = 0; i < 4; i++) {
-      ledcSetup(i, 5000, 8);
-      ledcAttachPin(motorPins[i], i);
-    }
-
     Serial.println("Initializing bluetooth connection");
 
     // Setup BLE Server
     BLEDevice::init(DEVICE_NAME);
     BLEServer *server = BLEDevice::createServer();
     server->setCallbacks(new MyServerCallbacks());
-    
-    BLEService *service = server->createService(SERVICE_UUID);
-    
+
+    BLEService *service = server->createService(BLEUUID(std::string(SERVICE_UUID)), 30, 0);
+
     controlCharacteristic = service->createCharacteristic(CONTROL_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
     controlCharacteristic->setCallbacks(new MessageCallbacks());
     controlCharacteristic->addDescriptor(new BLE2902());
-    
+
     telemetryCharacteristic = service->createCharacteristic(TELEM_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
     telemetryCharacteristic->setCallbacks(new MessageCallbacks());
     telemetryCharacteristic->addDescriptor(new BLE2902());
     telemetryCharacteristic->setWriteNoResponseProperty(true);
-    
+
     armCharacteristic = service->createCharacteristic(ARM_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
     armCharacteristic->setCallbacks(new MessageCallbacks());
     armCharacteristic->addDescriptor(new BLE2902());
-    
+
     resetCharacteristic = service->createCharacteristic(RESET_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
     resetCharacteristic->setCallbacks(new MessageCallbacks());
     resetCharacteristic->addDescriptor(new BLE2902());
 
+    motorDebugCharacteristic = service->createCharacteristic(MOTOR_DEBUG_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+    motorDebugCharacteristic->setCallbacks(new MessageCallbacks());
+    motorDebugCharacteristic->addDescriptor(new BLE2902());
+
+    calibrationCharacteristic = service->createCharacteristic(CALIBRATION_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+    calibrationCharacteristic->setCallbacks(new MessageCallbacks());
+    calibrationCharacteristic->addDescriptor(new BLE2902());
+
+    debugCharacteristic = service->createCharacteristic(DEBUG_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+    debugCharacteristic->setCallbacks(new MessageCallbacks());
+    debugCharacteristic->addDescriptor(new BLE2902());
+
     service->start();
-    
+
     // Register device info service, that contains the device's UUID, manufacturer and name.
     service = server->createService(DEVINFO_UUID);
     BLECharacteristic *characteristic = service->createCharacteristic(DEVINFO_MANUFACTURER_UUID, BLECharacteristic::PROPERTY_READ);
@@ -335,18 +453,7 @@ void setup() {
       .yaw = 180.0f,
       .pitch = 20.0f,
       .roll = 20.0f  
-    }, 1.0f);   
-    
-    ledcSetup(0, 5000, 8);
-    ledcSetup(1, 5000, 8);
-    ledcSetup(2, 5000, 8);
-    ledcSetup(3, 5000, 8);
-  
-    // attach the channel to the GPIO to be controlled
-    ledcAttachPin(33, 0);
-    ledcAttachPin(25, 1);
-    ledcAttachPin(26, 2);
-    ledcAttachPin(27, 3);
+    }, 1.0f);  
 
     Serial.println("Initializing SD diagnostics");
     diags = new DiagnosticsWriter(DIAGNOSTICS_PATH, SD_CS_PIN);
@@ -357,6 +464,27 @@ void setup() {
     while (true) {
       loop();
     }
+}
+
+void uploadDebugData() {
+  int currentByteIndex = 0;
+  const int packetSize = 20;
+  uint8_t *data = helper->data;
+  uint64_t dataSize = helper->totalDataSize();
+  String firstInfo = String("debug:") + String((int)dataSize);
+  debugCharacteristic->setValue(firstInfo.c_str());
+  debugCharacteristic->notify();
+  delay(100);
+  while (currentByteIndex < dataSize) {
+    if (currentByteIndex + packetSize < dataSize) {
+      debugCharacteristic->setValue(&data[currentByteIndex], packetSize);
+    } else {
+      debugCharacteristic->setValue(&data[currentByteIndex], dataSize - currentByteIndex);
+    }
+    debugCharacteristic->notify();
+    delay(30);
+    currentByteIndex += packetSize;
+  }
 }
 
 float batteryPercent(float batteryVoltage) {
@@ -400,16 +528,35 @@ void updateClientTelemetryIfNeeded() {
 }
 
 void updateMotors(motor_outputs_t outputs) {
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < NUM_MOTORS; i++) {
     if (!armed) {
-      ledcWrite(i, 0);
+      motors[i].write(map(ARM_MICROSECONDS, 1000, 2000, 0, 180));
     } else {
-      ledcWrite(i, ((outputs.values[i] - 1000.0f) / 1000.0f) * 255.0f);
+      motors[i].write(map(outputs.values[i], 1000, 2000, 0, 180));
     }
   }
 }
 
+unsigned long startedMonitoringTimestamp = 0;
+
+static int samples = 0;
+static int lastPrint = 0;
+
+#define NUM_SAMPLES_PER_AVG 40
+
 void loop() {
+  unsigned long timestamp = micros();
+  if (interruptLock) {
+    return;
+  }
+  if (sendDebugData) {
+    Serial.println("Beginning debug data transmission");
+    sendDebugData = false;
+    uploadDebugData();
+    Serial.println("Completed debug data transmission");
+    return;
+  }
+
   if (resetFlag) {
     Serial.println("Resetting");
     resetFlag = false;
@@ -417,6 +564,12 @@ void loop() {
   }
   
   updateClientTelemetryIfNeeded();
+
+  if (!startMonitoringPid && throttleValue > 20.0f) {
+    startMonitoringPid = true;
+    startedMonitoringTimestamp = timestamp;
+    controller->startMonitoringPID();
+  }
   
   if (!dmpReady) {
     Serial.println("DMP NOT READY");
@@ -464,12 +617,12 @@ void loop() {
 
     controller_values_t controllerValues = {
       .leftStickInput = {
-        .x = (uint8_t)yawValue,
-        .y = (uint8_t)throttleValue
+        .x = yawValue,
+        .y = throttleValue
       },
       .rightStickInput = {
-        .x = (uint8_t)rollValue,
-        .y = (uint8_t)pitchValue
+        .x = rollValue,
+        .y = pitchValue
       }
     };
 
@@ -481,7 +634,15 @@ void loop() {
 
 
 
-    motor_outputs_t outputs = controller->calculateOutputs(positionValues, controllerValues, millis());
+
+    motor_outputs_t outputs = controller->calculateOutputs(positionValues, controllerValues, timestamp - startedMonitoringTimestamp, recordDebugData);
+
+    samples++;
+    if (millis() - lastPrint > 1000) {
+      lastPrint = millis();
+      Serial.println(String(samples) + " samples per second");
+      samples = 0;
+    }
 
     previousMotorOutputs = outputs;
     
@@ -493,12 +654,21 @@ void loop() {
       diags->writeDiagnostics("throttle = " + String(throttleValue) + ", 1 = " + String(outputs.values[0]) + ", 2 = " + String(outputs.values[1]) + ", 3 = " + String(outputs.values[2]) + ", 4 = " + String(outputs.values[3]));
     }
 
-    if (throttleValue < 20) {
-      updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
+
+    if (motorDebugEnabled) {
+        updateMotors({.values = {
+          motorDebugValues[0],
+          motorDebugValues[1],
+          motorDebugValues[2],
+          motorDebugValues[3]
+        }});
     } else {
-      updateMotors(outputs);
+      if (throttleValue < 20) {
+        updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
+      } else {
+        updateMotors(outputs);
+      }
     }
-    
     setMotorOutputs = true;
 
 //    Serial.print(String(outputs.values[0]));

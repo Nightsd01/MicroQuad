@@ -6,5 +6,5 @@ idf_component_register(
     REQUIRES MicroQuad
     REQUIRES MPU6050
     REQUIRES i2cdev
-    REQUIRES FastLED
+    REQUIRES ESP32Servo
 )
