@@ -22,26 +22,21 @@
 
 #include <FastLED.h>
 
-// How many leds in your strip?
+// LED Setup
 #define NUM_LEDS 1
 #define DATA_PIN 32
 #define CLOCK_PIN 13
-
-// Define the array of leds
 CRGB leds[NUM_LEDS];
 
+// Accelerometer i2c pin definition
 #define ACCEL_INTERRUPT_PIN 35
 
+// Bluetooth constants
 #define SERVICE_UUID "ab0828b1-198e-4351-b779-901fa0e0371e"
 #define CONTROL_CHARACTERISTIC_UUID "4ac8a682-9736-4e5d-932b-e9b31405049c"
 #define ARM_CHARACTERISTIC_UUID "baf0bcca-634f-11eb-ae93-0242ac130002"
 #define TELEM_CHARACTERISTIC_UUID "e35f992e-5e7c-11eb-ae93-0242ac130002"
 #define RESET_CHARACTERISTIC_UUID "489d3a76-6fdf-11eb-9439-0242ac130002"
-
-#define THROTTLE_KEY "throttle"
-#define YAW_KEY "yaw"
-#define PITCH_KEY "pitch"
-#define ROLL_KEY "roll"
 
 #define DEVINFO_UUID (uint16_t)0x180a
 #define DEVINFO_MANUFACTURER_UUID (uint16_t)0x2a29
@@ -54,8 +49,8 @@ CRGB leds[NUM_LEDS];
 #define TELEM_DELIMITER ","
 #define TELEM_UPDATE_INTERVAL_MILLIS 100
 
+// Battery capacity sensing constants
 #define BATTERY_SENSE_PIN 34
-
 #define NUM_BATTERY_CELLS 1.0f
 #define BATTERY_CELL_MAX_VOLTAGE 4.2f
 #define BATTERY_CELL_MIN_VOLTAGE 3.3f
