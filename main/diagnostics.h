@@ -10,7 +10,7 @@ class File;
 class DiagnosticsWriter 
 {
     public:
-        DiagnosticsWriter(const char *diagnosticsPath);
+        DiagnosticsWriter(const char *diagnosticsDirPath, int sdCardCSPin);
         void writeDiagnostics(String line);
 
     private:

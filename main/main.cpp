@@ -171,6 +171,8 @@ float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gra
 
 QuadcopterController *controller;
 DiagnosticsWriter *diags;
+
+#define SD_CS_PIN 12
 #define DIAGNOSTICS_PATH "/diags"
 
 // Interrupt Detection Routine
@@ -352,7 +354,7 @@ void setup() {
     ledcAttachPin(27, 3);
 
     Serial.println("Initializing SD diagnostics");
-    diags = new DiagnosticsWriter(DIAGNOSTICS_PATH);
+    diags = new DiagnosticsWriter(DIAGNOSTICS_PATH, SD_CS_PIN);
 
     Serial.println("SETUP COMPLETE");
     diags->writeDiagnostics("SETUP COMPLETE AFTER " + String(millis() - initializationTime) + " ms");

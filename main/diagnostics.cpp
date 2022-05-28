@@ -2,39 +2,6 @@
 
 #include "Arduino.h"
 
-#define SD_CS_PIN 12
-
-void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
-    Serial.printf("Listing directory: %s\n", dirname);
-
-    File root = fs.open(dirname);
-    if(!root){
-        Serial.println("DIAGNOSTICS ERROR: Failed to open directory");
-        return;
-    }
-    if(!root.isDirectory()){
-        Serial.println("DIAGNOSTICS ERROR: Not a directory");
-        return;
-    }
-
-    File file = root.openNextFile();
-    while(file){
-        if(file.isDirectory()){
-            Serial.print("  DIR : ");
-            Serial.println(file.name());
-            if(levels){
-                listDir(fs, file.name(), levels -1);
-            }
-        } else {
-            Serial.print("  FILE: ");
-            Serial.print(file.name());
-            Serial.print("  SIZE: ");
-            Serial.println(file.size());
-        }
-        file = root.openNextFile();
-    }
-}
-
 static bool _createDir(fs::FS &fs, const char * path){
     if(!fs.mkdir(path)){
         Serial.println("DIAGNOSTICS ERROR: mkdir failed");
@@ -43,51 +10,8 @@ static bool _createDir(fs::FS &fs, const char * path){
     return true;
 }
 
-void removeDir(fs::FS &fs, const char * path){
-    if(!fs.rmdir(path)){
-        Serial.println("DIAGNOSTICS ERROR: rmdir failed");
-    }
-}
-
-void writeFile(fs::FS &fs, const char * path, const char * message){
-    File file = fs.open(path, FILE_WRITE);
-    if(!file){
-        Serial.println("DIAGNOSTICS ERROR: Failed to open file for writing");
-        return;
-    }
-    if(!file.print(message)){
-        Serial.println("DIAGNOSTICS ERROR: Write failed");
-    }
-    file.close();
-}
-
-void appendFile(fs::FS &fs, const char * path, const char * message){
-    File file = fs.open(path, FILE_APPEND);
-    if(!file){
-        Serial.println("DIAGNOSTICS ERROR: Failed to open file for appending");
-        return;
-    }
-    if(file.print(message)){
-    } else {
-        Serial.println("DIAGNOSTICS ERROR: Append failed");
-    }
-    file.close();
-}
-
-void renameFile(fs::FS &fs, const char * path1, const char * path2){
-    if (!fs.rename(path1, path2)) {
-        Serial.println("DIAGNOSTICS ERROR: Rename failed");
-    }
-}
-
-void deleteFile(fs::FS &fs, const char * path){
-    if(!fs.remove(path)){
-        Serial.println("DIAGNOSTICS ERROR: Delete failed");
-    }
-}
-
-DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsPath) {
-    if (!SD.begin(SD_CS_PIN)) {
+DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsDirPath, int sdCardCSPin) {
+    if (!SD.begin(sdCardCSPin)) {
         Serial.println("DIAGNOSTICS ERROR: Failed to initialize SD card");
         return;
     }
@@ -110,14 +34,14 @@ DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsPath) {
         return;
     }
 
-    File root = SD.open(diagnosticsPath);
+    File root = SD.open(diagnosticsDirPath);
     if (!root) {
         Serial.println("DIAGNOSTICS WARNING: No root diagnostics folder - creating one");
-        if (!_createDir(SD, diagnosticsPath)) {
+        if (!_createDir(SD, diagnosticsDirPath)) {
             Serial.println("DIAGNOSTICS ERROR: Failed to create diagnostics directory");
             return;
         } else {
-            root = SD.open(diagnosticsPath);
+            root = SD.open(diagnosticsDirPath);
         }
     }
 
@@ -128,7 +52,7 @@ DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsPath) {
         file = root.openNextFile();
     }
 
-    String fullPath = String(diagnosticsPath) + "/diags_" + String(diagnosticsCount) + ".txt";
+    String fullPath = String(diagnosticsDirPath) + "/diags_" + String(diagnosticsCount) + ".txt";
     _diagnosticsFile = SD.open(fullPath, FILE_WRITE);
     if (!_diagnosticsFile) {
         Serial.println("DIAGNOSTICS ERROR: FAILED TO OPEN DIAGNOSTICS FILE AT " + fullPath);
