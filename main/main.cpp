@@ -432,12 +432,12 @@ void setup() {
       Serial.println("Supplying DMP offsets");
       
       // supply your own gyro offsets here, scaled for min sensitivity
-      mpu.setXGyroOffset(91);
-      mpu.setYGyroOffset(61);
-      mpu.setZGyroOffset(-5);
-      mpu.setZAccelOffset(2020); // 1688 factory default for my test chip
-      mpu.setXAccelOffset(1891);
-      mpu.setYAccelOffset(-3958);
+      mpu.setXAccelOffset(3898);
+      mpu.setYAccelOffset(971);
+      mpu.setZAccelOffset(1402);
+      mpu.setXGyroOffset(55);
+      mpu.setYGyroOffset(21);
+      mpu.setZGyroOffset(-17);
     } else {
       Serial.println("Accelerometer DMP initialization failed with status code = " + String(dmpStatus));
     }
@@ -535,6 +535,7 @@ unsigned long startedMonitoringTimestamp = 0;
 
 static int samples = 0;
 static int lastPrint = 0;
+static long long lastUpdateAccelMillis = 0;
 
 #define NUM_SAMPLES_PER_AVG 40
 
@@ -603,7 +604,10 @@ void loop() {
     mpu.dmpGetGravity(&gravity, &quat);
     mpu.dmpGetYawPitchRoll(ypr, &quat, &gravity);
 
-//    Serial.println("Accel yaw = " + String(ypr[0] * (180.0f / (M_PI * 2.0)) + 90.0f) + ", pitch = " + String(ypr[1] * (180.0f / (M_PI * 2.0)) + 90.0f) + ", roll = " + String(ypr[2] * (180.0f / (M_PI * 2.0)) + 90.0f));
+    // need to flip pitch & roll
+    const float rollVal = ypr[2];
+    ypr[2] = ypr[1];
+    ypr[1] = rollVal;
 
     if (!updateParams) {
       return;
@@ -622,12 +626,14 @@ void loop() {
 
     position_values_t positionValues = {
       .yaw = ypr[0] * (180.0f / (M_PI * 2.0)) + 90.0f,
-      .pitch = ypr[2] * (180.0f / (M_PI * 2.0)) + 90.0f,
-      .roll = ypr[1] * (180.0f / (M_PI * 2.0)) + 90.0f
+      .pitch = ypr[1] * (180.0f / (M_PI * 2.0)) + 90.0f,
+      .roll = ypr[2] * (180.0f / (M_PI * 2.0)) + 90.0f
     };
 
-
-
+    if (millis() - lastUpdateAccelMillis > 200) {
+      Serial.println("Accel yaw = " + String(positionValues.yaw) + ", pitch = " + String(positionValues.pitch) + ", roll = " + String(positionValues.roll));
+      lastUpdateAccelMillis = millis();
+    }
 
     motor_outputs_t outputs = controller->calculateOutputs(positionValues, controllerValues, timestamp - startedMonitoringTimestamp, recordDebugData);
 
