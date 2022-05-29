@@ -23,13 +23,18 @@
 
 #include "servoControl.h"
 
-// #include <FastLED.h>
+#include "led_strip.h"
+#include "driver/rmt.h"
+#include "esp_system.h"
+#include "esp_log.h"
+
+#include <FastLED.h>
 
 // LED Setup
-// #define NUM_LEDS 1
-// #define DATA_PIN 32
-// #define CLOCK_PIN 13
-// CRGB leds[NUM_LEDS];
+#define NUM_LEDS 1
+#define LED_DATA_PIN 32
+#define CLOCK_PIN 13
+CRGB leds[NUM_LEDS];
 
 #define NUM_MOTORS 4
 
@@ -59,7 +64,7 @@
 
 // Battery capacity sensing constants
 #define BATTERY_SENSE_PIN 34
-#define NUM_BATTERY_CELLS 1.0f
+#define NUM_BATTERY_CELLS 2.0f
 #define BATTERY_CELL_MAX_VOLTAGE 4.2f
 #define BATTERY_CELL_MIN_VOLTAGE 3.3f
 #define BATTERY_SCALE 0.001777081468218f
@@ -100,6 +105,8 @@ bool resetFlag = false;
 
 bool motorDebugEnabled = false;
 double motorDebugValues[4] = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
+ledc_channel_t motorChannels[4] = {LEDC_CHANNEL_0, LEDC_CHANNEL_1, LEDC_CHANNEL_2, LEDC_CHANNEL_3}; 
+ledc_timer_t motorTimers[4] = {LEDC_TIMER_0, LEDC_TIMER_1, LEDC_TIMER_2, LEDC_TIMER_3};
 
 bool startMonitoringPid = false;
 
@@ -109,6 +116,12 @@ bool sendDebugData = false;
 bool recordDebugData = false;
 
 servoControl motors[NUM_MOTORS];
+
+static void updateArmStatus(void) {
+  FastLED.clear();
+  leds[0] = (armed ? CRGB::Green : CRGB::Red);
+  FastLED.show();
+}
 
 std::vector<std::string> split(std::string to_split, std::string delimiter) {
     size_t pos = 0;
@@ -171,6 +184,7 @@ class MessageCallbacks : public BLECharacteristicCallbacks
           } else {
             Serial.println("DISARMED");
           }
+          updateArmStatus();
         } else if (characteristic->getUUID().equals(resetCharacteristic->getUUID())) {
           Serial.println("SET RESET FLAG");
           resetFlag = true;
@@ -226,11 +240,6 @@ class MessageCallbacks : public BLECharacteristicCallbacks
         interruptLock = false;
     }
 };
-
-static void updateArmStatus(void) {
-  // leds[0] = armed ? CRGB::Red : CRGB::Green;
-  // FastLED.show();
-}
 
 class MyServerCallbacks : public BLEServerCallbacks
 {
@@ -303,23 +312,30 @@ static void initController()
   );
 }
 
+// 1 - wrong
+// 2 - correct
+// 3 - correct
+// 4 - wrong
+
 // Initial setup
 void setup() {
     const unsigned long initializationTime = millis();
     Serial.begin(115200);
     Serial.println("BEGAN APP");
-  
-    // FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
 
     initController();
+
+    Serial.println("Initializing Arming Signal LED");
+    FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
+    leds[0] = CRGB::Green;
 
     Serial.println("Setting up motor outputs");
     
     for (int i = 0; i < NUM_MOTORS; i++) {
-      motors[i].attach(motorPins[i]);
-      motors[i].write(map(ARM_MICROSECONDS, 1000, 2000, 0, 180));
+      motors[i].attach(motorPins[i], 1000, 2000, motorChannels[i], motorTimers[i]);
+      motors[i].write(91);
     }
-    vTaskDelay(1000 / portTICK_RATE_MS);
+    delay(3000);
 
     Wire.begin();
     Wire.setClock(400000);
