@@ -21,7 +21,7 @@
 
 #include "diagnostics.h"
 
-#include "servoControl.h"
+#include <ESP32_Servo.h> 
 
 #include "led_strip.h"
 #include "driver/rmt.h"
@@ -97,7 +97,7 @@ long long lastTelemetryUpdateTimeMillis = 0;
 motor_outputs_t previousMotorOutputs;
 bool setMotorOutputs = false;
 
-const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_33, GPIO_NUM_25, GPIO_NUM_26, GPIO_NUM_27};
+const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_33, GPIO_NUM_27, GPIO_NUM_26, GPIO_NUM_25};
 
 bool resetFlag = false;
 
@@ -105,8 +105,6 @@ bool resetFlag = false;
 
 bool motorDebugEnabled = false;
 double motorDebugValues[4] = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
-ledc_channel_t motorChannels[4] = {LEDC_CHANNEL_0, LEDC_CHANNEL_1, LEDC_CHANNEL_2, LEDC_CHANNEL_3}; 
-ledc_timer_t motorTimers[4] = {LEDC_TIMER_0, LEDC_TIMER_1, LEDC_TIMER_2, LEDC_TIMER_3};
 
 bool startMonitoringPid = false;
 
@@ -115,7 +113,7 @@ static volatile bool interruptLock = false;
 bool sendDebugData = false;
 bool recordDebugData = false;
 
-servoControl motors[NUM_MOTORS];
+Servo motors[NUM_MOTORS];
 
 static void updateArmStatus(void) {
   FastLED.clear();
@@ -312,10 +310,10 @@ static void initController()
   );
 }
 
-// 1 - wrong
-// 2 - correct
-// 3 - correct
-// 4 - wrong
+// 1 - correct
+// 2 - wrong
+// 3 - wrong
+// 4 - correct
 
 // Initial setup
 void setup() {
@@ -325,17 +323,13 @@ void setup() {
 
     initController();
 
-    Serial.println("Initializing Arming Signal LED");
-    FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
-    leds[0] = CRGB::Green;
-
     Serial.println("Setting up motor outputs");
     
     for (int i = 0; i < NUM_MOTORS; i++) {
-      motors[i].attach(motorPins[i], 1000, 2000, motorChannels[i], motorTimers[i]);
-      motors[i].write(91);
+      motors[i].attach(motorPins[i]);
+      motors[i].write(0);
     }
-    delay(3000);
+    delay(2000);
 
     Wire.begin();
     Wire.setClock(400000);
@@ -343,28 +337,12 @@ void setup() {
     // Wait for serial to become available
     while (!Serial);
 
-    if(!SD.begin(12)){
-        Serial.println("Card Mount Failed");
-        return;
-    }
-    uint8_t cardType = SD.cardType();
 
-    if(cardType == CARD_NONE){
-        Serial.println("No SD card attached");
-        return;
-    }
-    helper = new DebugHelper();
-
-    Serial.print("SD Card Type: ");
-    if(cardType == CARD_MMC){
-        Serial.println("MMC");
-    } else if(cardType == CARD_SD){
-        Serial.println("SDSC");
-    } else if(cardType == CARD_SDHC){
-        Serial.println("SDHC");
-    } else {
-        Serial.println("UNKNOWN");
-    }
+    Serial.println("Initializing Arming Signal LED");
+    FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
+    FastLED.clear();
+    leds[0] = CRGB::Green;
+    FastLED.show();
 
     Serial.println("Initializing bluetooth connection");
 
@@ -546,7 +524,7 @@ void updateClientTelemetryIfNeeded() {
 void updateMotors(motor_outputs_t outputs) {
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!armed) {
-      motors[i].write(map(ARM_MICROSECONDS, 1000, 2000, 0, 180));
+      motors[i].write(map(ARM_MICROSECONDS, 1000.0f, 2000.0f, 0, 180));
     } else {
       motors[i].write(map(outputs.values[i], 1000, 2000, 0, 180));
     }
