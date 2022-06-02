@@ -1,6 +1,7 @@
 #include "diagnostics.h"
 
 #include "Arduino.h"
+#include "SD.h"
 
 static bool _createDir(fs::FS &fs, const char * path){
     if(!fs.mkdir(path)){
@@ -11,7 +12,7 @@ static bool _createDir(fs::FS &fs, const char * path){
 }
 
 DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsDirPath, int sdCardCSPin) {
-    if (!SD.begin(sdCardCSPin)) {
+    if (SD.cardType() == CARD_NONE && !SD.begin(sdCardCSPin)) {
         Serial.println("DIAGNOSTICS ERROR: Failed to initialize SD card");
         return;
     }
@@ -37,6 +38,7 @@ DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsDirPath, int sdCardC
     File root = SD.open(diagnosticsDirPath);
     if (!root) {
         Serial.println("DIAGNOSTICS WARNING: No root diagnostics folder - creating one");
+        delay(500);
         if (!_createDir(SD, diagnosticsDirPath)) {
             Serial.println("DIAGNOSTICS ERROR: Failed to create diagnostics directory");
             return;
@@ -63,14 +65,12 @@ DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsDirPath, int sdCardC
 
 void DiagnosticsWriter::writeDiagnostics(String line)
 {
-    unsigned long time1 = millis();
-    if (!_diagnosticsFile.print(String(time1) + ": " + line + "\n")) {
+    if (!_diagnosticsFile.print(": " + line + "\n")) {
         Serial.println("DIAGNOSTICS ERROR: Failed to write diagnostics data");
         return;
     }
-    if (millis() - _lastFileWrite > 500) {
+    if (millis() - _lastFileWrite > 500 && xPortGetCoreID() == 1) {
         _diagnosticsFile.flush();
         _lastFileWrite = millis();
     }
-    Serial.println("Wrote diags in " + String(millis() - time1) + " ms");
 }

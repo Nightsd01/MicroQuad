@@ -12,6 +12,7 @@ class DiagnosticsWriter
     public:
         DiagnosticsWriter(const char *diagnosticsDirPath, int sdCardCSPin);
         void writeDiagnostics(String line);
+        void writeDiagnosticsAtTimestamp(unsigned long long time, String line);
 
     private:
         File _diagnosticsFile;

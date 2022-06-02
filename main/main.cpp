@@ -19,7 +19,7 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
-#include "diagnostics.h"
+#include "debug_util.h"
 
 #include <ESP32_Servo.h> 
 
@@ -91,6 +91,7 @@ bool updateParams = false;
 bool deviceConnected = false;
 
 bool armed = false;
+bool previousArmStatus = false;
 
 long long lastTelemetryUpdateTimeMillis = 0;
 
@@ -178,45 +179,44 @@ class MessageCallbacks : public BLECharacteristicCallbacks
           uint8_t *armData = characteristic->getData();
           armed = armData[0];
           if (armed) {
-            Serial.println("ARMED");
+            LOG_INFO("ARMED");
           } else {
-            Serial.println("DISARMED");
+            LOG_INFO("DISARMED");
           }
-          updateArmStatus();
         } else if (characteristic->getUUID().equals(resetCharacteristic->getUUID())) {
-          Serial.println("SET RESET FLAG");
+          LOG_INFO("SET RESET FLAG");
           resetFlag = true;
         } else if (characteristic->getUUID().equals(motorDebugCharacteristic->getUUID())) {
           std::string value = characteristic->getValue();
           std::vector<std::string> components = split(value, ":");
           if (components.size() == 0) {
-            Serial.println("ERROR: Incorrect motor debug packet (1)");
+            LOG_ERROR("ERROR: Incorrect motor debug packet (1)");
             return;
           }
           if (components[0] == "motordebug_enabled") {
             if (components.size() == 1) {
-              Serial.println("ERROR: Incorrect motor debug packet (2)");
+              LOG_ERROR("ERROR: Incorrect motor debug packet (2)");
               return;
             }
             std::string value = components[1];
             motorDebugEnabled = value == "1";
-            Serial.println("Changing motor debug status to " + String(motorDebugEnabled ? "enabled" : "disabled"));
+            LOG_INFO("Changing motor debug status to " + String(motorDebugEnabled ? "enabled" : "disabled"));
           } else if (components[0] == "motordebug_value") {
             if (components.size() < 3) {
-              Serial.println("ERROR: Incorrect motor debug packet (3)");
+              LOG_ERROR("ERROR: Incorrect motor debug packet (3)");
               return;
             }
             int motorNumber = atoi(components[1].c_str()) - 1;
             int motorValue = atoi(components[2].c_str());
             double motorWriteValue = ((((double)motorValue) / 255.0f) * 1000.0f) + 1000.0f;
-            Serial.println("Updating motor " + String(motorNumber) + " to " + String(motorWriteValue));
+            LOG_INFO("Updating motor " + String(motorNumber) + " to " + String(motorWriteValue));
             motorDebugValues[motorNumber] = motorWriteValue;
           } else {
-            Serial.println("ERROR: Incorrect motor debug packet (4)");
+            LOG_ERROR("ERROR: Incorrect motor debug packet (4)");
             return;
           }
         } else if (characteristic->getUUID().equals(calibrationCharacteristic->getUUID())) {
-          Serial.println("CALIBRATING");
+          LOG_INFO("CALIBRATING");
           // ESP_LOGI(TAG, "Calibrating MPU");
           // mpud::raw_axes_t accelBias, gyroBias;
           // ESP_ERROR_CHECK(MPU.computeOffsets(&accelBias, &gyroBias));
@@ -225,13 +225,13 @@ class MessageCallbacks : public BLECharacteristicCallbacks
           // calibrateMPU();
         } else if (characteristic->getUUID().equals(debugCharacteristic->getUUID())) {
           if (characteristic->getValue() == "request") {
-            Serial.println("Recording debug data transmission");
+            LOG_INFO("Recording debug data transmission");
             sendDebugData = true;
           } else if (characteristic->getValue() == "record:1") {
-            Serial.println("Recording debug data start");
+            LOG_INFO("Recording debug data start");
             recordDebugData = true;
           } else if (characteristic->getValue() == "record:0") {
-            Serial.println("Recording debug data stop");
+            LOG_INFO("Recording debug data stop");
             recordDebugData = false;
           }
         }
@@ -243,16 +243,15 @@ class MyServerCallbacks : public BLEServerCallbacks
 {
     void onConnect(BLEServer *server)
     {
-        Serial.println("Connected");
+        LOG_INFO("Connected");
         deviceConnected = true;
     };
 
     void onDisconnect(BLEServer *server)
     {
-        Serial.println("Disconnected");
+        LOG_INFO("Disconnected");
         deviceConnected = false;
         armed = false;
-        updateArmStatus();
     }
 };
 
@@ -272,9 +271,9 @@ float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gra
 
 QuadcopterController *controller;
 DebugHelper *helper;
-DiagnosticsWriter *diags;
 
 #define SD_CS_PIN 12
+#define DEBUG_LOG_PATH "/debug_logs"
 #define DIAGNOSTICS_PATH "/diags"
 
 // Interrupt Detection Routine
@@ -295,14 +294,14 @@ static void initController()
         .derivativeGain = 0.0f,
       },
       .pitchGains = {
-        .proportionalGain = 1.0f,
+        .proportionalGain = 0.1f,
         .integralGain = 0.001f,
-        .derivativeGain = 0.1f,
+        .derivativeGain = 0.01f,
       },
       .rollGains = {
-        .proportionalGain = 1.0f,
+        .proportionalGain = 0.1f,
         .integralGain = 0.001f,
-        .derivativeGain = 0.1f,
+        .derivativeGain = 0.01f,
       },
     },
     helper, 
@@ -321,9 +320,13 @@ void setup() {
     Serial.begin(115200);
     Serial.println("BEGAN APP");
 
+    Serial.println("Initializing SD diagnostics");
+
+    DebugUtilityInitialize(DIAGNOSTICS_PATH, DEBUG_LOG_PATH, SD_CS_PIN, LogLevel::verbose);
+
     initController();
 
-    Serial.println("Setting up motor outputs");
+    LOG_INFO("Setting up motor outputs");
     
     for (int i = 0; i < NUM_MOTORS; i++) {
       motors[i].attach(motorPins[i]);
@@ -337,14 +340,13 @@ void setup() {
     // Wait for serial to become available
     while (!Serial);
 
-
-    Serial.println("Initializing Arming Signal LED");
+    LOG_INFO("Initializing Arming Signal LED");
     FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
     FastLED.clear();
     leds[0] = CRGB::Green;
     FastLED.show();
 
-    Serial.println("Initializing bluetooth connection");
+    LOG_INFO("Initializing bluetooth connection");
 
     // Setup BLE Server
     BLEDevice::init(DEVICE_NAME);
@@ -405,31 +407,33 @@ void setup() {
     advertisement->start();
 
     // initialize device
-    Serial.println(F("Initializing I2C devices..."));
+    LOG_INFO(F("Initializing I2C devices..."));
     mpu.initialize();
     pinMode(ACCEL_INTERRUPT_PIN, INPUT);
     
     // verify connection
+    LOG_INFO(F("Testing device connections..."));
     const bool initialized = mpu.testConnection();
-    Serial.println(F("Testing device connections..."));
-    Serial.println(initialized ? "MPU6050 connection successful" : "MPU6050 connection failed");
+    initialized ? LOG_INFO("MPU6050 connection successful") : LOG_ERROR("MPU6050 connection failed");
+
+    updateArmStatus();
 
     if (!initialized) {
       return;
     }
 
-    Serial.println("Initializing DMP");
+    LOG_INFO("Initializing DMP");
     uint8_t dmpStatus = mpu.dmpInitialize();
-    Serial.println("Initialized DMP");
+    LOG_INFO("Initialized DMP");
 
     if (dmpStatus == 0) {
-      Serial.println(F("Enabling DMP..."));
+      LOG_INFO(F("Enabling DMP..."));
       mpu.setDMPEnabled(true);
       attachInterrupt(digitalPinToInterrupt(ACCEL_INTERRUPT_PIN), dmpDataReady, RISING);
       mpuIntStatus = mpu.getIntStatus();
       dmpReady = true;
       packetSize = mpu.dmpGetFIFOPacketSize();
-      Serial.println("Supplying DMP offsets");
+      LOG_INFO("Supplying DMP offsets");
       
       // supply your own gyro offsets here, scaled for min sensitivity
       mpu.setXAccelOffset(3898);
@@ -439,21 +443,18 @@ void setup() {
       mpu.setYGyroOffset(21);
       mpu.setZGyroOffset(-17);
     } else {
-      Serial.println("Accelerometer DMP initialization failed with status code = " + String(dmpStatus));
+      LOG_ERROR("Accelerometer DMP initialization failed with status code = " + String(dmpStatus));
     }
 
-    Serial.println("Configuring controller");
+    LOG_INFO("Configuring controller");
     controller->setControlScalingValues({
       .yaw = 180.0f,
       .pitch = 20.0f,
       .roll = 20.0f  
     }, 1.0f);  
 
-    Serial.println("Initializing SD diagnostics");
-    diags = new DiagnosticsWriter(DIAGNOSTICS_PATH, SD_CS_PIN);
-
-    Serial.println("SETUP COMPLETE");
-    diags->writeDiagnostics("SETUP COMPLETE AFTER " + String(millis() - initializationTime) + " ms");
+    LOG_INFO("SETUP COMPLETE");
+    LOG_INFO("SETUP COMPLETE AFTER " + String(millis() - initializationTime) + " ms");
 
     while (true) {
       loop();
@@ -544,16 +545,25 @@ void loop() {
   if (interruptLock) {
     return;
   }
+
+  if (armed != previousArmStatus) {
+    LOG_INFO("Updating arm LED");
+    updateArmStatus();
+    LOG_INFO("Updated arm LED");
+    previousArmStatus = armed;
+    LOG_INFO("Updated previous arm status");
+  }
+
   if (sendDebugData) {
-    Serial.println("Beginning debug data transmission");
+    LOG_INFO("Beginning debug data transmission");
     sendDebugData = false;
     uploadDebugData();
-    Serial.println("Completed debug data transmission");
+    LOG_INFO("Completed debug data transmission");
     return;
   }
 
   if (resetFlag) {
-    Serial.println("Resetting");
+    LOG_INFO("Resetting");
     resetFlag = false;
     initController();
   }
@@ -567,7 +577,7 @@ void loop() {
   }
   
   if (!dmpReady) {
-    Serial.println("DMP NOT READY");
+    LOG_ERROR("DMP NOT READY");
     return;
   };
 
@@ -588,7 +598,7 @@ void loop() {
 
   if ((mpuIntStatus & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount > 1024) {
     mpu.resetFIFO();
-    Serial.println("MPU6050 FIFO overflow!");
+    LOG_ERROR("MPU6050 FIFO overflow!");
     return;
   }
 
@@ -626,12 +636,12 @@ void loop() {
 
     position_values_t positionValues = {
       .yaw = ypr[0] * (180.0f / (M_PI * 2.0)) + 90.0f,
-      .pitch = ypr[1] * (180.0f / (M_PI * 2.0)) + 90.0f,
-      .roll = ypr[2] * (180.0f / (M_PI * 2.0)) + 90.0f
+      .pitch = ypr[1] * (180.0f / (M_PI * 2.0)),
+      .roll = ypr[2] * (180.0f / (M_PI * 2.0))
     };
 
     if (millis() - lastUpdateAccelMillis > 200) {
-      Serial.println("Accel yaw = " + String(positionValues.yaw) + ", pitch = " + String(positionValues.pitch) + ", roll = " + String(positionValues.roll));
+      LOG_INFO("Accel yaw = " + String(positionValues.yaw) + ", pitch = " + String(positionValues.pitch) + ", roll = " + String(positionValues.roll));
       lastUpdateAccelMillis = millis();
     }
 
@@ -640,7 +650,7 @@ void loop() {
     samples++;
     if (millis() - lastPrint > 1000) {
       lastPrint = millis();
-      Serial.println(String(samples) + " samples per second");
+      LOG_INFO(String(samples) + " samples per second");
       samples = 0;
     }
 
@@ -648,11 +658,7 @@ void loop() {
     
     static uint64_t lastUpdateTs = 0;
 
-    if (millis() - lastUpdateTs > 50) {
-      lastUpdateTs = millis();
-      diags->writeDiagnostics("yaw = " + String(ypr[0]) + ", pitch = " + String(ypr[1]) + ", roll = " + String(ypr[2]));
-      diags->writeDiagnostics("throttle = " + String(throttleValue) + ", 1 = " + String(outputs.values[0]) + ", 2 = " + String(outputs.values[1]) + ", 3 = " + String(outputs.values[2]) + ", 4 = " + String(outputs.values[3]));
-    }
+    DIAGNOSTICS_SAVE("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", ypr[0], ypr[1], ypr[2], throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3]);
 
 
     if (motorDebugEnabled) {
@@ -670,13 +676,5 @@ void loop() {
       }
     }
     setMotorOutputs = true;
-
-//    Serial.print(String(outputs.values[0]));
-//    Serial.print(", ");
-//    Serial.print(String(outputs.values[1]));
-//    Serial.print(", ");
-//    Serial.print(String(outputs.values[2]));
-//    Serial.print(", ");
-//    Serial.println(String(outputs.values[3]));
   }
 }
