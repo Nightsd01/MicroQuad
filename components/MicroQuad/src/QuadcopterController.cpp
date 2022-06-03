@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <Arduino.h>
 #include "DebugHelper.h"
-
 #include "PIDController.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))

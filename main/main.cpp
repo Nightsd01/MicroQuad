@@ -19,7 +19,7 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
-#include "debug_util.h"
+#include "Logger.h"
 
 #include <ESP32_Servo.h> 
 
@@ -116,10 +116,22 @@ bool recordDebugData = false;
 
 Servo motors[NUM_MOTORS];
 
+static bool completedFirstArm = false;
+
 static void updateArmStatus(void) {
   FastLED.clear();
   leds[0] = (armed ? CRGB::Green : CRGB::Red);
   FastLED.show();
+  if (armed && !completedFirstArm) {
+    LOG_INFO("Setting up motor outputs");
+    completedFirstArm = true;
+    
+    for (int i = 0; i < NUM_MOTORS; i++) {
+      motors[i].attach(motorPins[i]);
+      motors[i].write(0);
+    }
+    delay(2000);
+  }
 }
 
 std::vector<std::string> split(std::string to_split, std::string delimiter) {
@@ -138,7 +150,6 @@ std::vector<std::string> split(std::string to_split, std::string delimiter) {
         matches.push_back(to_split.substr(0, pos+change_end));
 
         to_split.erase(0, pos+1);
-
     }
     while (!to_split.empty());
     return matches;
@@ -273,7 +284,7 @@ QuadcopterController *controller;
 DebugHelper *helper;
 
 #define SD_CS_PIN 12
-#define DEBUG_LOG_PATH "/debug_logs"
+#define DEBUG_LOG_PATH "/logs"
 #define DIAGNOSTICS_PATH "/diags"
 
 // Interrupt Detection Routine
@@ -318,21 +329,13 @@ static void initController()
 void setup() {
     const unsigned long initializationTime = millis();
     Serial.begin(115200);
-    Serial.println("BEGAN APP");
+    LOG_INFO("BEGAN APP");
 
-    Serial.println("Initializing SD diagnostics");
+    LOG_INFO("Initializing SD diagnostics");
 
     DebugUtilityInitialize(DIAGNOSTICS_PATH, DEBUG_LOG_PATH, SD_CS_PIN, LogLevel::verbose);
 
     initController();
-
-    LOG_INFO("Setting up motor outputs");
-    
-    for (int i = 0; i < NUM_MOTORS; i++) {
-      motors[i].attach(motorPins[i]);
-      motors[i].write(0);
-    }
-    delay(2000);
 
     Wire.begin();
     Wire.setClock(400000);
@@ -523,6 +526,9 @@ void updateClientTelemetryIfNeeded() {
 }
 
 void updateMotors(motor_outputs_t outputs) {
+  if (!completedFirstArm) {
+    return;
+  }
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!armed) {
       motors[i].write(map(ARM_MICROSECONDS, 1000.0f, 2000.0f, 0, 180));
@@ -655,11 +661,8 @@ void loop() {
     }
 
     previousMotorOutputs = outputs;
-    
-    static uint64_t lastUpdateTs = 0;
 
-    DIAGNOSTICS_SAVE("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", ypr[0], ypr[1], ypr[2], throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3]);
-
+    DIAGNOSTICS_SAVE("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3]);
 
     if (motorDebugEnabled) {
         updateMotors({.values = {
