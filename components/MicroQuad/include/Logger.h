@@ -29,6 +29,4 @@ extern void __logImpl_DoNotUse(String statement, LogLevel level);
 #define LOG_VERBOSE(statement) __logImpl_DoNotUse(statement, LogLevel::verbose)
 #define LOG_CONSOLE(statement) __logImpl_DoNotUse(statement, LogLevel::console)
 
-extern void __diagnosticsImpl_DoNotUse(const char* format, ...);
-
-#define DIAGNOSTICS_SAVE(format, ...)  __diagnosticsImpl_DoNotUse(format, ##__VA_ARGS__)
+extern void DIAGNOSTICS_SAVE(const char* format, ...);

@@ -333,7 +333,7 @@ void setup() {
 
     LOG_INFO("Initializing SD diagnostics");
 
-    DebugUtilityInitialize(DIAGNOSTICS_PATH, DEBUG_LOG_PATH, SD_CS_PIN, LogLevel::verbose);
+    DebugUtilityInitialize(DEBUG_LOG_PATH, DIAGNOSTICS_PATH, SD_CS_PIN, LogLevel::verbose);
 
     initController();
 
@@ -662,7 +662,13 @@ void loop() {
 
     previousMotorOutputs = outputs;
 
-    DIAGNOSTICS_SAVE("%.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3]);
+    static bool savedHeading = false;
+    if (!savedHeading) {
+      savedHeading = true;
+      DIAGNOSTICS_SAVE("time, yaw, pitch, roll, throttle, mot1, mot2, mot3, mot4");
+    }
+
+    DIAGNOSTICS_SAVE("%lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3]);
 
     if (motorDebugEnabled) {
         updateMotors({.values = {

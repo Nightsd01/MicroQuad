@@ -7,7 +7,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 
 # This program built for i386-apple-darwin11.3.0
 
-# Make data base, printed on Sat May 28 18:14:46 2022
+# Make data base, printed on Fri Jun  3 17:00:25 2022
 
 # Variables
 
@@ -40,7 +40,7 @@ __CFBundleIdentifier = com.microsoft.VSCode
 # environment
 INFOPATH = /opt/homebrew/share/info:
 # environment
-VSCODE_IPC_HOOK_EXTHOST = /var/folders/y7/jd_cndjn7vd1c6_h2h6vh1t00000gn/T/vscode-ipc-2ec85434-038d-4d1c-9a9a-50e0fbac1b99.sock
+VSCODE_IPC_HOOK_EXTHOST = /var/folders/y7/jd_cndjn7vd1c6_h2h6vh1t00000gn/T/vscode-ipc-a50250b7-10a9-48fd-9f13-0ae5239a7ece.sock
 # environment
 VSCODE_CWD = /
 # environment
@@ -48,7 +48,7 @@ PATH = /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sb
 # environment
 LSCOLORS = Gxfxcxdxbxegedabagacad
 # environment
-LaunchInstanceID = C4541BD0-E44B-4BEA-865D-BEC17B78AC82
+LaunchInstanceID = AFFEE357-B009-4F67-94E7-B0D95C3554CC
 # environment
 VSCODE_LOG_STACK = false
 # environment
@@ -56,7 +56,7 @@ ELECTRON_RUN_AS_NODE = 1
 # default
 .FEATURES := target-specific order-only second-expansion else-if archives jobserver check-symlink
 # environment
-SSH_AUTH_SOCK = /private/tmp/com.apple.launchd.nzvInUbHlW/Listeners
+SSH_AUTH_SOCK = /private/tmp/com.apple.launchd.yPYHkUrHeP/Listeners
 # automatic
 %F = $(notdir $%)
 # environment
@@ -144,7 +144,7 @@ PAGER = less
 # environment
 LC_ALL = C
 # environment
-SECURITYSESSIONID = 186b7
+SECURITYSESSIONID = 186b2
 # automatic
 ^F = $(notdir $^)
 # default
@@ -156,7 +156,7 @@ MAKELEVEL := 0
 # environment
 LANG = C
 # environment
-VSCODE_PID = 617
+VSCODE_PID = 581
 # variable set hash-table stats:
 # Load=73/1024=7%, Rehash=0, Collisions=1/95=1%
 
@@ -166,9 +166,9 @@ VSCODE_PID = 617
 
 # Directories
 
-# . (device 16777231, inode 11442201): 14 files, no impossibilities.
+# . (device 16777231, inode 11442201): 16 files, no impossibilities.
 
-# 14 files, no impossibilities in 1 directories.
+# 16 files, no impossibilities in 1 directories.
 
 # Implicit Rules
 
@@ -222,7 +222,7 @@ Makefile:
 # strcache size: total = 4096 / max = 4096 / min = 4096 / avg = 4096
 # strcache free: total = 4070 / max = 4070 / min = 4070 / avg = 4070
 
-# Finished Make data base on Sat May 28 18:14:46 2022
+# Finished Make data base on Fri Jun  3 17:00:25 2022
 
  
 Makefile:6: /make/project.mk: No such file or directory

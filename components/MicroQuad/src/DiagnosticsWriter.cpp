@@ -58,7 +58,7 @@ DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsDirPath, int sdCardC
         file = root.openNextFile();
     }
 
-    String fullPath = String(diagnosticsDirPath) + "/diags_" + String(diagnosticsCount) + ".txt";
+    String fullPath = String(diagnosticsDirPath) + "/" + String(diagnosticsCount) + ".txt";
     ESP_LOGI(diagnosticsTag, "%s", ("RECORDING DIAGNOSTIC DATA TO " + fullPath).c_str());
     _diagnosticsFile = SD.open(fullPath, FILE_WRITE);
     if (!_diagnosticsFile) {

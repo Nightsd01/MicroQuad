@@ -154,21 +154,21 @@ void __logImpl_DoNotUse(String statement, LogLevel level)
     _log(statement, level, millis());
 }
 
-void __diagnosticsImpl_DoNotUse(const char* format, ...)
+void DIAGNOSTICS_SAVE(const char *format, ...)
 {
     if (_diagnosticsCsvWriter == NULL) {
         return;
     }
-    va_list argptr;
-    va_start(argptr,format);
-    char *buffer = nullptr;
-    if (asprintf(&buffer, format, argptr) == -1) {
+    va_list args;
+    va_start(args, format);
+    char *buffer = NULL;
+    if (vasprintf(&buffer, format, args) == -1) {
         ESP_LOGE(TAG, "Unable to allocate memory for formatted log string");
-        va_end(argptr);
+        va_end(args);
         return;
     }
-    va_end(argptr);
     String result = String(buffer);
     _diagnosticsCsvWriter->writeDiagnostics(result);
     free(buffer);
+    va_end(args);
 }

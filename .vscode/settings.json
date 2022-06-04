@@ -27,6 +27,7 @@
         "*.tcc": "cpp",
         "fstream": "cpp",
         "random": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "cstdio": "cpp"
     }
 }
