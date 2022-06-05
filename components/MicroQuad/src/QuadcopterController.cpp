@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include "DebugHelper.h"
 #include "PIDController.h"
+#include "Logger.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -128,8 +129,8 @@ motor_outputs_t QuadcopterController::calculateOutputs(position_values_t imuValu
     _previousUpdateMillis = timeMillis;
     motor_outputs_t outputs = {
         .values = {
-            MIN(MAX(throttle - pitchUpdate + rollUpdate + yawUpdate, _minThrottle), _maxThrottle),
             MIN(MAX(throttle + pitchUpdate - rollUpdate + yawUpdate, _minThrottle), _maxThrottle),
+            MIN(MAX(throttle - pitchUpdate + rollUpdate + yawUpdate, _minThrottle), _maxThrottle),
             MIN(MAX(throttle + pitchUpdate + rollUpdate - yawUpdate, _minThrottle), _maxThrottle),
             MIN(MAX(throttle - pitchUpdate - rollUpdate - yawUpdate, _minThrottle), _maxThrottle)
         }
@@ -151,6 +152,12 @@ motor_outputs_t QuadcopterController::calculateOutputs(position_values_t imuValu
         _debugHelper->desiredValues[2] = desiredValues.roll;
         lastUpdateMillis = millis();
         _debugHelper->saveValues(millis());
+    }
+
+    static unsigned long lastLogTime = 0;
+    if (millis() - lastLogTime > 200) {
+        LOG_INFO("Yaw = %f, pitch = %f, roll = %f, throttle = %f, pitch update = %f, roll update = %f, yaw update = %f", imuValues.yaw, imuValues.pitch, imuValues.roll, throttle, pitchUpdate, rollUpdate, yawUpdate);
+        lastLogTime = millis();
     }
 
     return outputs;

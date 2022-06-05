@@ -20,13 +20,11 @@ extern void DebugUtilityInitialize(
     LogLevel logLevel = LogLevel::warn
 );
 
-extern void __logImpl_DoNotUse(String statement, LogLevel level);
-
-#define LOG_ERROR(statement) __logImpl_DoNotUse(statement, LogLevel::error)
-#define LOG_WARN(statement) __logImpl_DoNotUse(statement, LogLevel::warn)
-#define LOG_INFO(statement) __logImpl_DoNotUse(statement, LogLevel::info)
-#define LOG_DEBUG(statement) __logImpl_DoNotUse(statement, LogLevel::debug)
-#define LOG_VERBOSE(statement) __logImpl_DoNotUse(statement, LogLevel::verbose)
-#define LOG_CONSOLE(statement) __logImpl_DoNotUse(statement, LogLevel::console)
+extern void LOG_ERROR(const char *format, ...);
+extern void LOG_WARN(const char *format, ...);
+extern void LOG_INFO(const char *format, ...);
+extern void LOG_DEBUG(const char *format, ...);
+extern void LOG_VERBOSE(const char *format, ...);
+extern void LOG_CONSOLE(const char *format, ...);
 
 extern void DIAGNOSTICS_SAVE(const char* format, ...);

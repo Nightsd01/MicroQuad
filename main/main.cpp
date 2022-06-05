@@ -211,7 +211,7 @@ class MessageCallbacks : public BLECharacteristicCallbacks
             }
             std::string value = components[1];
             motorDebugEnabled = value == "1";
-            LOG_INFO("Changing motor debug status to " + String(motorDebugEnabled ? "enabled" : "disabled"));
+            LOG_INFO("Changing motor debug status to %s", motorDebugEnabled ? "enabled" : "disabled");
           } else if (components[0] == "motordebug_value") {
             if (components.size() < 3) {
               LOG_ERROR("ERROR: Incorrect motor debug packet (3)");
@@ -220,7 +220,7 @@ class MessageCallbacks : public BLECharacteristicCallbacks
             int motorNumber = atoi(components[1].c_str()) - 1;
             int motorValue = atoi(components[2].c_str());
             double motorWriteValue = ((((double)motorValue) / 255.0f) * 1000.0f) + 1000.0f;
-            LOG_INFO("Updating motor " + String(motorNumber) + " to " + String(motorWriteValue));
+            LOG_INFO("Updating motor %i to %f", motorNumber, motorWriteValue);
             motorDebugValues[motorNumber] = motorWriteValue;
           } else {
             LOG_ERROR("ERROR: Incorrect motor debug packet (4)");
@@ -446,7 +446,7 @@ void setup() {
       mpu.setYGyroOffset(21);
       mpu.setZGyroOffset(-17);
     } else {
-      LOG_ERROR("Accelerometer DMP initialization failed with status code = " + String(dmpStatus));
+      LOG_ERROR("Accelerometer DMP initialization failed with status code = %i", dmpStatus);
     }
 
     LOG_INFO("Configuring controller");
@@ -457,7 +457,7 @@ void setup() {
     }, 1.0f);  
 
     LOG_INFO("SETUP COMPLETE");
-    LOG_INFO("SETUP COMPLETE AFTER " + String(millis() - initializationTime) + " ms");
+    LOG_INFO("SETUP COMPLETE AFTER %lu ms", millis() - initializationTime);
 
     while (true) {
       loop();
@@ -496,7 +496,7 @@ float batteryLevel() {
     return BATTERY_SCALE * (float)val;
 }
 
-void updateClientTelemetryIfNeeded() {
+void updateClientTelemetryIfNeeded(float batVoltage) {
   if (!deviceConnected || millis() - lastTelemetryUpdateTimeMillis < TELEM_UPDATE_INTERVAL_MILLIS) {
     return;
   }
@@ -516,7 +516,6 @@ void updateClientTelemetryIfNeeded() {
     }
   }
 
-  const float batVoltage = batteryLevel();
   packet += String(batVoltage);
   packet += TELEM_DELIMITER;
   packet += String(batteryPercent(batVoltage));
@@ -542,7 +541,6 @@ unsigned long startedMonitoringTimestamp = 0;
 
 static int samples = 0;
 static int lastPrint = 0;
-static long long lastUpdateAccelMillis = 0;
 
 #define NUM_SAMPLES_PER_AVG 40
 
@@ -574,7 +572,8 @@ void loop() {
     initController();
   }
   
-  updateClientTelemetryIfNeeded();
+  const float batteryVoltage = batteryLevel();
+  updateClientTelemetryIfNeeded(batteryVoltage);
 
   if (!startMonitoringPid && throttleValue > 20.0f) {
     startMonitoringPid = true;
@@ -622,7 +621,7 @@ void loop() {
 
     // need to flip pitch & roll
     const float rollVal = ypr[2];
-    ypr[2] = ypr[1];
+    ypr[2] = ypr[1] * -1; // need to flip roll
     ypr[1] = rollVal;
 
     if (!updateParams) {
@@ -646,17 +645,12 @@ void loop() {
       .roll = ypr[2] * (180.0f / (M_PI * 2.0))
     };
 
-    if (millis() - lastUpdateAccelMillis > 200) {
-      LOG_INFO("Accel yaw = " + String(positionValues.yaw) + ", pitch = " + String(positionValues.pitch) + ", roll = " + String(positionValues.roll));
-      lastUpdateAccelMillis = millis();
-    }
-
     motor_outputs_t outputs = controller->calculateOutputs(positionValues, controllerValues, timestamp - startedMonitoringTimestamp, recordDebugData);
 
     samples++;
     if (millis() - lastPrint > 1000) {
       lastPrint = millis();
-      LOG_INFO(String(samples) + " samples per second");
+      LOG_INFO("%i samples per second", samples);
       samples = 0;
     }
 
@@ -665,10 +659,11 @@ void loop() {
     static bool savedHeading = false;
     if (!savedHeading) {
       savedHeading = true;
-      DIAGNOSTICS_SAVE("time, yaw, pitch, roll, throttle, mot1, mot2, mot3, mot4");
+      DIAGNOSTICS_SAVE("voltage, time, yaw, pitch, roll, throttle, mot1, mot2, mot3, mot4");
     }
 
-    DIAGNOSTICS_SAVE("%lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3]);
+    // Save a diagnostics entry to the CSV file on the SD card
+    DIAGNOSTICS_SAVE("%.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3]);
 
     if (motorDebugEnabled) {
         updateMotors({.values = {
