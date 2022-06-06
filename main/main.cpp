@@ -30,6 +30,8 @@
 
 #include <FastLED.h>
 
+#define ENABLE_EMERGENCY_MODE 1
+
 // LED Setup
 #define NUM_LEDS 1
 #define LED_DATA_PIN 32
@@ -117,6 +119,11 @@ bool recordDebugData = false;
 Servo motors[NUM_MOTORS];
 
 static bool completedFirstArm = false;
+
+// When the quadcopter enters into unacceptable orientation for more than 2 measurements, 
+// the drone will cut power to the motors for safety and must be rebooted
+static bool enteredEmergencyMode = false;
+static position_values_t previousIMUValues;
 
 static void updateArmStatus(void) {
   FastLED.clear();
@@ -645,6 +652,19 @@ void loop() {
       .roll = ypr[2] * (180.0f / (M_PI * 2.0))
     };
 
+    // TODO: Replace with parameter provider check instead of a compiler flag
+    #ifdef ENABLE_EMERGENCY_MODE 
+      // Check if we need to enter into emergency mode
+      if ((fabs(positionValues.pitch) > 40.0f && fabs(previousIMUValues.pitch) > 40.0f) 
+          || (fabs(positionValues.roll) > 40.0f && fabs(previousIMUValues.roll) > 40.0f)) {
+        // The drone has entered into an unacceptable orientation - this kills the motors
+        enteredEmergencyMode = true;
+        LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", positionValues.pitch, positionValues.roll);
+      }
+    #endif
+
+    previousIMUValues = positionValues;
+
     motor_outputs_t outputs = controller->calculateOutputs(positionValues, controllerValues, timestamp - startedMonitoringTimestamp, recordDebugData);
 
     samples++;
@@ -656,14 +676,14 @@ void loop() {
 
     previousMotorOutputs = outputs;
 
-    static bool savedHeading = false;
-    if (!savedHeading) {
-      savedHeading = true;
-      DIAGNOSTICS_SAVE("voltage, time, yaw, pitch, roll, throttle, mot1, mot2, mot3, mot4");
+    static bool savedCSVHeader = false;
+    if (!savedCSVHeader) {
+      savedCSVHeader = true;
+      DIAGNOSTICS_SAVE("armed, voltage, time, yaw, pitch, roll, throttle, mot1, mot2, mot3, mot4, memory usage (bytes)");
     }
 
     // Save a diagnostics entry to the CSV file on the SD card
-    DIAGNOSTICS_SAVE("%.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f", batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3]);
+    DIAGNOSTICS_SAVE("%d, %.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %lu", armed, batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3], xPortGetFreeHeapSize());
 
     if (motorDebugEnabled) {
         updateMotors({.values = {
@@ -672,12 +692,10 @@ void loop() {
           motorDebugValues[2],
           motorDebugValues[3]
         }});
+    } else if (throttleValue < 20 || enteredEmergencyMode) {
+      updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
     } else {
-      if (throttleValue < 20) {
-        updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
-      } else {
-        updateMotors(outputs);
-      }
+      updateMotors(outputs);
     }
     setMotorOutputs = true;
   }

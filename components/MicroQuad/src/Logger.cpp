@@ -132,6 +132,7 @@ void _logImpl(LogLevel level, const char *format, va_list args)
         return;
     }
     String statement = String(buffer);
+    free(buffer);
     if (!_initialized) {
         // Add the log information to _preInitializationLogs
         log_task_t *task = _allocateLogTaskWithMessageCopy(statement, level);
