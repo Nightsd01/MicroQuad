@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2017-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2017-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -9,7 +9,7 @@
 #include <assert.h>
 #include "esp_efuse_table.h"
 
-// md5_digest_table ee5142bc489eee22230a49b5c7cafe00
+// md5_digest_table 62fa98bed350ebc4951c5f8191c487de
 // This file was generated from the file esp_efuse_table.csv. DO NOT CHANGE THIS FILE MANUALLY.
 // If you want to change some fields, you need to change esp_efuse_table.csv file
 // then run `efuse_common_table` or `efuse_custom_table` command it will generate this file.
@@ -80,7 +80,7 @@ static const esp_efuse_desc_t WR_DIS_SECURE_BOOT_AGGRESSIVE_REVOKE[] = {
 };
 
 static const esp_efuse_desc_t WR_DIS_GROUP_3[] = {
-    {EFUSE_BLK0, 18, 1}, 	 // Write protection for FLASH_TPUW DIS_DOWNLOAD_MODE DIS_LEGACY_SPI_BOOT UART_PRINT_CHANNEL DIS_USB_DOWNLOAD_MODE ENABLE_SECURITY_DOWNLOAD UART_PRINT_CONTROL PIN_POWER_SELECTION FLASH_TYPE FORCE_SEND_RESUME SECURE_VERSION,
+    {EFUSE_BLK0, 18, 1}, 	 // Write protection for FLASH_TPUW DIS_DOWNLOAD_MODE DIS_DIRECT_BOOT DIS_USB_SERIAL_JTAG_ROM_PRINT DIS_USB_SERIAL_JTAG_DOWNLOAD_MODE ENABLE_SECURITY_DOWNLOAD UART_PRINT_CONTROL PIN_POWER_SELECTION FLASH_TYPE FORCE_SEND_RESUME SECURE_VERSION,
 };
 
 static const esp_efuse_desc_t WR_DIS_BLK1[] = {
@@ -303,20 +303,20 @@ static const esp_efuse_desc_t DIS_DOWNLOAD_MODE[] = {
     {EFUSE_BLK0, 128, 1}, 	 // Disble download mode include boot_mode[3:0] is 0 1 2 3 6 7,
 };
 
-static const esp_efuse_desc_t DIS_LEGACY_SPI_BOOT[] = {
-    {EFUSE_BLK0, 129, 1}, 	 // Disable_Legcy_SPI_boot mode include boot_mode[3:0] is 4,
+static const esp_efuse_desc_t DIS_DIRECT_BOOT[] = {
+    {EFUSE_BLK0, 129, 1}, 	 // Disable direct boot mode,
 };
 
-static const esp_efuse_desc_t UART_PRINT_CHANNEL[] = {
-    {EFUSE_BLK0, 130, 1}, 	 // 0: UART0. 1: UART1,
+static const esp_efuse_desc_t DIS_USB_SERIAL_JTAG_ROM_PRINT[] = {
+    {EFUSE_BLK0, 130, 1}, 	 // Disable usb serial jtag print during rom boot,
 };
 
 static const esp_efuse_desc_t FLASH_ECC_MODE[] = {
     {EFUSE_BLK0, 131, 1}, 	 // Configures the ECC mode for SPI flash. 0:16-byte to 18-byte mode. 1:16-byte to 17-byte mode,
 };
 
-static const esp_efuse_desc_t DIS_USB_DOWNLOAD_MODE[] = {
-    {EFUSE_BLK0, 132, 1}, 	 // Disable download through USB,
+static const esp_efuse_desc_t DIS_USB_SERIAL_JTAG_DOWNLOAD_MODE[] = {
+    {EFUSE_BLK0, 132, 1}, 	 // Set this bit to disable download through USB-Serial-JTAG,
 };
 
 static const esp_efuse_desc_t ENABLE_SECURITY_DOWNLOAD[] = {
@@ -349,6 +349,10 @@ static const esp_efuse_desc_t FORCE_SEND_RESUME[] = {
 
 static const esp_efuse_desc_t SECURE_VERSION[] = {
     {EFUSE_BLK0, 142, 16}, 	 // Secure version for anti-rollback,
+};
+
+static const esp_efuse_desc_t DIS_USB_OTG_DOWNLOAD_MODE[] = {
+    {EFUSE_BLK0, 159, 1}, 	 // Set this bit to disable download through USB-OTG,
 };
 
 static const esp_efuse_desc_t MAC_FACTORY[] = {
@@ -412,8 +416,8 @@ static const esp_efuse_desc_t PKG_VERSION[] = {
     {EFUSE_BLK1, 117, 3}, 	 // Package version,
 };
 
-static const esp_efuse_desc_t BLOCK1_VERSION[] = {
-    {EFUSE_BLK1, 120, 3}, 	 // BLOCK1 efuse version 0:No calibration 1:With calibration,
+static const esp_efuse_desc_t BLK_VER_MINOR[] = {
+    {EFUSE_BLK1, 120, 3}, 	 // BLK_VERSION_MINOR,
 };
 
 static const esp_efuse_desc_t ADC2_CAL_VOL_ATTEN3[] = {
@@ -424,8 +428,8 @@ static const esp_efuse_desc_t OPTIONAL_UNIQUE_ID[] = {
     {EFUSE_BLK2, 0, 128}, 	 // Optional unique 128-bit ID,
 };
 
-static const esp_efuse_desc_t BLOCK2_VERSION[] = {
-    {EFUSE_BLK2, 128, 4}, 	 // Version of BLOCK2,
+static const esp_efuse_desc_t BLK_VER_MAJOR[] = {
+    {EFUSE_BLK2, 128, 2}, 	 // BLK_VERSION_MAJOR,
 };
 
 static const esp_efuse_desc_t TEMP_CALIB[] = {
@@ -617,7 +621,7 @@ const esp_efuse_desc_t* ESP_EFUSE_WR_DIS_SECURE_BOOT_AGGRESSIVE_REVOKE[] = {
 };
 
 const esp_efuse_desc_t* ESP_EFUSE_WR_DIS_GROUP_3[] = {
-    &WR_DIS_GROUP_3[0],    		// Write protection for FLASH_TPUW DIS_DOWNLOAD_MODE DIS_LEGACY_SPI_BOOT UART_PRINT_CHANNEL DIS_USB_DOWNLOAD_MODE ENABLE_SECURITY_DOWNLOAD UART_PRINT_CONTROL PIN_POWER_SELECTION FLASH_TYPE FORCE_SEND_RESUME SECURE_VERSION
+    &WR_DIS_GROUP_3[0],    		// Write protection for FLASH_TPUW DIS_DOWNLOAD_MODE DIS_DIRECT_BOOT DIS_USB_SERIAL_JTAG_ROM_PRINT DIS_USB_SERIAL_JTAG_DOWNLOAD_MODE ENABLE_SECURITY_DOWNLOAD UART_PRINT_CONTROL PIN_POWER_SELECTION FLASH_TYPE FORCE_SEND_RESUME SECURE_VERSION
     NULL
 };
 
@@ -896,13 +900,13 @@ const esp_efuse_desc_t* ESP_EFUSE_DIS_DOWNLOAD_MODE[] = {
     NULL
 };
 
-const esp_efuse_desc_t* ESP_EFUSE_DIS_LEGACY_SPI_BOOT[] = {
-    &DIS_LEGACY_SPI_BOOT[0],    		// Disable_Legcy_SPI_boot mode include boot_mode[3:0] is 4
+const esp_efuse_desc_t* ESP_EFUSE_DIS_DIRECT_BOOT[] = {
+    &DIS_DIRECT_BOOT[0],    		// Disable direct boot mode
     NULL
 };
 
-const esp_efuse_desc_t* ESP_EFUSE_UART_PRINT_CHANNEL[] = {
-    &UART_PRINT_CHANNEL[0],    		// 0: UART0. 1: UART1
+const esp_efuse_desc_t* ESP_EFUSE_DIS_USB_SERIAL_JTAG_ROM_PRINT[] = {
+    &DIS_USB_SERIAL_JTAG_ROM_PRINT[0],    		// Disable usb serial jtag print during rom boot
     NULL
 };
 
@@ -911,8 +915,8 @@ const esp_efuse_desc_t* ESP_EFUSE_FLASH_ECC_MODE[] = {
     NULL
 };
 
-const esp_efuse_desc_t* ESP_EFUSE_DIS_USB_DOWNLOAD_MODE[] = {
-    &DIS_USB_DOWNLOAD_MODE[0],    		// Disable download through USB
+const esp_efuse_desc_t* ESP_EFUSE_DIS_USB_SERIAL_JTAG_DOWNLOAD_MODE[] = {
+    &DIS_USB_SERIAL_JTAG_DOWNLOAD_MODE[0],    		// Set this bit to disable download through USB-Serial-JTAG
     NULL
 };
 
@@ -953,6 +957,11 @@ const esp_efuse_desc_t* ESP_EFUSE_FORCE_SEND_RESUME[] = {
 
 const esp_efuse_desc_t* ESP_EFUSE_SECURE_VERSION[] = {
     &SECURE_VERSION[0],    		// Secure version for anti-rollback
+    NULL
+};
+
+const esp_efuse_desc_t* ESP_EFUSE_DIS_USB_OTG_DOWNLOAD_MODE[] = {
+    &DIS_USB_OTG_DOWNLOAD_MODE[0],    		// Set this bit to disable download through USB-OTG
     NULL
 };
 
@@ -1031,8 +1040,8 @@ const esp_efuse_desc_t* ESP_EFUSE_PKG_VERSION[] = {
     NULL
 };
 
-const esp_efuse_desc_t* ESP_EFUSE_BLOCK1_VERSION[] = {
-    &BLOCK1_VERSION[0],    		// BLOCK1 efuse version 0:No calibration 1:With calibration
+const esp_efuse_desc_t* ESP_EFUSE_BLK_VER_MINOR[] = {
+    &BLK_VER_MINOR[0],    		// BLK_VERSION_MINOR
     NULL
 };
 
@@ -1046,8 +1055,8 @@ const esp_efuse_desc_t* ESP_EFUSE_OPTIONAL_UNIQUE_ID[] = {
     NULL
 };
 
-const esp_efuse_desc_t* ESP_EFUSE_BLOCK2_VERSION[] = {
-    &BLOCK2_VERSION[0],    		// Version of BLOCK2
+const esp_efuse_desc_t* ESP_EFUSE_BLK_VER_MAJOR[] = {
+    &BLK_VER_MAJOR[0],    		// BLK_VERSION_MAJOR
     NULL
 };
 

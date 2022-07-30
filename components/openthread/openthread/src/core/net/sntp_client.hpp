@@ -426,7 +426,10 @@ public:
      */
     void ReadFrom(const Message &aMessage)
     {
-        SuccessOrAssert(aMessage.Read(aMessage.GetLength() - sizeof(*this), *this));
+        Error error = aMessage.Read(aMessage.GetLength() - sizeof(*this), *this);
+
+        OT_ASSERT(error == kErrorNone);
+        OT_UNUSED_VARIABLE(error);
     }
 
     /**

@@ -86,7 +86,7 @@ class OtCliCommandRunner(OTCommandHandler):
                                     r')')
     """regex used to filter logs"""
 
-    __ASYNC_COMMANDS = {'scan', 'ping', 'discover'}
+    __ASYNC_COMMANDS = {'scan', 'ping'}
 
     def __init__(self, otcli: OtCliHandler, is_spinel_cli=False):
         self.__otcli: OtCliHandler = otcli

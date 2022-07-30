@@ -37,7 +37,6 @@
 
 #include <stdio.h>
 
-#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/encoding.hpp"
@@ -305,11 +304,11 @@ void Joiner::SaveDiscoveredJoinerRouter(const Mle::DiscoverScanner::ScanResult &
     JoinerRouter *end = OT_ARRAY_END(mJoinerRouters);
     JoinerRouter *entry;
 
-    doesAllowAny = AsCoreType(&aResult.mSteeringData).PermitsAllJoiners();
+    doesAllowAny = static_cast<const SteeringData &>(aResult.mSteeringData).PermitsAllJoiners();
 
     otLogInfoMeshCoP("Joiner discover network: %s, pan:0x%04x, port:%d, chan:%d, rssi:%d, allow-any:%s",
-                     AsCoreType(&aResult.mExtAddress).ToString().AsCString(), aResult.mPanId, aResult.mJoinerUdpPort,
-                     aResult.mChannel, aResult.mRssi, doesAllowAny ? "yes" : "no");
+                     static_cast<const Mac::ExtAddress &>(aResult.mExtAddress).ToString().AsCString(), aResult.mPanId,
+                     aResult.mJoinerUdpPort, aResult.mChannel, aResult.mRssi, doesAllowAny ? "yes" : "no");
 
     priority = CalculatePriority(aResult.mRssi, doesAllowAny);
 
@@ -330,7 +329,7 @@ void Joiner::SaveDiscoveredJoinerRouter(const Mle::DiscoverScanner::ScanResult &
     memmove(entry + 1, entry,
             static_cast<size_t>(reinterpret_cast<uint8_t *>(end - 1) - reinterpret_cast<uint8_t *>(entry)));
 
-    entry->mExtAddr       = AsCoreType(&aResult.mExtAddress);
+    entry->mExtAddr       = static_cast<const Mac::ExtAddress &>(aResult.mExtAddress);
     entry->mPanId         = aResult.mPanId;
     entry->mJoinerUdpPort = aResult.mJoinerUdpPort;
     entry->mChannel       = aResult.mChannel;
@@ -525,8 +524,8 @@ void Joiner::HandleJoinerFinalizeResponse(void *               aContext,
                                           const otMessageInfo *aMessageInfo,
                                           Error                aResult)
 {
-    static_cast<Joiner *>(aContext)->HandleJoinerFinalizeResponse(AsCoapMessagePtr(aMessage), &AsCoreType(aMessageInfo),
-                                                                  aResult);
+    static_cast<Joiner *>(aContext)->HandleJoinerFinalizeResponse(
+        static_cast<Coap::Message *>(aMessage), static_cast<const Ip6::MessageInfo *>(aMessageInfo), aResult);
 }
 
 void Joiner::HandleJoinerFinalizeResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, Error aResult)
@@ -558,7 +557,8 @@ exit:
 
 void Joiner::HandleJoinerEntrust(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<Joiner *>(aContext)->HandleJoinerEntrust(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
+    static_cast<Joiner *>(aContext)->HandleJoinerEntrust(*static_cast<Coap::Message *>(aMessage),
+                                                         *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
 void Joiner::HandleJoinerEntrust(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)

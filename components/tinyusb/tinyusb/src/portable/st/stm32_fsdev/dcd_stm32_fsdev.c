@@ -102,6 +102,7 @@
  */
 
 #include "tusb_option.h"
+#include "common/tusb_fifo.h"
 
 #if defined(STM32F102x6) || defined(STM32F102xB) || \
     defined(STM32F103x6) || defined(STM32F103xB) || \
@@ -113,8 +114,7 @@
       (CFG_TUSB_MCU == OPT_MCU_STM32F0                          ) || \
       (CFG_TUSB_MCU == OPT_MCU_STM32F1 && defined(STM32F1_FSDEV)) || \
       (CFG_TUSB_MCU == OPT_MCU_STM32F3                          ) || \
-	  (CFG_TUSB_MCU == OPT_MCU_STM32L0                          ) || \
-      (CFG_TUSB_MCU == OPT_MCU_STM32L1                          ) \
+      (CFG_TUSB_MCU == OPT_MCU_STM32L0                          ) \
     )
 
 // In order to reduce the dependance on HAL, we undefine this.
@@ -274,20 +274,6 @@ void dcd_connect(uint8_t rhport)
   USB->BCDR |= USB_BCDR_DPPU;
 }
 
-#elif defined(SYSCFG_PMC_USB_PU) // works e.g. on STM32L151
-// Disable internal D+ PU
-void dcd_disconnect(uint8_t rhport)
-{
-  (void) rhport;
-  SYSCFG->PMC &= ~(SYSCFG_PMC_USB_PU);
-}
-
-// Enable internal D+ PU
-void dcd_connect(uint8_t rhport)
-{
-  (void) rhport;
-  SYSCFG->PMC |= SYSCFG_PMC_USB_PU;
-}
 #endif
 
 // Enable device interrupt
@@ -299,8 +285,6 @@ void dcd_int_enable (uint8_t rhport)
   __ISB();
 #if CFG_TUSB_MCU == OPT_MCU_STM32F0 || CFG_TUSB_MCU == OPT_MCU_STM32L0
   NVIC_EnableIRQ(USB_IRQn);
-#elif CFG_TUSB_MCU == OPT_MCU_STM32L1
-  NVIC_EnableIRQ(USB_LP_IRQn);
 #elif CFG_TUSB_MCU == OPT_MCU_STM32F3
   // Some STM32F302/F303 devices allow to remap the USB interrupt vectors from
   // shared USB/CAN IRQs to separate CAN and USB IRQs.
@@ -335,8 +319,6 @@ void dcd_int_disable(uint8_t rhport)
 
 #if CFG_TUSB_MCU == OPT_MCU_STM32F0 || CFG_TUSB_MCU == OPT_MCU_STM32L0
   NVIC_DisableIRQ(USB_IRQn);
-#elif CFG_TUSB_MCU == OPT_MCU_STM32L1
-  NVIC_DisableIRQ(USB_LP_IRQn);
 #elif CFG_TUSB_MCU == OPT_MCU_STM32F3
   // Some STM32F302/F303 devices allow to remap the USB interrupt vectors from
   // shared USB/CAN IRQs to separate CAN and USB IRQs.
@@ -394,7 +376,7 @@ static const tusb_desc_endpoint_t ep0OUT_desc =
 
   .bEndpointAddress = 0x00,
   .bmAttributes     = { .xfer = TUSB_XFER_CONTROL },
-  .wMaxPacketSize   = CFG_TUD_ENDPOINT0_SIZE,
+  .wMaxPacketSize   = { .size = CFG_TUD_ENDPOINT0_SIZE },
   .bInterval        = 0
 };
 
@@ -405,7 +387,7 @@ static const tusb_desc_endpoint_t ep0IN_desc =
 
   .bEndpointAddress = 0x80,
   .bmAttributes     = { .xfer = TUSB_XFER_CONTROL },
-  .wMaxPacketSize   = CFG_TUD_ENDPOINT0_SIZE,
+  .wMaxPacketSize   = { .size = CFG_TUD_ENDPOINT0_SIZE },
   .bInterval        = 0
 };
 
@@ -741,7 +723,7 @@ bool dcd_edpt_open (uint8_t rhport, tusb_desc_endpoint_t const * p_endpoint_desc
   (void)rhport;
   uint8_t const epnum = tu_edpt_number(p_endpoint_desc->bEndpointAddress);
   uint8_t const dir   = tu_edpt_dir(p_endpoint_desc->bEndpointAddress);
-  const uint16_t epMaxPktSize = tu_edpt_packet_size(p_endpoint_desc);
+  const uint16_t epMaxPktSize = p_endpoint_desc->wMaxPacketSize.size;
   uint16_t pma_addr;
   uint32_t wType;
   
@@ -778,19 +760,19 @@ bool dcd_edpt_open (uint8_t rhport, tusb_desc_endpoint_t const * p_endpoint_desc
   // or being double-buffered (bulk endpoints)
   pcd_clear_ep_kind(USB,0);
 
-  pma_addr = dcd_pma_alloc(p_endpoint_desc->bEndpointAddress, epMaxPktSize);
+  pma_addr = dcd_pma_alloc(p_endpoint_desc->bEndpointAddress, p_endpoint_desc->wMaxPacketSize.size);
 
   if(dir == TUSB_DIR_IN)
   {
     *pcd_ep_tx_address_ptr(USB, epnum) = pma_addr;
-    pcd_set_ep_tx_cnt(USB, epnum, epMaxPktSize);
+    pcd_set_ep_tx_cnt(USB, epnum, p_endpoint_desc->wMaxPacketSize.size);
     pcd_clear_tx_dtog(USB, epnum);
     pcd_set_ep_tx_status(USB,epnum,USB_EP_TX_NAK);
   }
   else
   {
     *pcd_ep_rx_address_ptr(USB, epnum) = pma_addr;
-    pcd_set_ep_rx_cnt(USB, epnum, epMaxPktSize);
+    pcd_set_ep_rx_cnt(USB, epnum, p_endpoint_desc->wMaxPacketSize.size);
     pcd_clear_rx_dtog(USB, epnum);
     pcd_set_ep_rx_status(USB, epnum, USB_EP_RX_NAK);
   }
@@ -798,12 +780,6 @@ bool dcd_edpt_open (uint8_t rhport, tusb_desc_endpoint_t const * p_endpoint_desc
   xfer_ctl_ptr(epnum, dir)->max_packet_size = epMaxPktSize;
 
   return true;
-}
-
-void dcd_edpt_close_all (uint8_t rhport)
-{
-  (void) rhport;
-  // TODO implement dcd_edpt_close_all()
 }
 
 /**
@@ -1017,7 +993,7 @@ static bool dcd_write_packet_memory_ff(tu_fifo_t * ff, uint16_t dst, uint16_t wN
   // Since we copy from a ring buffer FIFO, a wrap might occur making it necessary to conduct two copies
   // Check for first linear part
   void * src;
-  uint16_t len = tu_fifo_get_linear_read_info(ff, 0, &src, wNBytes);  // We want to read from the FIFO        - THIS FUNCTION CHANGED!!!
+  uint16_t len = tu_fifo_get_linear_read_info(ff, 0, &src, wNBytes);  // We want to read from the FIFO
   TU_VERIFY(len && dcd_write_packet_memory(dst, src, len));           // and write it into the PMA
   tu_fifo_advance_read_pointer(ff, len);
 
@@ -1099,7 +1075,7 @@ static bool dcd_read_packet_memory_ff(tu_fifo_t * ff, uint16_t src, uint16_t wNB
   // Since we copy into a ring buffer FIFO, a wrap might occur making it necessary to conduct two copies
   // Check for first linear part
   void * dst;
-  uint16_t len = tu_fifo_get_linear_write_info(ff, 0, &dst, wNBytes);           // THIS FUNCTION CHANGED!!!!
+  uint16_t len = tu_fifo_get_linear_write_info(ff, 0, &dst, wNBytes);
   TU_VERIFY(len && dcd_read_packet_memory(dst, src, len));
   tu_fifo_advance_write_pointer(ff, len);
 

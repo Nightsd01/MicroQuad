@@ -30,7 +30,6 @@
 
 #if OPENTHREAD_CONFIG_SRP_CLIENT_ENABLE
 
-#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
@@ -73,7 +72,7 @@ void Client::HostInfo::SetState(ItemState aState)
     if (aState != GetState())
     {
         otLogInfoSrp("[client] HostInfo %s -> %s", ItemStateToString(GetState()), ItemStateToString(aState));
-        mState = MapEnum(aState);
+        mState = static_cast<otSrpClientItemState>(aState);
     }
 }
 
@@ -137,7 +136,7 @@ void Client::Service::SetState(ItemState aState)
                      GetWeight(), GetPriority(), GetNumTxtEntries());
     }
 
-    mState = MapEnum(aState);
+    mState = static_cast<otSrpClientItemState>(aState);
 
 exit:
     return;
@@ -1169,7 +1168,7 @@ void Client::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessa
 {
     OT_UNUSED_VARIABLE(aMessageInfo);
 
-    static_cast<Client *>(aContext)->ProcessResponse(AsCoreType(aMessage));
+    static_cast<Client *>(aContext)->ProcessResponse(*static_cast<Message *>(aMessage));
 }
 
 void Client::ProcessResponse(Message &aMessage)

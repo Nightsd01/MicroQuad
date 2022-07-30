@@ -1,4 +1,4 @@
-DEPS_SUBMODULES += hw/mcu/nxp/lpcopen
+DEPS_SUBMODULES += hw/mcu/nxp
 
 CFLAGS += \
   -flto \
@@ -13,7 +13,7 @@ CFLAGS += \
   -DCFG_TUSB_MCU=OPT_MCU_LPC43XX
 
 # mcu driver cause following warnings
-CFLAGS += -Wno-error=unused-parameter -Wno-error=strict-prototypes  -Wno-error=cast-qual
+CFLAGS += -Wno-error=unused-parameter -Wno-error=strict-prototypes
 
 MCU_DIR = hw/mcu/nxp/lpcopen/lpc43xx/lpc_chip_43xx
 

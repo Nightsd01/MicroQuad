@@ -1,22 +1,16 @@
-SDK_DIR = hw/mcu/nxp/nxp_sdk
-DEPS_SUBMODULES += $(SDK_DIR)
+DEPS_SUBMODULES += hw/mcu/nxp
 
 CFLAGS += \
   -mthumb \
   -mabi=aapcs \
   -mcpu=cortex-m0plus \
   -DCPU_MKL25Z128VLK4 \
-  -DCFG_TUSB_MCU=OPT_MCU_MKL25ZXX \
-  -DCFG_EXAMPLE_VIDEO_READONLY
-
-LDFLAGS += \
-  -Wl,--defsym,__stack_size__=0x400 \
-  -Wl,--defsym,__heap_size__=0
+  -DCFG_TUSB_MCU=OPT_MCU_MKL25ZXX
 
 # mcu driver cause following warnings
-CFLAGS += -Wno-error=unused-parameter -Wno-error=format
+CFLAGS += -Wno-error=unused-parameter
 
-MCU_DIR = $(SDK_DIR)/devices/MKL25Z4
+MCU_DIR = hw/mcu/nxp/sdk/devices/MKL25Z4
 
 # All source paths should be relative to the top level.
 LD_FILE = $(MCU_DIR)/gcc/MKL25Z128xxx4_flash.ld
@@ -31,7 +25,7 @@ SRC_C += \
 
 INC += \
 	$(TOP)/hw/bsp/$(BOARD) \
-	$(TOP)/$(SDK_DIR)/CMSIS/Include \
+	$(TOP)/$(MCU_DIR)/../../CMSIS/Include \
 	$(TOP)/$(MCU_DIR) \
 	$(TOP)/$(MCU_DIR)/drivers \
 	$(TOP)/$(MCU_DIR)/project_template \

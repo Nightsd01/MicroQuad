@@ -21,6 +21,7 @@
 #define SPI_FLASH_SPI_CMD_RDSR      0x05
 #define SPI_FLASH_SPI_CMD_RDCR      0x15
 #define SPI_FLASH_SPI_CMD_WRSRCR    0x01
+#define SPI_FLASH_SPI_CMD_RDSFDP    0x5A
 
 /**
  * Supported Flash chip vendor id
@@ -31,7 +32,7 @@ const static char *TAG = "Octal Flash";
 // default value is rom_default_spiflash_legacy_flash_func
 extern const spiflash_legacy_funcs_t *rom_spiflash_legacy_funcs;
 extern int SPI_write_enable(void *spi);
-static uint32_t s_vendor_id;
+static uint32_t s_chip_id;
 
 
 static void s_register_rom_function(void)
@@ -61,7 +62,8 @@ static esp_err_t s_probe_mxic_chip(uint32_t chip_id, uint8_t *out_vendor_id)
     if (chip_id >> 16 != ESP_FLASH_CHIP_MXIC_OCT) {
         return ESP_ERR_NOT_FOUND;
     }
-    if (((chip_id >> 8) & 0xff) != 0x80) {
+    if (((chip_id >> 8) & 0xf0) != 0x80) {
+        // We now suppose that middle id of opi flash is 0x8*.
         ESP_EARLY_LOGE(TAG, "Detected MXIC Flash, but memory type is not Octal");
         return ESP_ERR_NOT_FOUND;
     }
@@ -69,6 +71,44 @@ static esp_err_t s_probe_mxic_chip(uint32_t chip_id, uint8_t *out_vendor_id)
 
     return ESP_OK;
 }
+
+#if CONFIG_ESPTOOLPY_FLASH_SAMPLE_MODE_DTR
+static bool s_mxic_dtr_need_swap(void)
+{
+    // This function is used for judging the data bytes whether need swap.
+    // For some of opi flash chips, the data bytes are ordered by D1-D0-D3-D2. This kinds of order needs swap.
+    // On the contrary, some opi flash chips order the data like D0-D1-D2-D3. This kinds of order doesn't need swap.
+    // Note: this function must be called when flash works under single line mode.
+    // 1. Send 0x5A to read SFDP regs for getting the first address of JEDEC Flash Parameter table.
+    // 2. Add offset with first address to get the order in 8D-8D-8D mode.
+    // 3. Judge whether the BIT(7) is 1, 1 stands for need swap, vice versa.
+    uint8_t JEDEC_first_address = 0;
+    uint8_t byte_order_val = 0;
+    uint8_t dummy = 8;
+    uint8_t cmd_len = 8;
+    uint8_t addr_len = 24;
+    uint8_t miso_bit_len = 8;
+    esp_rom_opiflash_exec_cmd(1, ESP_ROM_SPIFLASH_FASTRD_MODE,
+                              SPI_FLASH_SPI_CMD_RDSFDP, cmd_len,
+                              0x0C, addr_len,
+                              dummy,
+                              NULL, 0,
+                              (uint8_t*)&JEDEC_first_address, miso_bit_len,
+                              ESP_ROM_OPIFLASH_SEL_CS0,
+                              false);
+
+    esp_rom_opiflash_exec_cmd(1, ESP_ROM_SPIFLASH_FASTRD_MODE,
+                              SPI_FLASH_SPI_CMD_RDSFDP, cmd_len,
+                              (JEDEC_first_address + 0x47), addr_len,
+                              dummy,
+                              NULL, 0,
+                              (uint8_t*)&byte_order_val, miso_bit_len,
+                              ESP_ROM_OPIFLASH_SEL_CS0,
+                              false);
+
+    return ((byte_order_val & 0x80) == 0x80) ? true : false;
+}
+#endif // CONFIG_ESPTOOLPY_FLASH_SAMPLE_MODE_DTR
 
 // 0x00: SPI; 0x01: STR OPI;  0x02: DTR OPI
 static void s_set_flash_dtr_str_opi_mode(int spi_num, uint8_t val)
@@ -167,15 +207,28 @@ static void s_flash_init_mxic(esp_rom_spiflash_read_mode_t mode)
     esp_rom_spi_set_dtr_swap_mode(1, false, false);
 #else //CONFIG_ESPTOOLPY_FLASH_SAMPLE_MODE_DTR
     s_set_pin_drive_capability(3);
+    bool need_swap = s_mxic_dtr_need_swap();
     s_set_flash_dtr_str_opi_mode(1, 0x2);
     esp_rom_opiflash_cache_mode_config(mode, &rom_opiflash_cmd_def->cache_rd_cmd);
-    esp_rom_spi_set_dtr_swap_mode(0, true, true);
-    esp_rom_spi_set_dtr_swap_mode(1, true, true);
+    esp_rom_spi_set_dtr_swap_mode(0, need_swap, need_swap);
+    esp_rom_spi_set_dtr_swap_mode(1, need_swap, need_swap);
 #endif
 
     esp_rom_opiflash_wait_idle();
 }
 #endif   // #if CONFIG_SPI_FLASH_SUPPORT_MXIC_OPI_CHIP
+
+static void s_mxic_set_required_regs(uint32_t chip_id)
+{
+    bool is_swap = false;
+#if CONFIG_ESPTOOLPY_FLASH_SAMPLE_MODE_DTR
+    is_swap = true;
+#else
+    //STR mode does not need to enable ddr_swap registers
+#endif
+    esp_rom_spi_set_dtr_swap_mode(0, is_swap, is_swap);
+    esp_rom_spi_set_dtr_swap_mode(1, is_swap, is_swap);
+}
 
 
 /*----------------------------------------------------------------------------------------------------
@@ -184,12 +237,14 @@ static void s_flash_init_mxic(esp_rom_spiflash_read_mode_t mode)
 typedef struct opi_flash_func_t {
     esp_err_t (*probe)(uint32_t flash_id, uint8_t *out_vendor_id);      //Function pointer for detecting Flash chip vendor
     void (*init)(esp_rom_spiflash_read_mode_t mode);                    //Function pointer for initialising certain Flash chips
+    void (*regs_set)(uint32_t flash_id);                                //Function pointer for setting required registers, decided by certain flash chips.
 } opi_flash_func_t;
 
 #if CONFIG_SPI_FLASH_SUPPORT_MXIC_OPI_CHIP
 static const opi_flash_func_t opi_flash_func_mxic = {
     .probe = &s_probe_mxic_chip,
-    .init = &s_flash_init_mxic
+    .init = &s_flash_init_mxic,
+    .regs_set = &s_mxic_set_required_regs,
 };
 #endif
 
@@ -199,6 +254,9 @@ static const opi_flash_func_t *registered_chip_funcs[] = {
 #endif
     NULL,
 };
+
+//To check which Flash chip is used
+static const opi_flash_func_t **s_chip_func = NULL;
 
 esp_err_t esp_opiflash_init(uint32_t chip_id)
 {
@@ -212,7 +270,6 @@ esp_err_t esp_opiflash_init(uint32_t chip_id)
     mode = ESP_ROM_SPIFLASH_FASTRD_MODE;
 #endif
 
-    //To check which Flash chip is used
     const opi_flash_func_t **chip_func = &registered_chip_funcs[0];
 
     uint8_t vendor_id = 0;
@@ -220,13 +277,14 @@ esp_err_t esp_opiflash_init(uint32_t chip_id)
         ret = (*chip_func)->probe(chip_id, &vendor_id);
         if (ret == ESP_OK) {
             // Detect this is the supported chip type
+            s_chip_id = chip_id;
             (*chip_func)->init(mode);
-            s_vendor_id = vendor_id;
             s_register_rom_function();
             break;
         }
         chip_func++;
     }
+    s_chip_func = chip_func;
 
     if (ret != ESP_OK) {
         ESP_EARLY_LOGE(TAG, "No detected Flash chip, please check the menuconfig to see if the chip is supported");
@@ -241,14 +299,5 @@ esp_err_t esp_opiflash_init(uint32_t chip_id)
  */
 void esp_opiflash_set_required_regs(void)
 {
-    bool is_swap = false;
-#if CONFIG_ESPTOOLPY_FLASH_SAMPLE_MODE_DTR
-    if (s_vendor_id == ESP_FLASH_CHIP_MXIC_OCT) {
-        is_swap = true;
-    }
-#else
-    //STR mode does not need to enable ddr_swap registers
-#endif
-    esp_rom_spi_set_dtr_swap_mode(0, is_swap, is_swap);
-    esp_rom_spi_set_dtr_swap_mode(1, is_swap, is_swap);
+    (*s_chip_func)->regs_set(s_chip_id);
 }

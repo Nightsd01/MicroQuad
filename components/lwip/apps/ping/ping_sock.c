@@ -1,8 +1,16 @@
-/*
- * SPDX-FileCopyrightText: 2019-2021 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
+// Copyright 2019 Espressif Systems (Shanghai) PTE LTD
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -59,6 +67,7 @@ typedef struct {
     uint32_t elapsed_time_ms;
     uint32_t total_time_ms;
     uint8_t ttl;
+    uint8_t tos;
     uint32_t flags;
     void (*on_ping_success)(esp_ping_handle_t hdl, void *args);
     void (*on_ping_timeout)(esp_ping_handle_t hdl, void *args);
@@ -123,6 +132,7 @@ static int esp_ping_receive(esp_ping_t *ep)
                 if ((iecho->id == ep->packet_hdr->id) && (iecho->seqno == ep->packet_hdr->seqno)) {
                     ep->received++;
                     ep->ttl = iphdr->_ttl;
+                    ep->tos = iphdr->_tos;
                     ep->recv_len = lwip_ntohs(IPH_LEN(iphdr)) - data_head;  // The data portion of ICMP
                     return len;
                 }
@@ -259,7 +269,7 @@ esp_err_t esp_ping_new_session(const esp_ping_config_t *config, const esp_ping_c
         ep->sock = socket(AF_INET6, SOCK_RAW, IP6_NEXTH_ICMP6);
     }
 #endif
-    PING_CHECK(ep->sock >= 0, "create socket failed: %d", err, ESP_FAIL, ep->sock);
+    PING_CHECK(ep->sock > 0, "create socket failed: %d", err, ESP_FAIL, ep->sock);
     /* set if index */
     if(config->interface) {
         struct ifreq iface;
@@ -280,6 +290,9 @@ esp_err_t esp_ping_new_session(const esp_ping_config_t *config, const esp_ping_c
 
     /* set tos */
     setsockopt(ep->sock, IPPROTO_IP, IP_TOS, &config->tos, sizeof(config->tos));
+
+    /* set ttl */
+    setsockopt(ep->sock, IPPROTO_IP, IP_TTL, &config->ttl, sizeof(config->ttl));
 
     /* set socket address */
     if (IP_IS_V4(&config->target_addr)) {
@@ -362,6 +375,10 @@ esp_err_t esp_ping_get_profile(esp_ping_handle_t hdl, esp_ping_profile_t profile
     case ESP_PING_PROF_SEQNO:
         from = &ep->packet_hdr->seqno;
         copy_size = sizeof(ep->packet_hdr->seqno);
+        break;
+    case ESP_PING_PROF_TOS:
+        from = &ep->tos;
+        copy_size = sizeof(ep->tos);
         break;
     case ESP_PING_PROF_TTL:
         from = &ep->ttl;

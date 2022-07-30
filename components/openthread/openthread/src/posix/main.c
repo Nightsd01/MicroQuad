@@ -129,6 +129,7 @@ typedef struct PosixConfig
 {
     otPlatformConfig mPlatformConfig;    ///< Platform configuration.
     otLogLevel       mLogLevel;          ///< Debug level of logging.
+    bool             mIsDryRun;          ///< Dry run.
     bool             mPrintRadioVersion; ///< Whether to print radio firmware version.
     bool             mIsVerbose;         ///< Whether to print log to stderr.
 } PosixConfig;
@@ -231,7 +232,7 @@ static void ParseArg(int aArgCount, char *aArgVector[], PosixConfig *aConfig)
             aConfig->mPlatformConfig.mBackboneInterfaceName = optarg;
             break;
         case OT_POSIX_OPT_DRY_RUN:
-            aConfig->mPlatformConfig.mDryRun = true;
+            aConfig->mIsDryRun = true;
             break;
         case OT_POSIX_OPT_TIME_SPEED:
         {
@@ -307,7 +308,7 @@ static otInstance *InitInstance(PosixConfig *aConfig)
         syslog(LOG_INFO, "RCP version: %s", otPlatRadioGetVersionString(instance));
     }
 
-    if (aConfig->mPlatformConfig.mDryRun)
+    if (aConfig->mIsDryRun)
     {
         exit(OT_EXIT_SUCCESS);
     }

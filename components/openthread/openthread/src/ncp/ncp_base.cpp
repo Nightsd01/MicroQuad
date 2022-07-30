@@ -1219,7 +1219,8 @@ otError NcpBase::CommandHandler_RESET(uint8_t aHeader)
 
     if (mDecoder.GetRemainingLengthInStruct() > 0)
     {
-        SuccessOrAssert(error = mDecoder.ReadUint8(reset_type));
+        error = mDecoder.ReadUint8(reset_type);
+        OT_ASSERT(error == OT_ERROR_NONE);
     }
 
 #if OPENTHREAD_RADIO
@@ -1234,8 +1235,8 @@ otError NcpBase::CommandHandler_RESET(uint8_t aHeader)
 
         ResetCounters();
 
-        SuccessOrAssert(
-            error = WriteLastStatusFrame(SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0, SPINEL_STATUS_RESET_POWER_ON));
+        error = WriteLastStatusFrame(SPINEL_HEADER_FLAG | SPINEL_HEADER_IID_0, SPINEL_STATUS_RESET_POWER_ON);
+        OT_ASSERT(error == OT_ERROR_NONE);
     }
     else
 #endif

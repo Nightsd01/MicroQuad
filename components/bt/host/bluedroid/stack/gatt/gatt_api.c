@@ -583,6 +583,11 @@ tGATT_STATUS GATTS_HandleValueIndication (UINT16 conn_id,  UINT16 attr_handle, U
         return (tGATT_STATUS) GATT_INVALID_CONN_ID;
     }
 
+    if ((GATT_CH_OPEN != gatt_get_ch_state(p_tcb)) || (p_tcb->payload_size == 0)) {
+        GATT_TRACE_ERROR("connection not established\n");
+        return GATT_WRONG_STATE;
+    }
+
     if (! GATT_HANDLE_IS_VALID (attr_handle)) {
         return GATT_ILLEGAL_PARAMETER;
     }
@@ -648,6 +653,11 @@ tGATT_STATUS GATTS_HandleValueNotification (UINT16 conn_id, UINT16 attr_handle,
     if ( (p_reg == NULL) || (p_tcb == NULL)) {
         GATT_TRACE_ERROR ("GATTS_HandleValueNotification Unknown  conn_id: %u \n", conn_id);
         return (tGATT_STATUS) GATT_INVALID_CONN_ID;
+    }
+
+    if ((GATT_CH_OPEN != gatt_get_ch_state(p_tcb)) || (p_tcb->payload_size == 0)) {
+        GATT_TRACE_ERROR("connection not established\n");
+        return GATT_WRONG_STATE;
     }
 
     if (GATT_HANDLE_IS_VALID (attr_handle)) {
@@ -814,13 +824,13 @@ tGATT_STATUS GATTC_ConfigureMTU (UINT16 conn_id)
 
     GATT_TRACE_API ("GATTC_ConfigureMTU conn_id=%d mtu=%d", conn_id, mtu );
 
+    if ( (p_tcb == NULL) || (p_reg == NULL) || (mtu < GATT_DEF_BLE_MTU_SIZE) || (mtu > GATT_MAX_MTU_SIZE)) {
+        return GATT_ILLEGAL_PARAMETER;
+    }
+
     /* Validate that the link is BLE, not BR/EDR */
     if (p_tcb->transport != BT_TRANSPORT_LE) {
         return GATT_ERROR;
-    }
-
-    if ( (p_tcb == NULL) || (p_reg == NULL) || (mtu < GATT_DEF_BLE_MTU_SIZE) || (mtu > GATT_MAX_MTU_SIZE)) {
-        return GATT_ILLEGAL_PARAMETER;
     }
 
     if (gatt_is_clcb_allocated(conn_id)) {

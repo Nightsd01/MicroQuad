@@ -355,15 +355,18 @@ void KeyMaterial::SetFrom(const Key &aKey, bool aIsExportable)
 {
 #if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
     {
+        Error  error;
         KeyRef keyRef = 0;
 
         DestroyKey();
 
-        SuccessOrAssert(Crypto::Storage::ImportKey(keyRef, Crypto::Storage::kKeyTypeAes,
-                                                   Crypto::Storage::kKeyAlgorithmAesEcb,
-                                                   (aIsExportable ? Crypto::Storage::kUsageExport : 0) |
-                                                       Crypto::Storage::kUsageEncrypt | Crypto::Storage::kUsageDecrypt,
-                                                   Crypto::Storage::kTypeVolatile, aKey.GetBytes(), Key::kSize));
+        error = Crypto::Storage::ImportKey(keyRef, Crypto::Storage::kKeyTypeAes, Crypto::Storage::kKeyAlgorithmAesEcb,
+                                           (aIsExportable ? Crypto::Storage::kUsageExport : 0) |
+                                               Crypto::Storage::kUsageEncrypt | Crypto::Storage::kUsageDecrypt,
+                                           Crypto::Storage::kTypeVolatile, aKey.GetBytes(), Key::kSize);
+
+        OT_ASSERT(error == kErrorNone);
+        OT_UNUSED_VARIABLE(error);
 
         SetKeyRef(keyRef);
     }
@@ -380,9 +383,12 @@ void KeyMaterial::ExtractKey(Key &aKey)
 
     if (Crypto::Storage::IsKeyRefValid(GetKeyRef()))
     {
+        Error  error;
         size_t keySize;
 
-        SuccessOrAssert(Crypto::Storage::ExportKey(GetKeyRef(), aKey.m8, Key::kSize, keySize));
+        error = Crypto::Storage::ExportKey(GetKeyRef(), aKey.m8, Key::kSize, keySize);
+        OT_ASSERT(error == kErrorNone);
+        OT_UNUSED_VARIABLE(error);
     }
 #else
     aKey = GetKey();

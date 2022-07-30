@@ -326,9 +326,6 @@ private:
     // Process methods only on FTD/MTD
 #if OPENTHREAD_FTD || OPENTHREAD_MTD
     otError ProcessCcaThreshold(Arg aArgs[]);
-#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
-    otError ProcessCcm(Arg aArgs[]);
-#endif
     otError ProcessBufferInfo(Arg aArgs[]);
     otError ProcessChannel(Arg aArgs[]);
 #if OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE
@@ -673,9 +670,6 @@ private:
 #endif
         {"bufferinfo", &Interpreter::ProcessBufferInfo},
         {"ccathreshold", &Interpreter::ProcessCcaThreshold},
-#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
-        {"ccm", &Interpreter::ProcessCcm},
-#endif
         {"channel", &Interpreter::ProcessChannel},
 #if OPENTHREAD_FTD
         {"child", &Interpreter::ProcessChild},

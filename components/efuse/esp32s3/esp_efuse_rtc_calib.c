@@ -19,23 +19,18 @@
 
 int esp_efuse_rtc_calib_get_ver(void)
 {
-    uint32_t blk1_version = 0;
-    uint32_t blk2_version = 0;
-    ESP_ERROR_CHECK(esp_efuse_read_field_blob(ESP_EFUSE_BLOCK1_VERSION, &blk1_version, ESP_EFUSE_BLOCK1_VERSION[0]->bit_count));
-    ESP_ERROR_CHECK(esp_efuse_read_field_blob(ESP_EFUSE_BLOCK2_VERSION, &blk2_version, ESP_EFUSE_BLOCK2_VERSION[0]->bit_count));
+    uint32_t blk_ver_major = 0;
+    ESP_ERROR_CHECK(esp_efuse_read_field_blob(ESP_EFUSE_BLK_VER_MAJOR, &blk_ver_major, ESP_EFUSE_BLK_VER_MAJOR[0]->bit_count));
 
-    if (blk1_version == blk2_version) {
-        return blk1_version;
-    } else {
-        blk1_version = 0;
-        blk2_version = 0;
+    uint32_t cali_version_v1 = (blk_ver_major == 1) ? 1 : 0;
+    if (!cali_version_v1) {
         ESP_LOGW("eFuse", "calibration efuse version does not match, set default version: %d", 0);
     }
 
-    return blk2_version;
+    return cali_version_v1;
 }
 
-uint16_t esp_efuse_rtc_calib_get_init_code(int version, uint32_t adc_unit, int atten)
+uint32_t esp_efuse_rtc_calib_get_init_code(int version, uint32_t adc_unit, int atten)
 {
     assert(version == 1);
     assert(atten < 4);
@@ -100,4 +95,20 @@ esp_err_t esp_efuse_rtc_calib_get_cal_voltage(int version, uint32_t adc_unit, in
     *out_vol_mv = 850;
 
     return ESP_OK;
+}
+
+float esp_efuse_rtc_calib_get_cal_temp(int version)
+{
+    assert(version == 1);
+    const esp_efuse_desc_t** cal_temp_efuse;
+    cal_temp_efuse = ESP_EFUSE_TEMP_CALIB;
+    int cal_temp_size = esp_efuse_get_field_size(cal_temp_efuse);
+    assert(cal_temp_size == 9);
+
+    uint32_t cal_temp = 0;
+    esp_err_t err = esp_efuse_read_field_blob(cal_temp_efuse, &cal_temp, cal_temp_size);
+    assert(err == ESP_OK);
+    (void)err;
+    // BIT(8) stands for sign: 1: negtive, 0: positive
+    return ((cal_temp & BIT(8)) != 0)? -(uint8_t)cal_temp: (uint8_t)cal_temp;
 }

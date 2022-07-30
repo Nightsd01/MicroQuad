@@ -143,7 +143,7 @@ def test_stall_ep0():
 	assert (inst.read_stb() == 0)
 
 
-rm = visa.ResourceManager()
+rm = visa.ResourceManager("/c/Windows/system32/visa64.dll")
 reslist = rm.list_resources("USB?::?*::INSTR")
 print(reslist)
 

@@ -33,6 +33,7 @@
 #include <nuttx/arch.h>
 
 #include "device/dcd.h"
+#include "osal/osal.h"
 
 #define CXD56_EPNUM (7)
 #define CXD56_SETUP_QUEUE_DEPTH (4)
@@ -134,7 +135,7 @@ static int _dcd_setup(FAR struct usbdevclass_driver_s *driver, FAR struct usbdev
   if (usbdcd_driver.setup_processed)
   {
     usbdcd_driver.setup_processed = false;
-    dcd_event_setup_received(0, (uint8_t const *) ctrl, true);
+    dcd_event_setup_received(0, (uint8_t *) ctrl, true);
   }
   else
   {
@@ -257,8 +258,6 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const *p_endpoint_desc)
   uint8_t epnum = tu_edpt_number(p_endpoint_desc->bEndpointAddress);
   uint8_t const dir = tu_edpt_dir(p_endpoint_desc->bEndpointAddress);
   uint8_t xfrtype = 0;
-  uint16_t const ep_mps = tu_edpt_packet_size(p_endpoint_desc);
-
   struct usb_epdesc_s epdesc;
 
   if (epnum >= CXD56_EPNUM)
@@ -289,7 +288,7 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const *p_endpoint_desc)
   usbdcd_driver.req[epnum] = EP_ALLOCREQ(usbdcd_driver.ep[epnum]);
   if (usbdcd_driver.req[epnum] != NULL)
   {
-    usbdcd_driver.req[epnum]->len = ep_mps;
+    usbdcd_driver.req[epnum]->len = p_endpoint_desc->wMaxPacketSize.size;
   }
   else
   {
@@ -302,8 +301,8 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const *p_endpoint_desc)
   epdesc.type = p_endpoint_desc->bDescriptorType;
   epdesc.addr = p_endpoint_desc->bEndpointAddress;
   epdesc.attr = xfrtype;
-  epdesc.mxpacketsize[0] = LSBYTE(ep_mps);
-  epdesc.mxpacketsize[1] = MSBYTE(ep_mps);
+  epdesc.mxpacketsize[0] = LSBYTE(p_endpoint_desc->wMaxPacketSize.size);
+  epdesc.mxpacketsize[1] = MSBYTE(p_endpoint_desc->wMaxPacketSize.size);
   epdesc.interval = p_endpoint_desc->bInterval;
 
   if (EP_CONFIGURE(usbdcd_driver.ep[epnum], &epdesc, false) < 0)
@@ -312,12 +311,6 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const *p_endpoint_desc)
   }
 
   return true;
-}
-
-void dcd_edpt_close_all (uint8_t rhport)
-{
-  (void) rhport;
-  // TODO implement dcd_edpt_close_all()
 }
 
 bool dcd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t *buffer, uint16_t total_bytes)

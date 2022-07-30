@@ -54,8 +54,6 @@
 #include "common/code_utils.hpp"
 #include "common/encoding.hpp"
 
-#include "system.hpp"
-
 static const size_t kMaxFileNameSize = sizeof(OPENTHREAD_CONFIG_POSIX_SETTINGS_PATH) + 32;
 
 static int sSettingsFd = -1;
@@ -170,9 +168,6 @@ void otPlatSettingsInit(otInstance *aInstance)
 {
     otError error = OT_ERROR_NONE;
 
-    // Don't touch the settings file the system runs in dry-run mode.
-    VerifyOrExit(!IsSystemDryRun());
-
 #if OPENTHREAD_POSIX_CONFIG_SECURE_SETTINGS_ENABLE
     otPosixSecureSettingsInit(aInstance);
 #endif
@@ -238,7 +233,6 @@ otError otPlatSettingsGet(otInstance *aInstance, uint16_t aKey, int aIndex, uint
     const off_t size   = lseek(sSettingsFd, 0, SEEK_END);
     off_t       offset = lseek(sSettingsFd, 0, SEEK_SET);
 
-    VerifyOrExit(!IsSystemDryRun());
 #if OPENTHREAD_POSIX_CONFIG_SECURE_SETTINGS_ENABLE
     if (isCriticalKey(aKey))
     {
@@ -498,12 +492,6 @@ void otPlatRadioGetIeeeEui64(otInstance *aInstance, uint8_t *aIeeeEui64)
     OT_UNUSED_VARIABLE(aInstance);
 
     memset(aIeeeEui64, 0, sizeof(uint64_t));
-}
-
-// Stub implementation for testing
-bool IsSystemDryRun(void)
-{
-    return false;
 }
 
 int main()

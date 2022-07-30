@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -26,27 +26,32 @@ static void i2s_hal_mclk_div_decimal_cal(i2s_hal_clock_cfg_t *clk_cfg, i2s_ll_mc
     cal->mclk_div = clk_cfg->mclk_div;
     cal->a = 1;
     cal->b = 0;
-    /* If sclk = 0 means APLL clock applied, mclk_div should set to 1 */
-    if (!clk_cfg->sclk) {
-        cal->mclk_div = 1;
+
+    uint32_t freq_diff = abs(clk_cfg->sclk - clk_cfg->mclk * cal->mclk_div);
+    if (!freq_diff) {
         return;
     }
-    uint32_t freq_diff = clk_cfg->sclk - clk_cfg->mclk * cal->mclk_div;
+    float decimal = freq_diff / (float)clk_cfg->mclk;
+    // Carry bit if the decimal is greater than 1.0 - 1.0 / (63.0 * 2) = 125.0 / 126.0
+    if (decimal > 125.0 / 126.0) {
+        cal->mclk_div++;
+        return;
+    }
     uint32_t min = ~0;
     for (int a = 2; a <= I2S_LL_MCLK_DIVIDER_MAX; a++) {
-        for (int b = 1; b < a; b++) {
-            ma = freq_diff * a;
-            mb = clk_cfg->mclk * b;
-            if (ma == mb) {
-                cal->a = a;
-                cal->b = b;
-                return;
-            }
-            if (abs((mb - ma)) < min) {
-                cal->a = a;
-                cal->b = b;
-                min = abs(mb - ma);
-            }
+        // Calculate the closest 'b' in this loop, no need to loop 'b' to seek the closest value
+        int b = (int)(a * (freq_diff / (double)clk_cfg->mclk) + 0.5);
+        ma = freq_diff * a;
+        mb = clk_cfg->mclk * b;
+        if (ma == mb) {
+            cal->a = a;
+            cal->b = b;
+            return;
+        }
+        if (abs((mb - ma)) < min) {
+            cal->a = a;
+            cal->b = b;
+            min = abs(mb - ma);
         }
     }
 }
@@ -167,7 +172,6 @@ void i2s_hal_tx_set_common_mode(i2s_hal_context_t *hal, const i2s_hal_config_t *
     i2s_ll_tx_clk_set_src(hal->dev, I2S_CLK_D2CLK); // Set I2S_CLK_D2CLK as default
     i2s_ll_mclk_use_tx_clk(hal->dev);
 
-    i2s_ll_tx_set_active_chan_mask(hal->dev, hal_cfg->chan_mask);
     // In TDM mode(more than 2 channels), the ws polarity should be high first.
     if (hal_cfg->total_chan > 2) {
         i2s_ll_tx_set_ws_idle_pol(hal->dev, true);
@@ -193,7 +197,6 @@ void i2s_hal_rx_set_common_mode(i2s_hal_context_t *hal, const i2s_hal_config_t *
     i2s_ll_rx_clk_set_src(hal->dev, I2S_CLK_D2CLK); // Set I2S_CLK_D2CLK as default
     i2s_ll_mclk_use_rx_clk(hal->dev);
 
-    i2s_ll_rx_set_active_chan_mask(hal->dev, hal_cfg->chan_mask);
     // In TDM mode(more than 2 channels), the ws polarity should be high first.
     if (hal_cfg->total_chan > 2) {
         i2s_ll_rx_set_ws_idle_pol(hal->dev, true);
@@ -233,7 +236,10 @@ void i2s_hal_tx_set_channel_style(i2s_hal_context_t *hal, const i2s_hal_config_t
     /* Set channel number and valid data bits */
 #if SOC_I2S_SUPPORTS_TDM
     chan_num = hal_cfg->total_chan;
+    i2s_ll_tx_set_active_chan_mask(hal->dev, hal_cfg->chan_mask >> 16);
     i2s_ll_tx_set_chan_num(hal->dev, chan_num);
+#else
+    i2s_ll_tx_set_chan_mod(hal->dev, hal_cfg->chan_fmt < I2S_CHANNEL_FMT_ONLY_RIGHT ? hal_cfg->chan_fmt : (hal_cfg->chan_fmt >> 1)); // 0-two channel;1-right;2-left;3-righ;4-left
 #endif
     i2s_ll_tx_set_sample_bit(hal->dev, chan_bits, data_bits);
     i2s_ll_tx_enable_mono_mode(hal->dev, is_mono);
@@ -258,7 +264,10 @@ void i2s_hal_rx_set_channel_style(i2s_hal_context_t *hal, const i2s_hal_config_t
 
 #if SOC_I2S_SUPPORTS_TDM
     chan_num = hal_cfg->total_chan;
+    i2s_ll_rx_set_active_chan_mask(hal->dev, hal_cfg->chan_mask >> 16);
     i2s_ll_rx_set_chan_num(hal->dev, chan_num);
+#else
+    i2s_ll_rx_set_chan_mod(hal->dev, hal_cfg->chan_fmt < I2S_CHANNEL_FMT_ONLY_RIGHT ? hal_cfg->chan_fmt : (hal_cfg->chan_fmt >> 1)); // 0-two channel;1-right;2-left;3-righ;4-left
 #endif
     i2s_ll_rx_set_sample_bit(hal->dev, chan_bits, data_bits);
     i2s_ll_rx_enable_mono_mode(hal->dev, is_mono);
@@ -342,32 +351,20 @@ void i2s_hal_config_param(i2s_hal_context_t *hal, const i2s_hal_config_t *hal_cf
 
 void i2s_hal_start_tx(i2s_hal_context_t *hal)
 {
-#if SOC_I2S_SUPPORTS_TDM
-    i2s_ll_tx_enable_clock(hal->dev);
-#endif
     i2s_ll_tx_start(hal->dev);
 }
 
 void i2s_hal_start_rx(i2s_hal_context_t *hal)
 {
-#if SOC_I2S_SUPPORTS_TDM
-    i2s_ll_rx_enable_clock(hal->dev);
-#endif
     i2s_ll_rx_start(hal->dev);
 }
 
 void i2s_hal_stop_tx(i2s_hal_context_t *hal)
 {
     i2s_ll_tx_stop(hal->dev);
-#if SOC_I2S_SUPPORTS_TDM
-    i2s_ll_tx_disable_clock(hal->dev);
-#endif
 }
 
 void i2s_hal_stop_rx(i2s_hal_context_t *hal)
 {
     i2s_ll_rx_stop(hal->dev);
-#if SOC_I2S_SUPPORTS_TDM
-    i2s_ll_rx_disable_clock(hal->dev);
-#endif
 }

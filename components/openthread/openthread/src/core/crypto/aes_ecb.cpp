@@ -40,24 +40,35 @@ namespace Crypto {
 
 AesEcb::AesEcb(void)
 {
+    Error err = kErrorNone;
+
     mContext.mContext     = mContextStorage;
     mContext.mContextSize = sizeof(mContextStorage);
-    SuccessOrAssert(otPlatCryptoAesInit(&mContext));
+    err                   = otPlatCryptoAesInit(&mContext);
+
+    OT_ASSERT(err == kErrorNone);
+    OT_UNUSED_VARIABLE(err);
 }
 
 void AesEcb::SetKey(const Key &aKey)
 {
-    SuccessOrAssert(otPlatCryptoAesSetKey(&mContext, &aKey));
+    Error err = otPlatCryptoAesSetKey(&mContext, &aKey);
+    OT_ASSERT(err == kErrorNone);
+    OT_UNUSED_VARIABLE(err);
 }
 
 void AesEcb::Encrypt(const uint8_t aInput[kBlockSize], uint8_t aOutput[kBlockSize])
 {
-    SuccessOrAssert(otPlatCryptoAesEncrypt(&mContext, aInput, aOutput));
+    Error err = otPlatCryptoAesEncrypt(&mContext, aInput, aOutput);
+    OT_ASSERT(err == kErrorNone);
+    OT_UNUSED_VARIABLE(err);
 }
 
 AesEcb::~AesEcb(void)
 {
-    SuccessOrAssert(otPlatCryptoAesFree(&mContext));
+    Error err = otPlatCryptoAesFree(&mContext);
+    OT_ASSERT(err == kErrorNone);
+    OT_UNUSED_VARIABLE(err);
 }
 
 } // namespace Crypto

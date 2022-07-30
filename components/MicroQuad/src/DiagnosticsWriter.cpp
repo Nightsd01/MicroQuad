@@ -7,6 +7,8 @@
 
 const char *diagnosticsTag = "diagnostics";
 
+#define MAX_SD_BUFFER_BYTE_SIZE 512
+
 static bool _createDir(fs::FS &fs, const char * path){
     if(!fs.mkdir(path)){
         ESP_LOGE(diagnosticsTag, "mkdir failed");
@@ -69,12 +71,18 @@ DiagnosticsWriter::DiagnosticsWriter(const char *diagnosticsDirPath, int sdCardC
 
 void DiagnosticsWriter::writeDiagnostics(String line)
 {
-    if (!_diagnosticsFile.print(line + "\n")) {
+    // if (_uncommittedDataSize + (sizeof(char) * val.length()) > MAX_SD_BUFFER_BYTE_SIZE)
+
+    if (!_diagnosticsFile.println(line)) {
         ESP_LOGE(diagnosticsTag, "Failed to write diagnostics data");
         return;
     }
-    if (millis() - _lastFileWrite > 500 && xPortGetCoreID() == 1) {
+
+    if (xPortGetCoreID() == 1 && millis() - _lastFileWrite > 5000) {
         _diagnosticsFile.flush();
         _lastFileWrite = millis();
-    }
+    } 
+    // else {
+    //     _uncommittedDataSize += sizeof(char) * val.count();
+    // }
 }

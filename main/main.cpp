@@ -1,5 +1,9 @@
+#define I2CDEV_ARDUINO_WIRE
+
 #include <QuadcopterController.h>
 #include <DebugHelper.h>
+#include <ParameterProvider.h>
+#include <RegisteredParameters.h>
 
 // uses MPU6050 digital motion processor for smooth accelerometer readings
 #include <I2Cdev.h>
@@ -28,20 +32,19 @@
 #include "esp_system.h"
 #include "esp_log.h"
 
-#include <FastLED.h>
+// #include <FastLED.h>
 
-#define ENABLE_EMERGENCY_MODE 1
+// static bool _enableEmergencyMode = false;
 
 // LED Setup
 #define NUM_LEDS 1
-#define LED_DATA_PIN 32
-#define CLOCK_PIN 13
-CRGB leds[NUM_LEDS];
+#define LED_DATA_PIN 14
+// CRGB leds[NUM_LEDS];
 
 #define NUM_MOTORS 4
 
 // Accelerometer i2c pin definition
-#define ACCEL_INTERRUPT_PIN 35
+#define ACCEL_INTERRUPT_PIN 45
 
 // Bluetooth constants
 #define SERVICE_UUID "ab0828b1-198e-4351-b779-901fa0e0371e"
@@ -65,7 +68,7 @@ CRGB leds[NUM_LEDS];
 #define TELEM_UPDATE_INTERVAL_MILLIS 100
 
 // Battery capacity sensing constants
-#define BATTERY_SENSE_PIN 34
+#define BATTERY_SENSE_PIN 9
 #define NUM_BATTERY_CELLS 2.0f
 #define BATTERY_CELL_MAX_VOLTAGE 4.2f
 #define BATTERY_CELL_MIN_VOLTAGE 3.3f
@@ -100,7 +103,7 @@ long long lastTelemetryUpdateTimeMillis = 0;
 motor_outputs_t previousMotorOutputs;
 bool setMotorOutputs = false;
 
-const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_33, GPIO_NUM_27, GPIO_NUM_26, GPIO_NUM_25};
+const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_5, GPIO_NUM_6, GPIO_NUM_7, GPIO_NUM_8};
 
 bool resetFlag = false;
 
@@ -125,10 +128,12 @@ static bool completedFirstArm = false;
 static bool enteredEmergencyMode = false;
 static position_values_t previousIMUValues;
 
+static ParameterProvider _parameterProvider;
+
 static void updateArmStatus(void) {
-  FastLED.clear();
-  leds[0] = (armed ? CRGB::Green : CRGB::Red);
-  FastLED.show();
+  // FastLED.clear();
+  // leds[0] = (armed ? CRGB::Green : CRGB::Red);
+  // FastLED.show();
   if (armed && !completedFirstArm) {
     LOG_INFO("Setting up motor outputs");
     completedFirstArm = true;
@@ -290,7 +295,7 @@ float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gra
 QuadcopterController *controller;
 DebugHelper *helper;
 
-#define SD_CS_PIN 12
+#define SD_CS_PIN 10
 #define DEBUG_LOG_PATH "/logs"
 #define DIAGNOSTICS_PATH "/diags"
 
@@ -333,6 +338,8 @@ static void initController()
 // 4 - correct
 
 // Initial setup
+static std::string someStr;
+static std::string previousStr;
 void setup() {
     const unsigned long initializationTime = millis();
     Serial.begin(115200);
@@ -344,17 +351,18 @@ void setup() {
 
     initController();
 
-    Wire.begin();
+    Wire.begin(1, 4);
     Wire.setClock(400000);
 
     // Wait for serial to become available
     while (!Serial);
 
     LOG_INFO("Initializing Arming Signal LED");
-    FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
-    FastLED.clear();
-    leds[0] = CRGB::Green;
-    FastLED.show();
+    // FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
+    // FastLED.addLeds<WS2812B, LED_DATA_PIN>(leds, NUM_LEDS);
+    // FastLED.clear();
+    // leds[0] = CRGB::Green;
+    // FastLED.show();
 
     LOG_INFO("Initializing bluetooth connection");
 
@@ -362,6 +370,22 @@ void setup() {
     BLEDevice::init(DEVICE_NAME);
     BLEServer *server = BLEDevice::createServer();
     server->setCallbacks(new MyServerCallbacks());
+
+    LOG_INFO("Setting up parameter provider");
+    _parameterProvider.begin("/prm.csv");
+    std::string testVal = _parameterProvider.get(TEST_VALUE, std::string("default_val"));
+    bool enableEmerg = _parameterProvider.get(ENABLE_EMERGENCY_MODE_DETECTION, 0) == 1;
+    LOG_INFO("Enable emergency mode: %d", enableEmerg);
+    LOG_INFO("Got test value: %s", testVal.c_str());
+
+    _parameterProvider.watch(ENABLE_EMERGENCY_MODE_DETECTION, (std::function<void(int)>)([&](int newValue) {
+      LOG_INFO("VALUE CHANGED: %d", newValue == 1);
+    }));
+    
+    _parameterProvider.watch(TEST_VALUE, (std::function<void(std::string)>)([&](std::string newValue) {
+      LOG_INFO("TEST STRING VALUE CHANGED: %s", newValue.c_str());
+      someStr = newValue;
+    }));
 
     BLEService *service = server->createService(BLEUUID(std::string(SERVICE_UUID)), 30, 0);
 
@@ -417,8 +441,9 @@ void setup() {
     advertisement->start();
 
     // initialize device
-    LOG_INFO(F("Initializing I2C devices..."));
+    LOG_INFO(F("Initializing I2C devices 1..."));
     mpu.initialize();
+    LOG_INFO(F("Initializing I2C devices 2..."));
     pinMode(ACCEL_INTERRUPT_PIN, INPUT);
     
     // verify connection
@@ -438,6 +463,7 @@ void setup() {
 
     if (dmpStatus == 0) {
       LOG_INFO(F("Enabling DMP..."));
+      mpu.setDLPFMode(0);
       mpu.setDMPEnabled(true);
       attachInterrupt(digitalPinToInterrupt(ACCEL_INTERRUPT_PIN), dmpDataReady, RISING);
       mpuIntStatus = mpu.getIntStatus();
@@ -555,6 +581,24 @@ void loop() {
   unsigned long timestamp = micros();
   if (interruptLock) {
     return;
+  }
+
+  if (Serial.available() > 0) {
+    String serialString = Serial.readString();
+    if (serialString.indexOf("enable_emerg") != -1) {
+      LOG_INFO("Updating");
+      _parameterProvider.update(ENABLE_EMERGENCY_MODE_DETECTION, 1);
+    }
+
+    if (serialString.indexOf("testing") != -1) {
+      LOG_INFO("Updating string");
+      _parameterProvider.update(TEST_VALUE, std::string("some_new_val2"));
+    }
+  }
+
+  if (someStr != previousStr) {
+    LOG_INFO("static string changed: %s", someStr.c_str());
+    previousStr = someStr;
   }
 
   if (armed != previousArmStatus) {

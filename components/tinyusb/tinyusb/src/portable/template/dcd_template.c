@@ -25,6 +25,7 @@
  */
 
 #include "tusb_option.h"
+#include "common/tusb_fifo.h"
 
 #if CFG_TUSB_MCU == OPT_MCU_NONE
 
@@ -92,11 +93,6 @@ bool dcd_edpt_open (uint8_t rhport, tusb_desc_endpoint_t const * ep_desc)
   (void) rhport;
   (void) ep_desc;
   return false;
-}
-
-void dcd_edpt_close_all (uint8_t rhport)
-{
-  (void) rhport;
 }
 
 // Submit a transfer, When complete dcd_event_xfer_complete() is invoked to notify the stack

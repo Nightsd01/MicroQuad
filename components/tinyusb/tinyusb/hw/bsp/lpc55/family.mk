@@ -1,11 +1,10 @@
 UF2_FAMILY_ID = 0x2abc77ec
-SDK_DIR = hw/mcu/nxp/mcux-sdk
-DEPS_SUBMODULES += lib/sct_neopixel $(SDK_DIR)
+DEPS_SUBMODULES += lib/sct_neopixel hw/mcu/nxp
 
 include $(TOP)/$(BOARD_PATH)/board.mk
 
-# Default to Highspeed PORT1
-PORT ?= 1
+# TODO change Default to Highspeed PORT1
+PORT ?= 0
 
 CFLAGS += \
   -flto \
@@ -15,15 +14,13 @@ CFLAGS += \
   -mfloat-abi=hard \
   -mfpu=fpv5-sp-d16 \
   -DCFG_TUSB_MCU=OPT_MCU_LPC55XX \
+  -DCFG_TUSB_MEM_SECTION='__attribute__((section(".data")))' \
   -DCFG_TUSB_MEM_ALIGN='__attribute__((aligned(64)))' \
   -DBOARD_DEVICE_RHPORT_NUM=$(PORT)
 
 ifeq ($(PORT), 1)
-  $(info "PORT1 High Speed")
   CFLAGS += -DBOARD_DEVICE_RHPORT_SPEED=OPT_MODE_HIGH_SPEED
-
-  # LPC55 Highspeed Port1 can only write to USB_SRAM region
-  CFLAGS += -DCFG_TUSB_MEM_SECTION='__attribute__((section("m_usb_global")))'
+  $(info "PORT1 High Speed")
 else
   $(info "PORT0 Full Speed")
 endif
@@ -31,7 +28,7 @@ endif
 # mcu driver cause following warnings
 CFLAGS += -Wno-error=unused-parameter -Wno-error=float-equal
 
-MCU_DIR = $(SDK_DIR)/devices/$(MCU_VARIANT)
+MCU_DIR = hw/mcu/nxp/sdk/devices/$(MCU_VARIANT)
 
 # All source paths should be relative to the top level.
 LD_FILE ?= $(MCU_DIR)/gcc/$(MCU_CORE)_flash.ld
@@ -40,11 +37,11 @@ SRC_C += \
 	src/portable/nxp/lpc_ip3511/dcd_lpc_ip3511.c \
 	$(MCU_DIR)/system_$(MCU_CORE).c \
 	$(MCU_DIR)/drivers/fsl_clock.c \
+	$(MCU_DIR)/drivers/fsl_gpio.c \
 	$(MCU_DIR)/drivers/fsl_power.c \
 	$(MCU_DIR)/drivers/fsl_reset.c \
-	$(SDK_DIR)/drivers/lpc_gpio/fsl_gpio.c \
-	$(SDK_DIR)/drivers/flexcomm/fsl_flexcomm.c \
-	$(SDK_DIR)/drivers/flexcomm/fsl_usart.c \
+	$(MCU_DIR)/drivers/fsl_usart.c \
+	$(MCU_DIR)/drivers/fsl_flexcomm.c \
 	lib/sct_neopixel/sct_neopixel.c
 
 INC += \
@@ -52,12 +49,7 @@ INC += \
 	$(TOP)/lib/sct_neopixel \
 	$(TOP)/$(MCU_DIR)/../../CMSIS/Include \
 	$(TOP)/$(MCU_DIR) \
-	$(TOP)/$(MCU_DIR)/drivers \
-	$(TOP)/$(SDK_DIR)/drivers/common \
-	$(TOP)/$(SDK_DIR)/drivers/flexcomm \
-	$(TOP)/$(SDK_DIR)/drivers/lpc_iocon \
-	$(TOP)/$(SDK_DIR)/drivers/lpc_gpio \
-	$(TOP)/$(SDK_DIR)/drivers/sctimer
+	$(TOP)/$(MCU_DIR)/drivers
 
 SRC_S += $(MCU_DIR)/gcc/startup_$(MCU_CORE).S
 

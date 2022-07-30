@@ -1,7 +1,16 @@
-/*
- * SPDX-FileCopyrightText: 2016-2021 Espressif Systems (Shanghai) CO LTD
+/* Copyright 2018 Espressif Systems (Shanghai) PTE LTD
  *
- * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include "esp_err.h"                // for esp_err_t
@@ -35,6 +44,7 @@ static uint8_t mb_slave_id[] = { MB_ID_BYTE0(MB_CONTROLLER_SLAVE_ID),
 
 // Common interface pointer for slave port
 static mb_slave_interface_t* slave_interface_ptr = NULL;
+static const char TAG[] __attribute__((unused)) = "MB_CONTROLLER_SLAVE";
 
 // Searches the register in the area specified by type, returns descriptor if found, else NULL
 static mb_descr_entry_t* mbc_slave_find_reg_descriptor(mb_param_type_t type, uint16_t addr, size_t regs)
@@ -251,11 +261,11 @@ static esp_err_t mbc_slave_send_param_info(mb_event_group_t par_type, uint16_t m
     par_info.mb_offset = mb_offset;
     BaseType_t status = xQueueSend(mbs_opts->mbs_notification_queue_handle, &par_info, MB_PAR_INFO_TOUT);
     if (pdTRUE == status) {
-        ESP_LOGD(MB_SLAVE_TAG, "Queue send parameter info (type, address, size): %d, 0x%.4x, %d",
+        ESP_LOGD(TAG, "Queue send parameter info (type, address, size): %d, 0x%.4x, %d",
                 par_type, (uint32_t)par_address, par_size);
         error = ESP_OK;
     } else if (errQUEUE_FULL == status) {
-        ESP_LOGD(MB_SLAVE_TAG, "Parameter queue is overflowed.");
+        ESP_LOGD(TAG, "Parameter queue is overflowed.");
     }
     return error;
 }
@@ -268,7 +278,7 @@ static esp_err_t mbc_slave_send_param_access_notification(mb_event_group_t event
     esp_err_t err = ESP_FAIL;
     mb_event_group_t bits = (mb_event_group_t)xEventGroupSetBits(mbs_opts->mbs_event_group, (EventBits_t)event);
     if (bits & event) {
-        ESP_LOGD(MB_SLAVE_TAG, "The MB_REG_CHANGE_EVENT = 0x%.2x is set.", (uint8_t)event);
+        ESP_LOGD(TAG, "The MB_REG_CHANGE_EVENT = 0x%.2x is set.", (uint8_t)event);
         err = ESP_OK;
     }
     return err;

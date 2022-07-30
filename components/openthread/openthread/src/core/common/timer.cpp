@@ -33,7 +33,6 @@
 
 #include "timer.hpp"
 
-#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
@@ -215,8 +214,10 @@ void Timer::Scheduler::RemoveAll(const AlarmApi &aAlarmApi)
 
 extern "C" void otPlatAlarmMilliFired(otInstance *aInstance)
 {
+    Instance *instance = static_cast<Instance *>(aInstance);
+
     VerifyOrExit(otInstanceIsInitialized(aInstance));
-    AsCoreType(aInstance).Get<TimerMilli::Scheduler>().ProcessTimers();
+    instance->Get<TimerMilli::Scheduler>().ProcessTimers();
 
 exit:
     return;
@@ -258,8 +259,10 @@ void TimerMicro::RemoveAll(Instance &aInstance)
 
 extern "C" void otPlatAlarmMicroFired(otInstance *aInstance)
 {
+    Instance *instance = static_cast<Instance *>(aInstance);
+
     VerifyOrExit(otInstanceIsInitialized(aInstance));
-    AsCoreType(aInstance).Get<TimerMicro::Scheduler>().ProcessTimers();
+    instance->Get<TimerMicro::Scheduler>().ProcessTimers();
 
 exit:
     return;

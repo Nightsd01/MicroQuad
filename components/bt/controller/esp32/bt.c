@@ -29,12 +29,13 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_pm.h"
-#include "esp_private/periph_ctrl.h"
+#include "driver/periph_ctrl.h"
 #include "soc/rtc.h"
 #include "soc/soc_memory_layout.h"
 #include "soc/dport_reg.h"
 #include "esp32/clk.h"
 #include "esp_coexist_internal.h"
+#include "esp_timer.h"
 #if !CONFIG_FREERTOS_UNICORE
 #include "esp_ipc.h"
 #endif
@@ -1627,6 +1628,8 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
         goto error;
     }
 
+    esp_phy_pd_mem_init();
+
     esp_bt_power_domain_on();
 
     btdm_controller_mem_init();
@@ -1793,7 +1796,14 @@ esp_err_t esp_bt_controller_deinit(void)
 
     esp_bt_power_domain_off();
 
+    esp_phy_pd_mem_deinit();
+
     return ESP_OK;
+}
+
+static void bt_controller_shutdown(void* arg)
+{
+    esp_bt_controller_shutdown();
 }
 
 static void bt_shutdown(void)
@@ -1801,8 +1811,11 @@ static void bt_shutdown(void)
     if (btdm_controller_status != ESP_BT_CONTROLLER_STATUS_ENABLED) {
         return;
     }
-
-    esp_bt_controller_shutdown();
+#if !CONFIG_FREERTOS_UNICORE
+    esp_ipc_call_blocking(CONFIG_BTDM_CTRL_PINNED_TO_CORE, bt_controller_shutdown, NULL);
+#else
+    bt_controller_shutdown(NULL);
+#endif
     esp_phy_disable();
 
     return;

@@ -12,7 +12,6 @@ if(BOOTLOADER_BUILD)
         idf_component_register(SRCS "${srcs}" REQUIRES spi_flash)
 else()
     list(APPEND srcs "crosscore_int.c"
-            "esp_ipc.c"
             "esp_err.c"
             "freertos_hooks.c"
             "int_wdt.c"
@@ -26,10 +25,6 @@ else()
             "xt_wdt.c"
             "debug_stubs.c")
 
-    if(NOT (${target} STREQUAL "esp8684"))
-        list(APPEND srcs "debug_stubs.c")
-    endif()
-
     if(CONFIG_ESP_SYSTEM_USE_EH_FRAME)
         list(APPEND srcs "eh_frame_parser.c")
     endif()
@@ -41,7 +36,7 @@ else()
                                     # should be removable once using component init functions
                                     # link-time registration is used.
                                     esp_pm app_update nvs_flash pthread app_trace esp_gdbstub
-                                    espcoredump esp_phy efuse
+                                    espcoredump esp_phy efuse esp_ipc
                         LDFRAGMENTS "linker.lf" "app.lf")
     add_subdirectory(port)
 

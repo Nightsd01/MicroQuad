@@ -1,8 +1,16 @@
-/*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
+// Copyright 2015-2019 Espressif Systems (Shanghai) PTE LTD
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <stdarg.h>
 #include "sdkconfig.h"
@@ -23,9 +31,6 @@
 #elif CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/ets_sys.h"
 #include "esp32h2/rom/cache.h"
-#elif CONFIG_IDF_TARGET_ESP8684
-#include "esp8684/rom/ets_sys.h"
-#include "esp8684/rom/cache.h"
 #endif
 
 #include "esp_attr.h"
@@ -37,7 +42,7 @@ typedef struct {
 } spi_noos_arg_t;
 
 static DRAM_ATTR spi_noos_arg_t spi_arg = { 0 };
-#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32H2 || CONFIG_IDF_TARGET_ESP8684
+#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32H2
 typedef struct {
     uint32_t icache_autoload;
 } spi_noos_arg_t;
@@ -54,7 +59,7 @@ static IRAM_ATTR esp_err_t start(void *arg)
     spi_noos_arg_t *spi_arg = arg;
     spi_arg->icache_autoload = Cache_Suspend_ICache();
     spi_arg->dcache_autoload = Cache_Suspend_DCache();
-#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32H2 || CONFIG_IDF_TARGET_ESP8684
+#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32H2
     spi_noos_arg_t *spi_arg = arg;
     spi_arg->icache_autoload = Cache_Suspend_ICache();
 #endif
@@ -73,7 +78,7 @@ static IRAM_ATTR esp_err_t end(void *arg)
     Cache_Invalidate_ICache_All();
     Cache_Resume_ICache(spi_arg->icache_autoload);
     Cache_Resume_DCache(spi_arg->dcache_autoload);
-#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32H2 || CONFIG_IDF_TARGET_ESP8684
+#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32H2
     spi_noos_arg_t *spi_arg = arg;
     Cache_Invalidate_ICache_All();
     Cache_Resume_ICache(spi_arg->icache_autoload);

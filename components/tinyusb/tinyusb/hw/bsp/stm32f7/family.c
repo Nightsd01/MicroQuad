@@ -70,17 +70,9 @@ void board_init(void)
 
   UART_CLK_EN();
 
-#if CFG_TUSB_OS == OPT_OS_NONE
+#if CFG_TUSB_OS  == OPT_OS_NONE
   // 1ms tick timer
   SysTick_Config(SystemCoreClock / 1000);
-
-#elif CFG_TUSB_OS == OPT_OS_FREERTOS
-  // Explicitly disable systick to prevent its ISR runs before scheduler start
-  SysTick->CTRL &= ~1U;
-
-  // If freeRTOS is used, IRQ priority is limit by max syscall ( smaller is higher )
-  NVIC_SetPriority(OTG_FS_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY );
-  NVIC_SetPriority(OTG_HS_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY );
 #endif
 
   GPIO_InitTypeDef  GPIO_InitStruct;
@@ -284,7 +276,7 @@ int board_uart_read(uint8_t* buf, int len)
 
 int board_uart_write(void const * buf, int len)
 {
-  HAL_UART_Transmit(&UartHandle, (uint8_t*)(uintptr_t) buf, len, 0xffff);
+  HAL_UART_Transmit(&UartHandle, (uint8_t*) buf, len, 0xffff);
   return len;
 }
 

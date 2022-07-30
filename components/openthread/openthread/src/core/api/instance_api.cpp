@@ -132,7 +132,9 @@ otError otInstanceErasePersistentInfo(otInstance *aInstance)
 #if OPENTHREAD_RADIO
 void otInstanceResetRadioStack(otInstance *aInstance)
 {
-    AsCoreType(aInstance).ResetRadioStack();
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    instance.ResetRadioStack();
 }
 #endif
 

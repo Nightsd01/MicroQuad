@@ -1,13 +1,24 @@
-/*
- * SPDX-FileCopyrightText: 2016-2021 Espressif Systems (Shanghai) CO LTD
+/* Copyright 2018 Espressif Systems (Shanghai) PTE LTD
  *
- * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include "esp_err.h"            // for esp_err_t
 #include "mbc_master.h"         // for master interface define
 #include "esp_modbus_master.h"  // for public interface defines
 #include "esp_modbus_callbacks.h"   // for callback functions
+
+static const char TAG[] __attribute__((unused)) = "MB_CONTROLLER_MASTER";
 
 // This file implements public API for Modbus master controller.
 // These functions are wrappers for interface functions of the controller

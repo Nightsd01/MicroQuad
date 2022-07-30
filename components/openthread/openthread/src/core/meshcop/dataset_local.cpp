@@ -193,5 +193,11 @@ exit:
     return error;
 }
 
+int DatasetLocal::Compare(const Timestamp *aCompare)
+{
+    return (aCompare == nullptr) ? (!mTimestampPresent ? 0 : -1)
+                                 : (!mTimestampPresent ? 1 : mTimestamp.Compare(*aCompare));
+}
+
 } // namespace MeshCoP
 } // namespace ot

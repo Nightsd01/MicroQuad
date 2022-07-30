@@ -311,26 +311,19 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const * p_endpoint_desc)
   }
 
   //------------- Realize Endpoint with Max Packet Size -------------//
-  const uint16_t ep_size = tu_edpt_packet_size(p_endpoint_desc);
-  set_ep_size(ep_id, ep_size);
+  set_ep_size(ep_id, p_endpoint_desc->wMaxPacketSize.size);
 
   //------------- first DD prepare -------------//
   dma_desc_t* const dd = &_dcd.dd[ep_id];
   tu_memclr(dd, sizeof(dma_desc_t));
 
   dd->isochronous = (p_endpoint_desc->bmAttributes.xfer == TUSB_XFER_ISOCHRONOUS) ? 1 : 0;
-  dd->max_packet_size = ep_size;
+  dd->max_packet_size = p_endpoint_desc->wMaxPacketSize.size;
   dd->retired = 1; // invalid at first
 
   sie_write(SIE_CMDCODE_ENDPOINT_SET_STATUS + ep_id, 1, 0);    // clear all endpoint status
 
   return true;
-}
-
-void dcd_edpt_close_all (uint8_t rhport)
-{
-  (void) rhport;
-  // TODO implement dcd_edpt_close_all()
 }
 
 void dcd_edpt_stall(uint8_t rhport, uint8_t ep_addr)

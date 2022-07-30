@@ -188,24 +188,10 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
 {
   (void) lun;
 
-  // out of ramdisk
-  if ( lba >= DISK_BLOCK_NUM ) return -1;
-
   uint8_t const* addr = msc_disk[lba] + offset;
   memcpy(buffer, addr, bufsize);
 
-  return (int32_t) bufsize;
-}
-
-bool tud_msc_is_writable_cb (uint8_t lun)
-{
-  (void) lun;
-
-#ifdef CFG_EXAMPLE_MSC_READONLY
-  return false;
-#else
-  return true;
-#endif
+  return bufsize;
 }
 
 // Callback invoked when received WRITE10 command.
@@ -214,9 +200,6 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
 {
   (void) lun;
 
-  // out of ramdisk
-  if ( lba >= DISK_BLOCK_NUM ) return -1;
-
 #ifndef CFG_EXAMPLE_MSC_READONLY
   uint8_t* addr = msc_disk[lba] + offset;
   memcpy(addr, buffer, bufsize);
@@ -224,7 +207,7 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
   (void) lba; (void) offset; (void) buffer;
 #endif
 
-  return (int32_t) bufsize;
+  return bufsize;
 }
 
 // Callback invoked when received an SCSI command not in built-in list below
@@ -235,7 +218,7 @@ int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, 
   // read10 & write10 has their own callback and MUST not be handled here
 
   void const* response = NULL;
-  int32_t resplen = 0;
+  uint16_t resplen = 0;
 
   // most scsi handled is input
   bool in_xfer = true;
@@ -263,14 +246,14 @@ int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, 
   {
     if(in_xfer)
     {
-      memcpy(buffer, response, (size_t) resplen);
+      memcpy(buffer, response, resplen);
     }else
     {
       // SCSI output
     }
   }
 
-  return (int32_t) resplen;
+  return resplen;
 }
 
 #endif

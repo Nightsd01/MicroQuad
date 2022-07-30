@@ -28,7 +28,6 @@
 
 #include "coap.hpp"
 
-#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
@@ -132,7 +131,7 @@ Message *CoapBase::NewMessage(const Message::Settings &aSettings)
 {
     Message *message = nullptr;
 
-    VerifyOrExit((message = AsCoapMessagePtr(Get<Ip6::Udp>().NewMessage(0, aSettings))) != nullptr);
+    VerifyOrExit((message = static_cast<Message *>(Get<Ip6::Udp>().NewMessage(0, aSettings))) != nullptr);
     message->SetOffset(0);
 
 exit:
@@ -144,7 +143,7 @@ Error CoapBase::Send(ot::Message &aMessage, const Ip6::MessageInfo &aMessageInfo
     Error error;
 
 #if OPENTHREAD_CONFIG_OTNS_ENABLE
-    Get<Utils::Otns>().EmitCoapSend(AsCoapMessage(&aMessage), aMessageInfo);
+    Get<Utils::Otns>().EmitCoapSend(static_cast<Message &>(aMessage), aMessageInfo);
 #endif
 
     error = mSender(*this, aMessage, aMessageInfo);
@@ -152,7 +151,7 @@ Error CoapBase::Send(ot::Message &aMessage, const Ip6::MessageInfo &aMessageInfo
 #if OPENTHREAD_CONFIG_OTNS_ENABLE
     if (error != kErrorNone)
     {
-        Get<Utils::Otns>().EmitCoapSendFailure(error, AsCoapMessage(&aMessage), aMessageInfo);
+        Get<Utils::Otns>().EmitCoapSendFailure(error, static_cast<Message &>(aMessage), aMessageInfo);
     }
 #endif
     return error;
@@ -777,7 +776,8 @@ Error CoapBase::ProcessBlock1Request(Message &                aMessage,
         VerifyOrExit((response = NewMessage()) != nullptr, error = kErrorFailed);
         response->Init(kTypeAck, kCodeContinue);
         response->SetMessageId(aMessage.GetMessageId());
-        IgnoreReturnValue(response->SetToken(AsConst(aMessage).GetToken(), aMessage.GetTokenLength()));
+        IgnoreReturnValue(
+            response->SetToken(static_cast<const Message &>(aMessage).GetToken(), aMessage.GetTokenLength()));
 
         response->SetBlockWiseBlockNumber(aMessage.GetBlockWiseBlockNumber());
         response->SetMoreBlocksFlag(aMessage.IsMoreBlocksFlagSet());
@@ -1002,7 +1002,7 @@ exit:
 
 void CoapBase::Receive(ot::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
-    Message &message = AsCoapMessage(&aMessage);
+    Message &message = static_cast<Message &>(aMessage);
 
     if (message.ParseHeader() != kErrorNone)
     {
@@ -1684,7 +1684,8 @@ exit:
 
 void Coap::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<Coap *>(aContext)->Receive(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
+    static_cast<Coap *>(aContext)->Receive(*static_cast<Message *>(aMessage),
+                                           *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
 Error Coap::Send(CoapBase &aCoapBase, ot::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)

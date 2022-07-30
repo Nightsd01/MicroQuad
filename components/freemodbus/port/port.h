@@ -6,9 +6,8 @@
  * SPDX-FileContributor: 2016-2021 Espressif Systems (Shanghai) CO LTD
  */
 /*
- * FreeModbus Libary: ESP32 Port Demo Application
+ * FreeModbus Libary: ESP32 Port
  * Copyright (C) 2010 Christian Walter <cwalter@embedded-solutions.at>
- *
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,7 +31,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * File: $Id: portother.c,v 1.1 2010/06/06 13:07:20 wolti Exp $
+ * File: $Id: port.h,v 1.1 2010/06/06 13:07:20 wolti Exp $
  */
 
 #ifndef PORT_COMMON_H_
@@ -40,7 +39,6 @@
 
 #include "freertos/FreeRTOS.h"
 #include "esp_log.h"                // for ESP_LOGE macro
-#include "esp_timer.h"
 #include "mbconfig.h"
 
 #define INLINE                      inline
@@ -88,7 +86,6 @@
 
 // Define number of timer reloads per 1 mS
 #define MB_TIMER_TICS_PER_MS            (20UL)
-#define MB_TIMER_TICK_TIME_US           (1000 / MB_TIMER_TICS_PER_MS) // 50uS = one discreet for timer
 
 #define MB_TCP_DEBUG                    (LOG_LOCAL_LEVEL >= ESP_LOG_DEBUG) // Enable legacy debug output in TCP module.
 
@@ -143,12 +140,6 @@ typedef enum {
     MB_PORT_IPV4 = 0,                     /*!< TCP IPV4 addressing */
     MB_PORT_IPV6 = 1                      /*!< TCP IPV6 addressing */
 } eMBPortIpVer;
-
-typedef struct {
-    esp_timer_handle_t xTimerIntHandle;
-    USHORT usT35Ticks;
-    BOOL xTimerState;
-} xTimerContext_t;
 
 void vMBPortEnterCritical(void);
 void vMBPortExitCritical(void);

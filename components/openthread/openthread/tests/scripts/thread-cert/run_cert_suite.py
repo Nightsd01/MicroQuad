@@ -56,16 +56,15 @@ def bash(cmd: str, check=True, stdout=None):
     subprocess.run(cmd, shell=True, check=check, stdout=stdout)
 
 
-def run_cert(job_id: int, port_offset: int, script: str):
+def run_cert(port_offset: int, script: str):
     try:
-        test_name = os.path.splitext(os.path.basename(script))[0] + '_' + str(job_id)
-        logfile = f'{test_name}.log'
+        test_name = os.path.splitext(os.path.basename(script))[0] + '_' + str(port_offset)
+        logfile = test_name + '.log'
         env = os.environ.copy()
         env['PORT_OFFSET'] = str(port_offset)
         env['TEST_NAME'] = test_name
 
         try:
-            print(f'Running {test_name}')
             with open(logfile, 'wt') as output:
                 subprocess.check_call(["python3", script],
                                       stdout=output,
@@ -148,7 +147,7 @@ def run_tests(scripts: List[str], multiply: int = 1):
     script_succ_count = Counter()
 
     # Run each script for multiple times
-    script_ids = [(script, i) for script in scripts for i in range(multiply)]
+    scripts = [script for script in scripts for _ in range(multiply)]
     port_offset_pool = PortOffsetPool(MAX_JOBS)
 
     def error_callback(port_offset, script, err):
@@ -167,10 +166,10 @@ def run_tests(scripts: List[str], multiply: int = 1):
             color = _COLOR_PASS if script_fail_count[script] == 0 else _COLOR_FAIL
             print(f'{color}PASS {script_succ_count[script]} FAIL {script_fail_count[script]}{_COLOR_NONE} {script}')
 
-    for script, i in script_ids:
+    for i, script in enumerate(scripts):
         port_offset = port_offset_pool.allocate()
         pool.apply_async(
-            run_cert, [i, port_offset, script],
+            run_cert, [port_offset, script],
             callback=lambda ret, port_offset=port_offset, script=script: pass_callback(port_offset, script),
             error_callback=lambda err, port_offset=port_offset, script=script: error_callback(
                 port_offset, script, err))

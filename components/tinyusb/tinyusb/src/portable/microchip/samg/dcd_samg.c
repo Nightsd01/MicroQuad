@@ -25,6 +25,7 @@
  */
 
 #include "tusb_option.h"
+#include "common/tusb_fifo.h"
 
 #if CFG_TUSB_MCU == OPT_MCU_SAMG
 
@@ -258,7 +259,7 @@ bool dcd_edpt_open (uint8_t rhport, tusb_desc_endpoint_t const * ep_desc)
   // Must not already enabled
   TU_ASSERT((UDP->UDP_CSR[epnum] & UDP_CSR_EPEDS_Msk) == 0);
 
-  xfer_epsize_set(&_dcd_xfer[epnum], tu_edpt_packet_size(ep_desc));
+  xfer_epsize_set(&_dcd_xfer[epnum], ep_desc->wMaxPacketSize.size);
 
   // Configure type and enable EP
   csr_write(epnum, UDP_CSR_EPEDS_Msk | UDP_CSR_EPTYPE(ep_desc->bmAttributes.xfer + 4*dir));
@@ -267,12 +268,6 @@ bool dcd_edpt_open (uint8_t rhport, tusb_desc_endpoint_t const * ep_desc)
   if (dir == TUSB_DIR_IN) UDP->UDP_IER |= (1 << epnum);
 
   return true;
-}
-
-void dcd_edpt_close_all (uint8_t rhport)
-{
-  (void) rhport;
-  // TODO implement dcd_edpt_close_all()
 }
 
 // Submit a transfer, When complete dcd_event_xfer_complete() is invoked to notify the stack

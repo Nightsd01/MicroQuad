@@ -35,7 +35,6 @@
 
 #include <stdio.h>
 
-#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/encoding.hpp"
 #include "common/instance.hpp"
@@ -145,7 +144,7 @@ void Prefix::ToString(StringWriter &aWriter) const
 {
     uint8_t sizeInUint16 = (GetBytesSize() + sizeof(uint16_t) - 1) / sizeof(uint16_t);
 
-    AsCoreType(&mPrefix).AppendHexWords(aWriter, sizeInUint16);
+    static_cast<const Address &>(mPrefix).AppendHexWords(aWriter, sizeInUint16);
 
     if (GetBytesSize() < Address::kSize - 1)
     {
@@ -188,7 +187,13 @@ bool InterfaceIdentifier::IsReservedSubnetAnycast(void) const
 
 void InterfaceIdentifier::GenerateRandom(void)
 {
-    SuccessOrAssert(Random::Crypto::FillBuffer(mFields.m8, kSize));
+    Error error;
+
+    OT_UNUSED_VARIABLE(error);
+
+    error = Random::Crypto::FillBuffer(mFields.m8, kSize);
+
+    OT_ASSERT(error == kErrorNone);
 }
 
 void InterfaceIdentifier::SetBytes(const uint8_t *aBuffer)
@@ -660,27 +665,27 @@ void Address::AppendHexWords(StringWriter &aWriter, uint8_t aLength) const
 
 const Address &Address::GetLinkLocalAllNodesMulticast(void)
 {
-    return AsCoreType(&Netif::kLinkLocalAllNodesMulticastAddress.mAddress);
+    return static_cast<const Address &>(Netif::kLinkLocalAllNodesMulticastAddress.mAddress);
 }
 
 const Address &Address::GetLinkLocalAllRoutersMulticast(void)
 {
-    return AsCoreType(&Netif::kLinkLocalAllRoutersMulticastAddress.mAddress);
+    return static_cast<const Address &>(Netif::kLinkLocalAllRoutersMulticastAddress.mAddress);
 }
 
 const Address &Address::GetRealmLocalAllNodesMulticast(void)
 {
-    return AsCoreType(&Netif::kRealmLocalAllNodesMulticastAddress.mAddress);
+    return static_cast<const Address &>(Netif::kRealmLocalAllNodesMulticastAddress.mAddress);
 }
 
 const Address &Address::GetRealmLocalAllRoutersMulticast(void)
 {
-    return AsCoreType(&Netif::kRealmLocalAllRoutersMulticastAddress.mAddress);
+    return static_cast<const Address &>(Netif::kRealmLocalAllRoutersMulticastAddress.mAddress);
 }
 
 const Address &Address::GetRealmLocalAllMplForwarders(void)
 {
-    return AsCoreType(&Netif::kRealmLocalAllMplForwardersMulticastAddress.mAddress);
+    return static_cast<const Address &>(Netif::kRealmLocalAllMplForwardersMulticastAddress.mAddress);
 }
 
 } // namespace Ip6

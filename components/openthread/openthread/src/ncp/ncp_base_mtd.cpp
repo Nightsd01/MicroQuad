@@ -3771,7 +3771,8 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_SRP_CLIENT_HOST_NAME>
     SuccessOrExit(error = otSrpClientSetHostName(mInstance, name));
 
     strcpy(hostNameBuffer, name);
-    SuccessOrAssert(error = otSrpClientSetHostName(mInstance, hostNameBuffer));
+    error = otSrpClientSetHostName(mInstance, hostNameBuffer);
+    OT_ASSERT(error == OT_ERROR_NONE);
 
 exit:
     return error;
@@ -3819,7 +3820,8 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_SRP_CLIENT_HOST_ADDRE
 
     memcpy(hostAddressArray, addresses, sizeof(addresses));
 
-    SuccessOrAssert(error = otSrpClientSetHostAddresses(mInstance, hostAddressArray, numAddresses));
+    error = otSrpClientSetHostAddresses(mInstance, hostAddressArray, numAddresses);
+    OT_ASSERT(error == OT_ERROR_NONE);
 
 exit:
     return error;

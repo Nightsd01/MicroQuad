@@ -37,6 +37,7 @@
 
 #include <openthread/platform/time.h>
 
+#include "mac_frame.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
@@ -44,7 +45,6 @@
 #include "common/logging.hpp"
 #include "common/random.hpp"
 #include "common/time.hpp"
-#include "mac/mac_frame.hpp"
 
 namespace ot {
 namespace Mac {
@@ -184,7 +184,7 @@ Error SubMac::Enable(void)
     SetState(kStateSleep);
 
 exit:
-    SuccessOrAssert(error);
+    OT_ASSERT(error == kErrorNone);
     return error;
 }
 
@@ -455,7 +455,8 @@ void SubMac::BeginTransmit(void)
 
     if ((mRadioCaps & OT_RADIO_CAPS_SLEEP_TO_TX) == 0)
     {
-        SuccessOrAssert(Get<Radio>().Receive(mTransmitFrame.GetChannel()));
+        error = Get<Radio>().Receive(mTransmitFrame.GetChannel());
+        OT_ASSERT(error == kErrorNone);
     }
 
     SetState(kStateTransmit);
@@ -473,8 +474,7 @@ void SubMac::BeginTransmit(void)
         mTransmitFrame.mInfo.mTxInfo.mTxDelayBaseTime = 0;
         error                                         = Get<Radio>().Transmit(mTransmitFrame);
     }
-
-    SuccessOrAssert(error);
+    OT_ASSERT(error == kErrorNone);
 
 exit:
     return;
@@ -644,7 +644,8 @@ Error SubMac::EnergyScan(uint8_t aScanChannel, uint16_t aScanDuration)
     }
     else if (ShouldHandleEnergyScan())
     {
-        SuccessOrAssert(Get<Radio>().Receive(aScanChannel));
+        error = Get<Radio>().Receive(aScanChannel);
+        OT_ASSERT(error == kErrorNone);
 
         SetState(kStateEnergyScan);
         mEnergyScanMaxRssi = kInvalidRssiValue;

@@ -33,15 +33,11 @@ add_executable(ot-ncp-ftd
 
 target_include_directories(ot-ncp-ftd PRIVATE ${COMMON_INCLUDES})
 
-if(NOT DEFINED OT_PLATFORM_LIB_FTD)
-    set(OT_PLATFORM_LIB_FTD ${OT_PLATFORM_LIB})
-endif()
-
 target_link_libraries(ot-ncp-ftd PRIVATE
     openthread-ncp-ftd
-    ${OT_PLATFORM_LIB_FTD}
+    ${OT_PLATFORM_LIB}
     openthread-ftd
-    ${OT_PLATFORM_LIB_FTD}
+    ${OT_PLATFORM_LIB}
     openthread-ncp-ftd
     ${OT_MBEDTLS}
     ot-config

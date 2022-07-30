@@ -32,6 +32,7 @@
 // INCLUDE
 //--------------------------------------------------------------------+
 #include "bth_device.h"
+#include <common/tusb_types.h>
 #include <device/usbd_pvt.h>
 
 //--------------------------------------------------------------------+
@@ -142,14 +143,14 @@ uint16_t btd_open(uint8_t rhport, tusb_desc_interface_t const *itf_desc, uint16_
     dir = tu_edpt_dir(desc_ep->bEndpointAddress);
     _btd_itf.ep_voice[dir] = desc_ep->bEndpointAddress;
     // Store endpoint size for alternative
-    _btd_itf.ep_voice_size[dir][itf_desc->bAlternateSetting] = (uint8_t) tu_edpt_packet_size(desc_ep);
+    _btd_itf.ep_voice_size[dir][itf_desc->bAlternateSetting] = (uint8_t)desc_ep->wMaxPacketSize.size;
 
     desc_ep = (tusb_desc_endpoint_t const *)tu_desc_next(desc_ep);
     TU_ASSERT(desc_ep->bDescriptorType == TUSB_DESC_ENDPOINT, 0);
     dir = tu_edpt_dir(desc_ep->bEndpointAddress);
     _btd_itf.ep_voice[dir] = desc_ep->bEndpointAddress;
     // Store endpoint size for alternative
-    _btd_itf.ep_voice_size[dir][itf_desc->bAlternateSetting] = (uint8_t) tu_edpt_packet_size(desc_ep);
+    _btd_itf.ep_voice_size[dir][itf_desc->bAlternateSetting] = (uint8_t)desc_ep->wMaxPacketSize.size;
     drv_len += iso_alt_itf_size;
 
     for (int i = 1; i < CFG_TUD_BTH_ISO_ALT_COUNT && drv_len + iso_alt_itf_size <= max_len; ++i) {
@@ -170,14 +171,14 @@ uint16_t btd_open(uint8_t rhport, tusb_desc_interface_t const *itf_desc, uint16_
       // Verify that alternative endpoint are same as first ones
       TU_ASSERT(desc_ep->bDescriptorType == TUSB_DESC_ENDPOINT &&
                 _btd_itf.ep_voice[dir] == desc_ep->bEndpointAddress, 0);
-      _btd_itf.ep_voice_size[dir][itf_desc->bAlternateSetting] = (uint8_t) tu_edpt_packet_size(desc_ep);
+      _btd_itf.ep_voice_size[dir][itf_desc->bAlternateSetting] = (uint8_t)desc_ep->wMaxPacketSize.size;
 
       desc_ep = (tusb_desc_endpoint_t const *)tu_desc_next(desc_ep);
       dir = tu_edpt_dir(desc_ep->bEndpointAddress);
       // Verify that alternative endpoint are same as first ones
       TU_ASSERT(desc_ep->bDescriptorType == TUSB_DESC_ENDPOINT &&
                 _btd_itf.ep_voice[dir] == desc_ep->bEndpointAddress, 0);
-      _btd_itf.ep_voice_size[dir][itf_desc->bAlternateSetting] = (uint8_t) tu_edpt_packet_size(desc_ep);
+      _btd_itf.ep_voice_size[dir][itf_desc->bAlternateSetting] = (uint8_t)desc_ep->wMaxPacketSize.size;
       drv_len += iso_alt_itf_size;
     }
   }
@@ -214,14 +215,14 @@ bool btd_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t c
     }
     else return false;
 
-    return tud_control_xfer(rhport, request, &_btd_itf.hci_cmd, sizeof(_btd_itf.hci_cmd));
+    return tud_control_xfer(rhport, request, &_btd_itf.hci_cmd, request->wLength);
   }
   else if ( stage == CONTROL_STAGE_DATA )
   {
     // Handle class request only
     TU_VERIFY(request->bmRequestType_bit.type == TUSB_REQ_TYPE_CLASS);
 
-    if (tud_bt_hci_cmd_cb) tud_bt_hci_cmd_cb(&_btd_itf.hci_cmd, tu_min16(request->wLength, sizeof(_btd_itf.hci_cmd)));
+    if (tud_bt_hci_cmd_cb) tud_bt_hci_cmd_cb(&_btd_itf.hci_cmd, request->wLength);
   }
 
   return true;

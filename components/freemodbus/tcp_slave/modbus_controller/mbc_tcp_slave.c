@@ -1,8 +1,17 @@
-/*
- * SPDX-FileCopyrightText: 2016-2021 Espressif Systems (Shanghai) CO LTD
+/* Copyright 2018 Espressif Systems (Shanghai) PTE LTD
  *
- * SPDX-License-Identifier: Apache-2.0
- */
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
 
 // mbc_tcp_slave.c
 // Implementation of the Modbus controller TCP slave
@@ -23,6 +32,7 @@
 
 // Shared pointer to interface structure
 static mb_slave_interface_t* mbs_interface_ptr = NULL;
+static const char *TAG = "MB_CONTROLLER_SLAVE";
 
 // Modbus task function
 static void modbus_tcp_slave_task(void *pvParameters)
@@ -78,7 +88,6 @@ static esp_err_t mbc_tcp_slave_start(void)
     eMBPortProto proto = (mbs_opts->mbs_comm.ip_mode == MB_MODE_TCP) ? MB_PROTO_TCP : MB_PROTO_UDP;
     eMBPortIpVer ip_ver = (mbs_opts->mbs_comm.ip_addr_type == MB_IPV4) ? MB_PORT_IPV4 : MB_PORT_IPV6;
     vMBTCPPortSlaveSetNetOpt(mbs_opts->mbs_comm.ip_netif_ptr, ip_ver, proto, (char*)mbs_opts->mbs_comm.ip_addr);
-    vMBTCPPortSlaveStartServerTask();
 
     status = eMBEnable();
     MB_SLAVE_CHECK((status == MB_ENOERR), ESP_ERR_INVALID_STATE,
@@ -109,7 +118,7 @@ static esp_err_t mbc_tcp_slave_destroy(void)
     (void)vQueueDelete(mbs_opts->mbs_notification_queue_handle);
     (void)vEventGroupDelete(mbs_opts->mbs_event_group);
     (void)vMBTCPPortClose();
-
+    mbs_interface_ptr = NULL;
     vMBPortSetMode((UCHAR)MB_PORT_INACTIVE);
     return ESP_OK;
 }

@@ -34,7 +34,6 @@
 
 #if OPENTHREAD_FTD
 
-#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/encoding.hpp"
@@ -71,7 +70,6 @@ MleRouter::MleRouter(Instance &aInstance)
     , mLeaderWeight(kLeaderWeight)
 #if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     , mPreferredLeaderPartitionId(0)
-    , mCcmEnabled(false)
 #endif
     , mRouterEligible(true)
     , mAddressSolicitPending(false)
@@ -124,11 +122,7 @@ bool MleRouter::IsRouterEligible(void) const
 #else
     if (secPolicy.mCommercialCommissioningEnabled)
     {
-#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
-        VerifyOrExit(mCcmEnabled || secPolicy.mNonCcmRoutersEnabled);
-#else
         VerifyOrExit(secPolicy.mNonCcmRoutersEnabled);
-#endif
     }
     if (!secPolicy.mRoutersEnabled)
     {
@@ -2261,8 +2255,7 @@ void MleRouter::HandleChildIdRequest(const Message &         aMessage,
     switch (Tlv::Find<ActiveTimestampTlv>(aMessage, timestamp))
     {
     case kErrorNone:
-        needsActiveDatasetTlv =
-            (MeshCoP::Timestamp::Compare(&timestamp, Get<MeshCoP::ActiveDataset>().GetTimestamp()) != 0);
+        needsActiveDatasetTlv = (Get<MeshCoP::ActiveDataset>().Compare(timestamp) != 0);
         break;
     case kErrorNotFound:
         break;
@@ -2275,8 +2268,7 @@ void MleRouter::HandleChildIdRequest(const Message &         aMessage,
     switch (Tlv::Find<PendingTimestampTlv>(aMessage, timestamp))
     {
     case kErrorNone:
-        needsPendingDatasetTlv =
-            (MeshCoP::Timestamp::Compare(&timestamp, Get<MeshCoP::PendingDataset>().GetTimestamp()) != 0);
+        needsPendingDatasetTlv = (Get<MeshCoP::PendingDataset>().Compare(timestamp) != 0);
         break;
     case kErrorNotFound:
         break;
@@ -2741,7 +2733,7 @@ void MleRouter::HandleDataRequest(const Message &         aMessage,
     switch (Tlv::Find<ActiveTimestampTlv>(aMessage, timestamp))
     {
     case kErrorNone:
-        if (MeshCoP::Timestamp::Compare(&timestamp, Get<MeshCoP::ActiveDataset>().GetTimestamp()) == 0)
+        if (Get<MeshCoP::ActiveDataset>().Compare(timestamp) == 0)
         {
             break;
         }
@@ -2760,7 +2752,7 @@ void MleRouter::HandleDataRequest(const Message &         aMessage,
     switch (Tlv::Find<PendingTimestampTlv>(aMessage, timestamp))
     {
     case kErrorNone:
-        if (MeshCoP::Timestamp::Compare(&timestamp, Get<MeshCoP::PendingDataset>().GetTimestamp()) == 0)
+        if (Get<MeshCoP::PendingDataset>().Compare(timestamp) == 0)
         {
             break;
         }
@@ -2917,7 +2909,7 @@ void MleRouter::HandleDiscoveryRequest(const Message &aMessage, const Ip6::Messa
         {
             otThreadDiscoveryRequestInfo info;
 
-            aMessageInfo.GetPeerAddr().GetIid().ConvertToExtAddress(AsCoreType(&info.mExtAddress));
+            aMessageInfo.GetPeerAddr().GetIid().ConvertToExtAddress(*static_cast<Mac::ExtAddress *>(&info.mExtAddress));
             info.mVersion  = discoveryRequest.GetVersion();
             info.mIsJoiner = discoveryRequest.IsJoiner();
 
@@ -3671,8 +3663,8 @@ void MleRouter::HandleAddressSolicitResponse(void *               aContext,
                                              const otMessageInfo *aMessageInfo,
                                              Error                aResult)
 {
-    static_cast<MleRouter *>(aContext)->HandleAddressSolicitResponse(AsCoapMessagePtr(aMessage),
-                                                                     AsCoreTypePtr(aMessageInfo), aResult);
+    static_cast<MleRouter *>(aContext)->HandleAddressSolicitResponse(
+        static_cast<Coap::Message *>(aMessage), static_cast<const Ip6::MessageInfo *>(aMessageInfo), aResult);
 }
 
 void MleRouter::HandleAddressSolicitResponse(Coap::Message *         aMessage,
@@ -3779,7 +3771,8 @@ bool MleRouter::IsExpectedToBecomeRouterSoon(void) const
 
 void MleRouter::HandleAddressSolicit(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<MleRouter *>(aContext)->HandleAddressSolicit(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
+    static_cast<MleRouter *>(aContext)->HandleAddressSolicit(*static_cast<Coap::Message *>(aMessage),
+                                                             *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
 void MleRouter::HandleAddressSolicit(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
@@ -3905,7 +3898,8 @@ exit:
 
 void MleRouter::HandleAddressRelease(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<MleRouter *>(aContext)->HandleAddressRelease(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
+    static_cast<MleRouter *>(aContext)->HandleAddressRelease(*static_cast<Coap::Message *>(aMessage),
+                                                             *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
 void MleRouter::HandleAddressRelease(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)

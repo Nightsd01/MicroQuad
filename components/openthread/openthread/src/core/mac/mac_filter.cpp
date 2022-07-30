@@ -35,7 +35,6 @@
 
 #if OPENTHREAD_CONFIG_MAC_FILTER_ENABLE
 
-#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 
 namespace ot {
@@ -202,7 +201,7 @@ Error Filter::GetNextRssIn(Iterator &aIterator, Entry &aEntry)
     // Return the default RssIn at the end of list
     if ((aIterator == OT_ARRAY_LENGTH(mFilterEntries)) && (mDefaultRssIn != kFixedRssDisabled))
     {
-        AsCoreType(&aEntry.mExtAddress).Fill(0xff);
+        static_cast<ExtAddress &>(aEntry.mExtAddress).Fill(0xff);
         aEntry.mRssIn = mDefaultRssIn;
         error         = kErrorNone;
         aIterator++;

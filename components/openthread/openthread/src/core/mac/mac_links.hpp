@@ -511,7 +511,11 @@ public:
     void Send(void)
     {
 #if OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
-        SuccessOrAssert(mSubMac.Send());
+        {
+            Error error = mSubMac.Send();
+            OT_ASSERT(error == kErrorNone);
+            OT_UNUSED_VARIABLE(error);
+        }
 #endif
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
         mTrel.Send();

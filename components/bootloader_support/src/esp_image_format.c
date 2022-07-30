@@ -19,7 +19,6 @@
 #include "bootloader_common.h"
 #include "esp_rom_sys.h"
 #include "soc/soc_memory_types.h"
-#include "soc/soc_caps.h"
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/secure_boot.h"
 #elif CONFIG_IDF_TARGET_ESP32S2
@@ -30,9 +29,6 @@
 #include "esp32c3/rom/secure_boot.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/secure_boot.h"
-#elif CONFIG_IDF_TARGET_ESP8684
-#include "esp8684/rom/rtc.h"
-#include "esp8684/rom/secure_boot.h"
 #endif
 
 /* Checking signatures as part of verifying images is necessary:
@@ -254,7 +250,11 @@ esp_err_t bootloader_load_image(const esp_partition_pos_t *part, esp_image_metad
 #if CONFIG_BOOTLOADER_SKIP_VALIDATE_ALWAYS
     mode = ESP_IMAGE_LOAD_NO_VALIDATE;
 #elif CONFIG_BOOTLOADER_SKIP_VALIDATE_ON_POWER_ON
-    if (esp_rom_get_reset_reason(0) == RESET_REASON_CHIP_POWER_ON) {
+    if (esp_rom_get_reset_reason(0) == RESET_REASON_CHIP_POWER_ON
+#if SOC_EFUSE_HAS_EFUSE_RST_BUG
+        || esp_rom_get_reset_reason(0) == RESET_REASON_CORE_EFUSE_CRC
+#endif
+        ) {
         mode = ESP_IMAGE_LOAD_NO_VALIDATE;
     }
 #endif // CONFIG_BOOTLOADER_SKIP_...
@@ -431,22 +431,13 @@ static bool verify_load_addresses(int segment_index, intptr_t load_addr, intptr_
             }
         }
     /* Sections entirely in RTC memory won't overlap with a vanilla bootloader but are valid load addresses, thus skipping them from the check */
-    }
-#if SOC_RTC_FAST_MEM_SUPPORTED
-    else if (esp_ptr_in_rtc_iram_fast(load_addr_p) && esp_ptr_in_rtc_iram_fast(load_inclusive_end_p)){
+    } else if (esp_ptr_in_rtc_iram_fast(load_addr_p) && esp_ptr_in_rtc_iram_fast(load_inclusive_end_p)){
         return true;
     } else if (esp_ptr_in_rtc_dram_fast(load_addr_p) && esp_ptr_in_rtc_dram_fast(load_inclusive_end_p)){
         return true;
-    }
-#endif
-
-#if SOC_RTC_SLOW_MEM_SUPPORTED
-    else if (esp_ptr_in_rtc_slow(load_addr_p) && esp_ptr_in_rtc_slow(load_inclusive_end_p)) {
+    } else if (esp_ptr_in_rtc_slow(load_addr_p) && esp_ptr_in_rtc_slow(load_inclusive_end_p)) {
         return true;
-    }
-#endif
-
-    else { /* Not a DRAM or an IRAM or RTC Fast IRAM, RTC Fast DRAM or RTC Slow address */
+    } else { /* Not a DRAM or an IRAM or RTC Fast IRAM, RTC Fast DRAM or RTC Slow address */
         reason = "bad load address range";
         goto invalid;
     }
@@ -709,7 +700,6 @@ static bool should_load(uint32_t load_addr)
     }
 
     if (!load_rtc_memory) {
-#if SOC_RTC_FAST_MEM_SUPPORTED
         if (load_addr >= SOC_RTC_IRAM_LOW && load_addr < SOC_RTC_IRAM_HIGH) {
             ESP_LOGD(TAG, "Skipping RTC fast memory segment at 0x%08x", load_addr);
             return false;
@@ -718,14 +708,10 @@ static bool should_load(uint32_t load_addr)
             ESP_LOGD(TAG, "Skipping RTC fast memory segment at 0x%08x", load_addr);
             return false;
         }
-#endif
-
-#if SOC_RTC_SLOW_MEM_SUPPORTED
         if (load_addr >= SOC_RTC_DATA_LOW && load_addr < SOC_RTC_DATA_HIGH) {
             ESP_LOGD(TAG, "Skipping RTC slow memory segment at 0x%08x", load_addr);
             return false;
         }
-#endif
     }
 
     return true;
@@ -919,6 +905,12 @@ int esp_image_get_flash_size(esp_image_flash_size_t app_flash_size)
         return 8 * 1024 * 1024;
     case ESP_IMAGE_FLASH_SIZE_16MB:
         return 16 * 1024 * 1024;
+    case ESP_IMAGE_FLASH_SIZE_32MB:
+        return 32 * 1024 * 1024;
+    case ESP_IMAGE_FLASH_SIZE_64MB:
+        return 64 * 1024 * 1024;
+    case ESP_IMAGE_FLASH_SIZE_128MB:
+        return 128 * 1024 * 1024;
     default:
         return 0;
     }

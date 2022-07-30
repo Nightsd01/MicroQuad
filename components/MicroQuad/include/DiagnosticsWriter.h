@@ -17,6 +17,8 @@ class DiagnosticsWriter
     private:
         File _diagnosticsFile;
         unsigned long _lastFileWrite;
+        unsigned long _uncommittedDataSize;
+        void _checkIfShouldFlushSD(void);
 };
 
 #endif

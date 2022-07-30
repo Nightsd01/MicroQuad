@@ -1,8 +1,16 @@
-/*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
+// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <string.h>
 #include <stdlib.h>
@@ -81,10 +89,11 @@ static int vfs_fat_mkdir(void* ctx, const char* name, mode_t mode);
 static int vfs_fat_rmdir(void* ctx, const char* name);
 static int vfs_fat_access(void* ctx, const char *path, int amode);
 static int vfs_fat_truncate(void* ctx, const char *path, off_t length);
+static int vfs_fat_ftruncate(void* ctx, int fd, off_t length);
 static int vfs_fat_utime(void* ctx, const char *path, const struct utimbuf *times);
 #endif // CONFIG_VFS_SUPPORT_DIR
 
-static vfs_fat_ctx_t* s_fat_ctxs[FF_VOLUMES] = { NULL };
+static vfs_fat_ctx_t* s_fat_ctxs[FF_VOLUMES] = { NULL, NULL };
 //backwards-compatibility with esp_vfs_fat_unregister()
 static vfs_fat_ctx_t* s_fat_ctx = NULL;
 
@@ -146,6 +155,7 @@ esp_err_t esp_vfs_fat_register(const char* base_path, const char* fat_drive, siz
         .rmdir_p = &vfs_fat_rmdir,
         .access_p = &vfs_fat_access,
         .truncate_p = &vfs_fat_truncate,
+        .ftruncate_p = &vfs_fat_ftruncate,
         .utime_p = &vfs_fat_utime,
 #endif // CONFIG_VFS_SUPPORT_DIR
     };
@@ -367,6 +377,10 @@ static ssize_t vfs_fat_write(void* ctx, int fd, const void * data, size_t size)
     }
     unsigned written = 0;
     res = f_write(file, data, size, &written);
+    if (((written == 0) && (size != 0)) && (res == 0)) {
+        errno = ENOSPC;
+        return -1;
+    }
     if (res != FR_OK) {
         ESP_LOGD(TAG, "%s: fresult=%d", __func__, res);
         errno = fresult_to_errno(res);
@@ -451,6 +465,10 @@ static ssize_t vfs_fat_pwrite(void *ctx, int fd, const void *src, size_t size, o
 
     unsigned wr = 0;
     f_res = f_write(file, src, size, &wr);
+    if (((wr == 0) && (size != 0)) && (f_res == 0)) {
+        errno = ENOSPC;
+        return -1;
+    }
     if (f_res == FR_OK) {
         ret = wr;
     } else {
@@ -595,7 +613,13 @@ static int vfs_fat_stat(void* ctx, const char * path, struct stat * st)
         .tm_year = fdate.year + 80,
         .tm_sec = ftime.sec * 2,
         .tm_min = ftime.min,
-        .tm_hour = ftime.hour
+        .tm_hour = ftime.hour,
+        /* FAT doesn't keep track if the time was DST or not, ask the C library
+         * to try to figure this out. Note that this may yield incorrect result
+         * in the hour before the DST comes in effect, when the local time can't
+         * be converted to UTC uniquely.
+         */
+        .tm_isdst = -1
     };
     st->st_mtime = mktime(&tm);
     st->st_atime = 0;
@@ -949,6 +973,59 @@ close:
 
 out:
     free(file);
+    return ret;
+}
+
+static int vfs_fat_ftruncate(void* ctx, int fd, off_t length)
+{
+    FRESULT res;
+    FIL* file = NULL;
+
+    int ret = 0;
+
+    vfs_fat_ctx_t* fat_ctx = (vfs_fat_ctx_t*) ctx;
+
+    if (length < 0) {
+        errno = EINVAL;
+        ret = -1;
+        return ret;
+    }
+
+    _lock_acquire(&fat_ctx->lock);
+    file = &fat_ctx->files[fd];
+    if (file == NULL) {
+        ESP_LOGD(TAG, "ftruncate NULL file pointer");
+        errno = EINVAL;
+        ret = -1;
+        goto out;
+    }
+
+    long sz = f_size(file);
+    if (sz < length) {
+        ESP_LOGD(TAG, "ftruncate does not support extending size");
+        errno = EPERM;
+        ret = -1;
+        goto out;
+    }
+
+    res = f_lseek(file, length);
+    if (res != FR_OK) {
+        ESP_LOGD(TAG, "%s: fresult=%d", __func__, res);
+        errno = fresult_to_errno(res);
+        ret = -1;
+        goto out;
+    }
+
+    res = f_truncate(file);
+
+    if (res != FR_OK) {
+        ESP_LOGD(TAG, "%s: fresult=%d", __func__, res);
+        errno = fresult_to_errno(res);
+        ret = -1;
+    }
+
+out:
+    _lock_release(&fat_ctx->lock);
     return ret;
 }
 

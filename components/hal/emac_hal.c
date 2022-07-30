@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -335,36 +335,50 @@ void emac_hal_start(emac_hal_context_t *hal)
     /* Enable Ethernet MAC and DMA Interrupt */
     emac_ll_enable_corresponding_intr(hal->dma_regs, EMAC_LL_CONFIG_ENABLE_INTR_MASK);
 
-    /* Enable transmit state machine of the MAC for transmission on the MII */
-    emac_ll_transmit_enable(hal->mac_regs, true);
-    /* Enable receive state machine of the MAC for reception from the MII */
-    emac_ll_receive_enable(hal->mac_regs, true);
     /* Flush Transmit FIFO */
     emac_ll_flush_trans_fifo_enable(hal->dma_regs, true);
+
     /* Start DMA transmission */
     emac_ll_start_stop_dma_transmit(hal->dma_regs, true);
     /* Start DMA reception */
     emac_ll_start_stop_dma_receive(hal->dma_regs, true);
 
+    /* Enable transmit state machine of the MAC for transmission on the MII */
+    emac_ll_transmit_enable(hal->mac_regs, true);
+    /* Enable receive state machine of the MAC for reception from the MII */
+    emac_ll_receive_enable(hal->mac_regs, true);
+
     /* Clear all pending interrupts */
     emac_ll_clear_all_pending_intr(hal->dma_regs);
 }
 
-void emac_hal_stop(emac_hal_context_t *hal)
+esp_err_t emac_hal_stop(emac_hal_context_t *hal)
 {
-    /* Flush Transmit FIFO */
-    emac_ll_flush_trans_fifo_enable(hal->dma_regs, true);
     /* Stop DMA transmission */
     emac_ll_start_stop_dma_transmit(hal->dma_regs, false);
-    /* Stop DMA reception */
-    emac_ll_start_stop_dma_receive(hal->dma_regs, false);
-    /* Disable receive state machine of the MAC for reception from the MII */
-    emac_ll_transmit_enable(hal->mac_regs, false);
+
+    if (emac_ll_transmit_frame_ctrl_status(hal->mac_regs) != 0x0) {
+        /* Previous transmit in progress */
+        return ESP_ERR_INVALID_STATE;
+    }
+
     /* Disable transmit state machine of the MAC for transmission on the MII */
     emac_ll_receive_enable(hal->mac_regs, false);
+    /* Disable receive state machine of the MAC for reception from the MII */
+    emac_ll_transmit_enable(hal->mac_regs, false);
+
+    if (emac_ll_receive_read_ctrl_state(hal->mac_regs) != 0x0) {
+        /* Previous receive copy in progress */
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    /* Stop DMA reception */
+    emac_ll_start_stop_dma_receive(hal->dma_regs, false);
 
     /* Disable Ethernet MAC and DMA Interrupt */
     emac_ll_disable_all_intr(hal->dma_regs);
+
+    return ESP_OK;
 }
 
 uint32_t emac_hal_get_tx_desc_owner(emac_hal_context_t *hal)

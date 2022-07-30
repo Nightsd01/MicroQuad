@@ -23,8 +23,6 @@
 #include "esp32c3/rom/spi_flash.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
 #include "esp32h2/rom/spi_flash.h"
-#elif CONFIG_IDF_TARGET_ESP8684
-#include "esp8684/rom/spi_flash.h"
 #endif
 #include "soc/efuse_periph.h"
 #include "soc/io_mux_reg.h"
@@ -51,6 +49,7 @@ const bootloader_qio_info_t __attribute__((weak)) bootloader_flash_qe_support_li
     { "WinBond",     0xEF,   0x4000, 0xFF00,    bootloader_read_status_16b_rdsr_rdsr2, bootloader_write_status_16b_wrsr,      9 },
     { "GD",          0xC8,   0x6000, 0xFF00,    bootloader_read_status_16b_rdsr_rdsr2, bootloader_write_status_16b_wrsr,      9 },
     { "XM25QU64A",   0x20,   0x3817, 0xFFFF,    bootloader_read_status_8b_xmc25qu64a,  bootloader_write_status_8b_xmc25qu64a, 6 },
+    { "TH",          0xcd,   0x6000, 0xFF00,    bootloader_read_status_16b_rdsr_rdsr2, bootloader_write_status_16b_wrsr,      9 },
 
     /* Final entry is default entry, if no other IDs have matched.
 
@@ -115,6 +114,7 @@ static esp_err_t enable_qio_mode(bootloader_flash_read_status_fn_t read_status_f
                                  uint8_t status_qio_bit)
 {
     uint32_t status;
+    const uint32_t spiconfig = esp_rom_efuse_get_flash_gpio_info();
 
     esp_rom_spiflash_wait_idle(&g_rom_flashchip);
 
@@ -149,17 +149,9 @@ static esp_err_t enable_qio_mode(bootloader_flash_read_status_fn_t read_status_f
 
     esp_rom_spiflash_config_readmode(mode);
 
-#if !CONFIG_IDF_TARGET_ESP8684
-    //IDF-3914
-    const uint32_t spiconfig = esp_rom_efuse_get_flash_gpio_info();
-#endif
-
 #if CONFIG_IDF_TARGET_ESP32
     int wp_pin = bootloader_flash_get_wp_pin();
     esp_rom_spiflash_select_qio_pins(wp_pin, spiconfig);
-#elif CONFIG_IDF_TARGET_ESP8684
-    //IDF-3914
-    esp_rom_spiflash_select_qio_pins(0, 0);
 #else
     esp_rom_spiflash_select_qio_pins(esp_rom_efuse_get_flash_wp_gpio(), spiconfig);
 #endif

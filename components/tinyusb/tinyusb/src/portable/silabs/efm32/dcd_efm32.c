@@ -393,17 +393,18 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const * p_endpoint_desc)
   uint8_t const epnum = tu_edpt_number(p_endpoint_desc->bEndpointAddress);
   uint8_t const dir = tu_edpt_dir(p_endpoint_desc->bEndpointAddress);
 
+  TU_ASSERT(p_endpoint_desc->wMaxPacketSize.size <= 64);
   TU_ASSERT(epnum < EP_COUNT);
   TU_ASSERT(epnum != 0);
 
   xfer_ctl_t *xfer = XFER_CTL_BASE(epnum, dir);
-  xfer->max_size = tu_edpt_packet_size(p_endpoint_desc);
+  xfer->max_size = p_endpoint_desc->wMaxPacketSize.size;
 
   if(dir == TUSB_DIR_OUT)
   {
     USB->DOEP[epnum - 1].CTL |= USB_DOEP_CTL_USBACTEP |
                                 (p_endpoint_desc->bmAttributes.xfer << _USB_DOEP_CTL_EPTYPE_SHIFT) |
-                                (xfer->max_size << _USB_DOEP_CTL_MPS_SHIFT);
+                                (p_endpoint_desc->wMaxPacketSize.size << _USB_DOEP_CTL_MPS_SHIFT);
     USB->DAINTMSK |= (1 << (_USB_DAINTMSK_OUTEPMSK0_SHIFT + epnum));
   }
   else
@@ -416,7 +417,7 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const * p_endpoint_desc)
                                 (fifo_num << _USB_DIEP_CTL_TXFNUM_SHIFT) |
                                 (p_endpoint_desc->bmAttributes.xfer << _USB_DIEP_CTL_EPTYPE_SHIFT) |
                                 ((p_endpoint_desc->bmAttributes.xfer != TUSB_XFER_ISOCHRONOUS) ? USB_DIEP_CTL_SETD0PIDEF : 0) |
-                                (xfer->max_size << 0);
+                                (p_endpoint_desc->wMaxPacketSize.size << 0);
 
     USB->DAINTMSK |= (1 << epnum);
 
@@ -431,12 +432,6 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const * p_endpoint_desc)
     usb_dieptxf[epnum - 1] = (fifo_size << _USB_DIEPTXF1_INEPNTXFDEP_SHIFT) | fifo_offset;
   }
   return true;
-}
-
-void dcd_edpt_close_all (uint8_t rhport)
-{
-  (void) rhport;
-  // TODO implement dcd_edpt_close_all()
 }
 
 bool dcd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t* buffer, uint16_t total_bytes)

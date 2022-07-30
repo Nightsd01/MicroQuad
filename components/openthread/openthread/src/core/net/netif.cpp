@@ -33,7 +33,6 @@
 
 #include "netif.hpp"
 
-#include "common/as_core_type.hpp"
 #include "common/debug.hpp"
 #include "common/instance.hpp"
 #include "common/locator_getters.hpp"
@@ -123,7 +122,8 @@ bool Netif::IsMulticastSubscribed(const Address &aAddress) const
 void Netif::SubscribeAllNodesMulticast(void)
 {
     MulticastAddress *tail;
-    MulticastAddress &linkLocalAllNodesAddress = AsCoreType(&AsNonConst(kLinkLocalAllNodesMulticastAddress));
+    MulticastAddress &linkLocalAllNodesAddress =
+        static_cast<MulticastAddress &>(AsNonConst(kLinkLocalAllNodesMulticastAddress));
 
     VerifyOrExit(!mMulticastAddresses.Contains(linkLocalAllNodesAddress));
 
@@ -170,7 +170,8 @@ exit:
 void Netif::UnsubscribeAllNodesMulticast(void)
 {
     MulticastAddress *      prev;
-    const MulticastAddress &linkLocalAllNodesAddress = AsCoreType(&AsNonConst(kLinkLocalAllNodesMulticastAddress));
+    const MulticastAddress &linkLocalAllNodesAddress =
+        static_cast<MulticastAddress &>(AsNonConst(kLinkLocalAllNodesMulticastAddress));
 
     // The tail of multicast address linked list contains the
     // fixed addresses. Search if LinkLocalAll is present
@@ -188,7 +189,7 @@ void Netif::UnsubscribeAllNodesMulticast(void)
     //    LinkLocalAllRouters -> RealmLocalAllRouters -> LinkLocalAll
     //         -> RealmLocalAll -> RealmLocalAllMpl.
 
-    OT_ASSERT(prev != AsCoreTypePtr(AsNonConst(&kRealmLocalAllRoutersMulticastAddress)));
+    OT_ASSERT(prev != static_cast<MulticastAddress *>(AsNonConst(&kRealmLocalAllRoutersMulticastAddress)));
 
     if (prev == nullptr)
     {
@@ -225,15 +226,22 @@ exit:
 
 void Netif::SubscribeAllRoutersMulticast(void)
 {
-    MulticastAddress *prev                        = nullptr;
-    MulticastAddress &linkLocalAllRoutersAddress  = AsCoreType(&AsNonConst(kLinkLocalAllRoutersMulticastAddress));
-    MulticastAddress &linkLocalAllNodesAddress    = AsCoreType(&AsNonConst(kLinkLocalAllNodesMulticastAddress));
-    MulticastAddress &realmLocalAllRoutersAddress = AsCoreType(&AsNonConst(kRealmLocalAllRoutersMulticastAddress));
+    Error             error = kErrorNone;
+    MulticastAddress *prev  = nullptr;
+    MulticastAddress &linkLocalAllRoutersAddress =
+        static_cast<MulticastAddress &>(AsNonConst(kLinkLocalAllRoutersMulticastAddress));
+    MulticastAddress &linkLocalAllNodesAddress =
+        static_cast<MulticastAddress &>(AsNonConst(kLinkLocalAllNodesMulticastAddress));
+    MulticastAddress &realmLocalAllRoutersAddress =
+        static_cast<MulticastAddress &>(AsNonConst(kRealmLocalAllRoutersMulticastAddress));
+
+    error = mMulticastAddresses.Find(linkLocalAllNodesAddress, prev);
 
     // This method MUST be called after `SubscribeAllNodesMulticast()`
     // Ensure that the `LinkLocalAll` was found on the list.
 
-    SuccessOrAssert(mMulticastAddresses.Find(linkLocalAllNodesAddress, prev));
+    OT_ASSERT(error == kErrorNone);
+    OT_UNUSED_VARIABLE(error);
 
     // The tail of multicast address linked list contains the
     // fixed addresses. We either have a chain of five addresses
@@ -288,8 +296,10 @@ exit:
 void Netif::UnsubscribeAllRoutersMulticast(void)
 {
     MulticastAddress *prev;
-    MulticastAddress &linkLocalAllRoutersAddress = AsCoreType(&AsNonConst(kLinkLocalAllRoutersMulticastAddress));
-    MulticastAddress &linkLocalAllNodesAddress   = AsCoreType(&AsNonConst(kLinkLocalAllNodesMulticastAddress));
+    MulticastAddress &linkLocalAllRoutersAddress =
+        static_cast<MulticastAddress &>(AsNonConst(kLinkLocalAllRoutersMulticastAddress));
+    MulticastAddress &linkLocalAllNodesAddress =
+        static_cast<MulticastAddress &>(AsNonConst(kLinkLocalAllNodesMulticastAddress));
 
     // The tail of multicast address linked list contains the
     // fixed addresses. We check for the chain of five addresses:
@@ -386,8 +396,9 @@ exit:
 
 Error Netif::SubscribeExternalMulticast(const Address &aAddress)
 {
-    Error             error                      = kErrorNone;
-    MulticastAddress &linkLocalAllRoutersAddress = AsCoreType(&AsNonConst(kLinkLocalAllRoutersMulticastAddress));
+    Error             error = kErrorNone;
+    MulticastAddress &linkLocalAllRoutersAddress =
+        static_cast<MulticastAddress &>(AsNonConst(kLinkLocalAllRoutersMulticastAddress));
     ExternalMulticastAddress *entry;
 
     VerifyOrExit(aAddress.IsMulticast(), error = kErrorInvalidArgs);

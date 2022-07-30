@@ -44,6 +44,10 @@ THE SOFTWARE.
 ===============================================
 */
 
+#ifndef I2CDEV_ARDUINO_WIRE
+#define I2CDEV_ARDUINO_WIRE
+#endif 
+
 #ifndef _I2CDEV_H_
 #define _I2CDEV_H_
 

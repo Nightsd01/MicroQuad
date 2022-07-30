@@ -5,11 +5,12 @@
 # Set all as default goal
 .DEFAULT_GOAL := all
 
-# ESP32-Sx and RP2040 has its own CMake build system
-ifeq (,$(findstring $(FAMILY),esp32s2 esp32s3 rp2040))
-
+# ESP32-SX and RP2040 has its own CMake build system
+ifneq ($(FAMILY),esp32s2)
+ifneq ($(FAMILY),esp32s3)
+ifneq ($(FAMILY),rp2040)
 # ---------------------------------------
-# Compiler Flags
+# GNU Make build system
 # ---------------------------------------
 
 # libc
@@ -27,15 +28,12 @@ SRC_C += \
 	src/device/usbd_control.c \
 	src/class/audio/audio_device.c \
 	src/class/cdc/cdc_device.c \
-	src/class/dfu/dfu_device.c \
 	src/class/dfu/dfu_rt_device.c \
 	src/class/hid/hid_device.c \
 	src/class/midi/midi_device.c \
 	src/class/msc/msc_device.c \
-	src/class/net/ecm_rndis_device.c \
-	src/class/net/ncm_device.c \
+	src/class/net/net_device.c \
 	src/class/usbtmc/usbtmc_device.c \
-	src/class/video/video_device.c \
 	src/class/vendor/vendor_device.c
 
 # TinyUSB stack include
@@ -43,13 +41,7 @@ INC += $(TOP)/src
 
 CFLAGS += $(addprefix -I,$(INC))
 
-# LTO makes it difficult to analyze map file for optimizing size purpose
-# We will run this option in ci
-ifeq ($(NO_LTO),1)
-CFLAGS := $(filter-out -flto,$(CFLAGS))
-endif
-
-LDFLAGS += $(CFLAGS) -Wl,-T,$(TOP)/$(LD_FILE) -Wl,-Map=$@.map -Wl,-cref -Wl,-gc-sections
+LDFLAGS += $(CFLAGS) -fshort-enums -Wl,-T,$(TOP)/$(LD_FILE) -Wl,-Map=$@.map -Wl,-cref -Wl,-gc-sections
 ifneq ($(SKIP_NANOLIB), 1)
 LDFLAGS += -specs=nosys.specs -specs=nano.specs
 endif
@@ -71,10 +63,6 @@ $(info CFLAGS  $(CFLAGS) ) $(info )
 $(info LDFLAGS $(LDFLAGS)) $(info )
 $(info ASFLAGS $(ASFLAGS)) $(info )
 endif
-
-# ---------------------------------------
-# Rules
-# ---------------------------------------
 
 all: $(BUILD)/$(PROJECT).bin $(BUILD)/$(PROJECT).hex size
 
@@ -135,16 +123,10 @@ $(BUILD)/obj/%_asm.o: %.S
 	@echo AS $(notdir $@)
 	@$(CC) -x assembler-with-cpp $(ASFLAGS) -c -o $@ $<
 
-endif # GNU Make
-
 size: $(BUILD)/$(PROJECT).elf
 	-@echo ''
 	@$(SIZE) $<
 	-@echo ''
-
-# linkermap must be install previously at https://github.com/hathach/linkermap
-linkermap: $(BUILD)/$(PROJECT).elf
-	@linkermap -v $<.map
 
 .PHONY: clean
 clean:
@@ -153,6 +135,10 @@ ifeq ($(CMDEXE),1)
 else
 	$(RM) -rf $(BUILD)
 endif
+
+endif
+endif
+endif # GNU Make
 
 # ---------------------------------------
 # Flash Targets
@@ -182,9 +168,8 @@ flash-stlink: $(BUILD)/$(PROJECT).elf
 	STM32_Programmer_CLI --connect port=swd --write $< --go
 
 # flash with pyocd
-PYOCD_OPTION ?=
 flash-pyocd: $(BUILD)/$(PROJECT).hex
-	pyocd flash -t $(PYOCD_TARGET) $(PYOCD_OPTION) $<
+	pyocd flash -t $(PYOCD_TARGET) $<
 	pyocd reset -t $(PYOCD_TARGET)
 
 # flash with Black Magic Probe

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2021 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -45,10 +45,6 @@
 #include "esp32h2/rom/cache.h"
 #include "esp32h2/rom/spi_flash.h"
 #include "esp32h2/clk.h"
-#elif CONFIG_IDF_TARGET_ESP8684
-#include "esp8684/rom/cache.h"
-#include "esp8684/rom/spi_flash.h"
-#include "esp_private/esp_clk.h"
 #endif
 #include "esp_flash_partitions.h"
 #include "cache_utils.h"
@@ -918,12 +914,17 @@ void IRAM_ATTR spi_flash_set_rom_required_regs(void)
 #endif
 }
 
+#if CONFIG_SPIRAM_MODE_OCT
+// This function will only be called when Octal PSRAM enabled.
 void IRAM_ATTR spi_flash_set_vendor_required_regs(void)
 {
 #if CONFIG_ESPTOOLPY_OCT_FLASH
     //Flash chip requires MSPI specifically, call this function to set them
     esp_opiflash_set_required_regs();
+    SET_PERI_REG_BITS(SPI_MEM_CACHE_FCTRL_REG(1), SPI_MEM_CACHE_USR_CMD_4BYTE_V, 1, SPI_MEM_CACHE_USR_CMD_4BYTE_S);
 #else
-    //currently we don't need to set other MSPI registers for Quad Flash
-#endif
+    // Set back MSPI registers after Octal PSRAM initialization.
+    SET_PERI_REG_BITS(SPI_MEM_CACHE_FCTRL_REG(1), SPI_MEM_CACHE_USR_CMD_4BYTE_V, 0, SPI_MEM_CACHE_USR_CMD_4BYTE_S);
+#endif // CONFIG_ESPTOOLPY_OCT_FLASH
 }
+#endif

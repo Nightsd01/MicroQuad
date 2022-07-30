@@ -41,7 +41,6 @@
 #include <openthread/platform/alarm-milli.h>
 #include <openthread/platform/diag.h>
 
-#include "common/as_core_type.hpp"
 #include "common/code_utils.hpp"
 #include "common/instance.hpp"
 #include "common/locator_getters.hpp"
@@ -440,7 +439,9 @@ exit:
 
 extern "C" void otPlatDiagAlarmFired(otInstance *aInstance)
 {
-    AsCoreType(aInstance).Get<Diags>().AlarmFired();
+    Instance *instance = static_cast<Instance *>(aInstance);
+
+    instance->Get<Diags>().AlarmFired();
 }
 
 void Diags::AlarmFired(void)

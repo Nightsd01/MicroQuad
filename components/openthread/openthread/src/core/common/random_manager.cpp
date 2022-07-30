@@ -54,6 +54,9 @@ RandomManager::CryptoCtrDrbg RandomManager::sCtrDrbg;
 RandomManager::RandomManager(void)
 {
     uint32_t seed;
+    Error    error;
+
+    OT_UNUSED_VARIABLE(error);
 
     OT_ASSERT(sInitCount < 0xffff);
 
@@ -63,9 +66,11 @@ RandomManager::RandomManager(void)
     sEntropy.Init();
     sCtrDrbg.Init();
 
-    SuccessOrAssert(Random::Crypto::FillBuffer(reinterpret_cast<uint8_t *>(&seed), sizeof(seed)));
+    error = Random::Crypto::FillBuffer(reinterpret_cast<uint8_t *>(&seed), sizeof(seed));
+    OT_ASSERT(error == kErrorNone);
 #else
-    SuccessOrAssert(otPlatEntropyGet(reinterpret_cast<uint8_t *>(&seed), sizeof(seed)));
+    error = otPlatEntropyGet(reinterpret_cast<uint8_t *>(&seed), sizeof(seed));
+    OT_ASSERT(error == kErrorNone);
 #endif
 
     sPrng.Init(seed);

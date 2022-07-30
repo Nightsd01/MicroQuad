@@ -1,17 +1,7 @@
-/**
- * Copyright 2020 Espressif Systems (Shanghai) PTE LTD
+/*
+ * SPDX-FileCopyrightText: 2020-2021 Espressif Systems (Shanghai) CO LTD
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifdef ESP_PLATFORM
@@ -130,7 +120,6 @@ struct crypto_hash * crypto_hash_init(enum crypto_hash_alg alg, const u8 *key,
 	struct crypto_hash *ctx;
 	mbedtls_md_type_t md_type;
 	const mbedtls_md_info_t *md_info;
-	int ret;
 
 	switch (alg) {
 		case CRYPTO_HASH_ALG_HMAC_MD5:
@@ -154,29 +143,37 @@ struct crypto_hash * crypto_hash_init(enum crypto_hash_alg alg, const u8 *key,
 	mbedtls_md_init(&ctx->ctx);
 	md_info = mbedtls_md_info_from_type(md_type);
 	if (!md_info) {
-		os_free(ctx);
-		return NULL;
+		goto cleanup;
 	}
-	ret = mbedtls_md_setup(&ctx->ctx, md_info, 1);
-	if (ret != 0) {
-		os_free(ctx);
-		return NULL;
+	if (mbedtls_md_setup(&ctx->ctx, md_info, 1) != 0) {
+		goto cleanup;
 	}
-	mbedtls_md_hmac_starts(&ctx->ctx, key, key_len);
-
+	if (mbedtls_md_hmac_starts(&ctx->ctx, key, key_len) != 0) {
+		goto cleanup;
+	}
 	return ctx;
+cleanup:
+	os_free(ctx);
+	return NULL;
 }
 
 void crypto_hash_update(struct crypto_hash *ctx, const u8 *data, size_t len)
 {
+	int ret;
+
 	if (ctx == NULL) {
 		return;
 	}
-	mbedtls_md_hmac_update(&ctx->ctx, data, len);
+	ret = mbedtls_md_hmac_update(&ctx->ctx, data, len);
+	if (ret != 0) {
+		wpa_printf(MSG_ERROR, "%s: mbedtls_md_hmac_update failed", __func__);
+	}
 }
 
 int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
 {
+	int ret;
+
 	if (ctx == NULL) {
 		return -2;
 	}
@@ -186,11 +183,11 @@ int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
 		bin_clear_free(ctx, sizeof(*ctx));
 		return 0;
 	}
-	mbedtls_md_hmac_finish(&ctx->ctx, mac);
+	ret = mbedtls_md_hmac_finish(&ctx->ctx, mac);
 	mbedtls_md_free(&ctx->ctx);
 	bin_clear_free(ctx, sizeof(*ctx));
 
-	return 0;
+	return ret;
 }
 
 static int hmac_vector(mbedtls_md_type_t md_type,
@@ -215,17 +212,24 @@ static int hmac_vector(mbedtls_md_type_t md_type,
 		return(ret);
 	}
 
-	mbedtls_md_hmac_starts(&md_ctx, key, key_len);
-
-	for (i = 0; i < num_elem; i++) {
-		mbedtls_md_hmac_update(&md_ctx, addr[i], len[i]);
+	ret = mbedtls_md_hmac_starts(&md_ctx, key, key_len);
+	if (ret != 0) {
+		return(ret);
 	}
 
-	mbedtls_md_hmac_finish(&md_ctx, mac);
+	for (i = 0; i < num_elem; i++) {
+		ret = mbedtls_md_hmac_update(&md_ctx, addr[i], len[i]);
+		if (ret != 0) {
+			return(ret);
+		}
+
+	}
+
+	ret = mbedtls_md_hmac_finish(&md_ctx, mac);
 
 	mbedtls_md_free(&md_ctx);
 
-	return 0;
+	return ret;
 }
 
 int hmac_sha384_vector(const u8 *key, size_t key_len, size_t num_elem,
@@ -631,23 +635,16 @@ int crypto_mod_exp(const uint8_t *base, size_t base_len,
 	mbedtls_mpi_init(&bn_result);
 	mbedtls_mpi_init(&bn_rinv);
 
-	mbedtls_mpi_read_binary(&bn_base, base, base_len);
-	mbedtls_mpi_read_binary(&bn_exp, power, power_len);
-	mbedtls_mpi_read_binary(&bn_modulus, modulus, modulus_len);
+	MBEDTLS_MPI_CHK(mbedtls_mpi_read_binary(&bn_base, base, base_len));
+	MBEDTLS_MPI_CHK(mbedtls_mpi_read_binary(&bn_exp, power, power_len));
+	MBEDTLS_MPI_CHK(mbedtls_mpi_read_binary(&bn_modulus, modulus, modulus_len));
 
-	ret = mbedtls_mpi_exp_mod(&bn_result, &bn_base, &bn_exp, &bn_modulus,
-				  &bn_rinv);
-	if (ret < 0) {
-		mbedtls_mpi_free(&bn_base);
-		mbedtls_mpi_free(&bn_exp);
-		mbedtls_mpi_free(&bn_modulus);
-		mbedtls_mpi_free(&bn_result);
-		mbedtls_mpi_free(&bn_rinv);
-		return ret;
-	}
+	MBEDTLS_MPI_CHK(mbedtls_mpi_exp_mod(&bn_result, &bn_base, &bn_exp, &bn_modulus,
+					    &bn_rinv));
 
 	ret = mbedtls_mpi_write_binary(&bn_result, result, *result_len);
 
+cleanup:
 	mbedtls_mpi_free(&bn_base);
 	mbedtls_mpi_free(&bn_exp);
 	mbedtls_mpi_free(&bn_modulus);

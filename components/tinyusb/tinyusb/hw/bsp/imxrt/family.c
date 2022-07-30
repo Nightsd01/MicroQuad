@@ -79,18 +79,7 @@ void board_init(void)
   uart_config.baudRate_Bps = CFG_BOARD_UART_BAUDRATE;
   uart_config.enableTx = true;
   uart_config.enableRx = true;
-
-  uint32_t freq;
-  if (CLOCK_GetMux(kCLOCK_UartMux) == 0) /* PLL3 div6 80M */
-  {
-    freq = (CLOCK_GetPllFreq(kCLOCK_PllUsb1) / 6U) / (CLOCK_GetDiv(kCLOCK_UartDiv) + 1U);
-  }
-  else
-  {
-    freq = CLOCK_GetOscFreq() / (CLOCK_GetDiv(kCLOCK_UartDiv) + 1U);
-  }
-
-  LPUART_Init(UART_PORT, &uart_config, freq);
+  LPUART_Init(UART_PORT, &uart_config, (CLOCK_GetPllFreq(kCLOCK_PllUsb1) / 6U) / (CLOCK_GetDiv(kCLOCK_UartDiv) + 1U));
 
   //------------- USB0 -------------//
 
@@ -172,7 +161,7 @@ int board_uart_read(uint8_t* buf, int len)
 
 int board_uart_write(void const * buf, int len)
 {
-  LPUART_WriteBlocking(UART_PORT, (uint8_t const*)buf, len);
+  LPUART_WriteBlocking(UART_PORT, (uint8_t*)buf, len);
   return len;
 }
 

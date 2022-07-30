@@ -15,7 +15,6 @@
 #include "esp_wpa.h"
 #include "esp_netif.h"
 #include "tcpip_adapter_compatible/tcpip_adapter_compat.h"
-#include "driver/adc.h"
 #include "driver/adc2_wifi_private.h"
 #include "esp_coexist_internal.h"
 #include "esp_phy_init.h"
@@ -57,7 +56,6 @@ uint64_t g_wifi_feature_caps =
 #endif
 0;
 
-static bool s_wifi_adc_xpd_flag;
 
 static const char* TAG = "wifi_init";
 
@@ -102,6 +100,11 @@ esp_err_t esp_wifi_deinit(void)
         return ESP_ERR_WIFI_NOT_STOPPED;
     }
 
+    if (esp_wifi_internal_reg_rxcb(WIFI_IF_STA,  NULL) != ESP_OK ||
+        esp_wifi_internal_reg_rxcb(WIFI_IF_AP,  NULL) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to unregister Rx callbacks");
+    }
+
     esp_supplicant_deinit();
     err = esp_wifi_deinit_internal();
     if (err != ESP_OK) {
@@ -130,6 +133,11 @@ esp_err_t esp_wifi_deinit(void)
     phy_init_flag();
 #endif
     esp_wifi_power_domain_off();
+#if CONFIG_MAC_BB_PD
+    esp_mac_bb_pd_mem_deinit();
+#endif
+    esp_phy_pd_mem_deinit();
+
     return err;
 }
 
@@ -245,6 +253,7 @@ esp_err_t esp_wifi_init(const wifi_init_config_t *config)
         esp_mac_bb_pd_mem_init();
         esp_wifi_internal_set_mac_sleep(true);
 #endif
+        esp_phy_pd_mem_init();
 #if CONFIG_IDF_TARGET_ESP32
         s_wifi_mac_time_update_cb = esp_wifi_internal_update_mac_time;
 #endif
@@ -282,24 +291,6 @@ void wifi_apb80m_release(void)
     esp_pm_lock_release(s_wifi_modem_sleep_lock);
 }
 #endif //CONFIG_PM_ENABLE
-
-/* Coordinate ADC power with other modules. This overrides the function from PHY lib. */
-// It seems that it is only required on ESP32, but we still compile it for all chips, in case it is
-// called by PHY unexpectedly.
-void set_xpd_sar(bool en)
-{
-    if (s_wifi_adc_xpd_flag == en) {
-        /* ignore repeated calls to set_xpd_sar when the state is already correct */
-        return;
-    }
-
-    s_wifi_adc_xpd_flag = en;
-    if (en) {
-        adc_power_acquire();
-    } else {
-        adc_power_release();
-    }
-}
 
 #ifndef CONFIG_ESP_WIFI_FTM_ENABLE
 void ieee80211_ftm_attach(void)

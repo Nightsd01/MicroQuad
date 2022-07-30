@@ -35,7 +35,6 @@
 
 #if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
 
-#include "common/as_core_type.hpp"
 #include "common/const_cast.hpp"
 #include "common/instance.hpp"
 #include "common/locator_getters.hpp"
@@ -339,7 +338,7 @@ void Server::HandleServiceUpdateResult(ServiceUpdateId aId, Error aError)
     }
     else
     {
-        otLogInfoSrp("[server] delayed SRP host update result, the SRP update has been committed (updateId = %u)", aId);
+        otLogInfoSrp("[server] delayed SRP host update result, the SRP update has been committed");
     }
 }
 
@@ -1241,7 +1240,8 @@ exit:
 
 void Server::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<Server *>(aContext)->HandleUdpReceive(AsCoreType(aMessage), AsCoreType(aMessageInfo));
+    static_cast<Server *>(aContext)->HandleUdpReceive(*static_cast<Message *>(aMessage),
+                                                      *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
 void Server::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
@@ -1406,10 +1406,9 @@ void Server::HandleOutstandingUpdatesTimer(Timer &aTimer)
 
 void Server::HandleOutstandingUpdatesTimer(void)
 {
+    otLogInfoSrp("[server] outstanding service update timeout");
     while (!mOutstandingUpdates.IsEmpty() && mOutstandingUpdates.GetTail()->GetExpireTime() <= TimerMilli::GetNow())
     {
-        otLogInfoSrp("[server] outstanding service update timeout (updateId = %u)",
-                     mOutstandingUpdates.GetTail()->GetId());
         HandleServiceUpdateResult(mOutstandingUpdates.GetTail(), kErrorResponseTimeout);
     }
 }

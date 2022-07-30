@@ -35,7 +35,6 @@
 
 #if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
 
-#include "common/as_core_type.hpp"
 #include "common/encoding.hpp"
 #include "common/locator_getters.hpp"
 #include "common/random.hpp"
@@ -108,7 +107,7 @@ Error PingSender::Ping(const Config &aConfig)
     VerifyOrExit(mConfig.mInterval <= Timer::kMaxDelay, error = kErrorInvalidArgs);
 
     mStatistics.Clear();
-    mStatistics.mIsMulticast = AsCoreType(&mConfig.mDestination).IsMulticast();
+    mStatistics.mIsMulticast = static_cast<Ip6::Address *>(&mConfig.mDestination)->IsMulticast();
 
     mIdentifier++;
     SendPing();
@@ -190,8 +189,9 @@ void PingSender::HandleIcmpReceive(void *               aContext,
                                    const otMessageInfo *aMessageInfo,
                                    const otIcmp6Header *aIcmpHeader)
 {
-    reinterpret_cast<PingSender *>(aContext)->HandleIcmpReceive(AsCoreType(aMessage), AsCoreType(aMessageInfo),
-                                                                AsCoreType(aIcmpHeader));
+    reinterpret_cast<PingSender *>(aContext)->HandleIcmpReceive(*static_cast<Message *>(aMessage),
+                                                                *static_cast<const Ip6::MessageInfo *>(aMessageInfo),
+                                                                *static_cast<const Ip6::Icmp::Header *>(aIcmpHeader));
 }
 
 void PingSender::HandleIcmpReceive(const Message &          aMessage,

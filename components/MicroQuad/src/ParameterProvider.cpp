@@ -4,74 +4,73 @@
 #include "SD.h"
 #include "esp_log.h"
 
-#include "Logger.h"
+#define DEFAULT_READ_LINE_SIZE 100
 
-static bool _createDir(fs::FS &fs, const char * path){
-    if(!fs.mkdir(path)){
-        LOG_ERROR("Could not create parameters file with name: %s", path);
-        return false;
-    }
-    return true;
+template<> SupportedValueType _valueType(int parameter) { 
+    return SupportedValueType::intParameter; 
 }
 
-void ParameterProvider::registerParameter(const char *name, int defaultValue) {
-    _intMap.emplace(name, defaultValue);
+template<> SupportedValueType _valueType(double parameter) { 
+    return SupportedValueType::doubleParameter; 
 }
 
-void ParameterProvider::registerParameter(const char *name, double defaultValue) {
-    _doubleMap.emplace(name, defaultValue);
+template<> SupportedValueType _valueType(std::string parameter) { 
+    return SupportedValueType::stringParameter; 
 }
 
-void ParameterProvider::registerParameter(const char *name, std::string defaultValue) {
-    _stringMap.emplace(name, defaultValue);
+template<>
+std::map<const char *, int> *ParameterProvider::_getValueMap(void) {
+    return &_intMap;
 }
 
-// Updates the cached in-memory value for this parameter
-template <class T>
-static void _updateParameterInMemory(std::map<const char *, T> *valueMap, const char *name, T newValue) {
-    if (valueMap->find(name) == valueMap->end()) {
-        LOG_ERROR("Attempted to update an unregistered parameter (%s)", name);
-        return;
-    }
-    valueMap->erase(name);
-    valueMap->emplace(name, newValue);
+template<>
+std::map<const char *, double> *ParameterProvider::_getValueMap(void) {
+    return &_doubleMap;
 }
 
-void ParameterProvider::updateInt(const char *name, int newValue)
-{
-    _updateParameterInMemory(&_intMap, name, newValue);
+template<>
+std::map<const char *, std::string> *ParameterProvider::_getValueMap(void) {
+    return &_stringMap;
+}
+
+template<>
+std::map<const char *, std::vector<std::function<void(int)>>> *ParameterProvider::_getUpdateHandlers(void) {
+    return &_intUpdateHandlers;
+}
+
+template<>
+std::map<const char *, std::vector<std::function<void(double)>>> *ParameterProvider::_getUpdateHandlers(void) {
+    return &_doubleUpdateHandlers;
+}
+
+template<>
+std::map<const char *, std::vector<std::function<void(std::string)>>> *ParameterProvider::_getUpdateHandlers(void) {
+    return &_stringUpdateHandlers;
+}
+
+template<>
+char *ParameterProvider::_createStringFromParameter(int parameter) {
     char *parameterStringValue = NULL;
-    asprintf(&parameterStringValue, "%i", newValue);
-    _updateParameterOnDisk(name, parameterStringValue, SupportedValueType::intParameter);
-    free(parameterStringValue);
+    asprintf(&parameterStringValue, "%i", parameter);
+    return parameterStringValue;
 }
 
-void ParameterProvider::updateDouble(const char *name, double newValue)
-{
-    _updateParameterInMemory(&_doubleMap, name, newValue);
+template<>
+char *ParameterProvider::_createStringFromParameter(double parameter) {
     char *parameterStringValue = NULL;
-    asprintf(&parameterStringValue, "%f", newValue);
-    _updateParameterOnDisk(name, parameterStringValue, SupportedValueType::doubleParameter);
-    free(parameterStringValue);
+    asprintf(&parameterStringValue, "%f", parameter);
+    return parameterStringValue;
 }
 
-void ParameterProvider::updateString(const char *name, std::string newValue)
-{
-    _updateParameterInMemory(&_stringMap, name, newValue);
-    _updateParameterOnDisk(name, newValue.c_str(), SupportedValueType::intParameter);
-}
-
-template <class T>
-static void _loadParameterFromDiskString(std::map<const char *, T> *valueMap, const char *parameterName, SupportedValueType type, T value) {
-    if (valueMap->find(parameterName) == valueMap->end()) {
-        valueMap->erase(parameterName);
-        valueMap->emplace(parameterName, value);
-    } else {
-        _updateParameterInMemory(valueMap, parameterName, value);
-    }
+template<>
+char *ParameterProvider::_createStringFromParameter(std::string parameter) {
+    char *cString = (char *)malloc((parameter.length() + 1) * sizeof(char));
+    strcpy(cString, parameter.c_str());
+    return cString;
 }
 
 void ParameterProvider::_processParameterRowFromDisk(String row) {
+    LOG_INFO("Processing disk row: %s", row.c_str());
     const int nameDelimiterIndex = row.indexOf(',', 0);
     String parameterName = row.substring(0, nameDelimiterIndex);
 
@@ -98,49 +97,63 @@ void ParameterProvider::_processParameterRowFromDisk(String row) {
 }
 
 void ParameterProvider::begin(const char *sdPath) {
-    _sdFile = SD.open(sdPath, "rw");
+    if (SD.exists(sdPath)) {
+        _sdFile = SD.open(sdPath, "rw");
+    } else {
+        _sdFile = SD.open(sdPath, "w");
+    }
     if (!_sdFile) {
         LOG_ERROR("Parameter provider failed to open file at path %s", sdPath);
         return;
     }
     _filePath = sdPath;
     _beganSuccess = true;
-    while (_sdFile.available()) {
+    while (_sdFile.available() > 1) {
         // Here is an example of a registered integer row in the file
-        // {paramter name}, {type enum}, {value}
+        // {paramter name},{type enum},{value}
         // "param_name,0,123"
-        String row = _sdFile.readStringUntil('\n');
-        _processParameterRowFromDisk(row);
+        LOG_INFO("Disk available");
+        
+        char *buf = (char *)malloc(sizeof(char) * DEFAULT_READ_LINE_SIZE);
+        if (_sdFile.readBytesUntil('\n', buf, DEFAULT_READ_LINE_SIZE) > 0 
+            && strcmp(buf, "\n") != 0 
+            && strcmp(buf, "")) {
+            LOG_INFO("Found disk row: %s", buf);
+            _processParameterRowFromDisk(String(buf));
+            free(buf);
+            continue;
+        }
+        break;
     }
 
     // reset our position to the beginning of the file
     _sdFile.seek(0);
 }
 
-int ParameterProvider::getInt(const char *name) {
-    return _intMap[name];
-}
-
-double ParameterProvider::getDouble(const char *name) {
-    return _doubleMap[name];
-}
-
-std::string ParameterProvider::getString(const char *name) {
-    return _stringMap[name];
-}
-
-void ParameterProvider::_updateParameterOnDisk(
-    const char *name, 
-    const char *stringValue,
-    SupportedValueType type
-) {
+void ParameterProvider::_updateParametersOnDisk(void) {
+    unsigned long long beginMillis = millis();
     if (!_beganSuccess) {
-        LOG_ERROR("Attempted to update parameter (%s) with invalid parameter provider state", name);
+        LOG_ERROR("Attempted to update disk parameters with invalid parameter provider state");
         return;
     }
-    File parameterFile = SD.open(_filePath);
+    LOG_INFO("Re-writing parameters file");
+    // Removing & re-writing the entire file is highly inefficient, but should not be a frequent operation
+    // Consider refactoring with disk B-tree if this ever becomes a bottleneck
+    SD.remove(_filePath);
+
+    File parameterFile = SD.open(_filePath, "w");
     if (!parameterFile) {
-        LOG_ERROR("Attempted to update parameter (%s) but was unable to open the parameters file", name);
+        LOG_ERROR("Attempted to update disk parameters but was unable to open the parameters file");
         return;
     }
+
+    int numParams = 0;
+    _writeParamsToFile(&_intMap, &parameterFile, &numParams);
+    _writeParamsToFile(&_doubleMap, &parameterFile, &numParams);
+    _writeParamsToFile(&_stringMap, &parameterFile, &numParams);
+
+    parameterFile.flush();
+    _sdFile = parameterFile;
+    _sdFile.seek(0);
+    LOG_INFO("Wrote %i parameters to disk in %llu milliseconds", numParams, millis() - beginMillis);
 }

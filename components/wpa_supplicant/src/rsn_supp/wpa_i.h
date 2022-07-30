@@ -16,7 +16,6 @@
 #define WPA_I_H
 
 struct install_key {
-    int mic_errors_seen; /* Michael MIC errors with the current PTK */
     int keys_cleared;
     enum wpa_alg alg;
     u8 addr[ETH_ALEN];
@@ -43,6 +42,8 @@ struct wpa_sm {
     u8 request_counter[WPA_REPLAY_COUNTER_LEN];
     struct rsn_pmksa_cache *pmksa; /* PMKSA cache */
     struct rsn_pmksa_cache_entry *cur_pmksa; /* current PMKSA entry */
+    u8 ssid[32];
+    size_t ssid_len;
 
     unsigned int pairwise_cipher;
     unsigned int group_cipher;
@@ -75,14 +76,14 @@ struct wpa_sm {
 
     struct install_key install_ptk;
     struct install_key install_gtk;
-    int  key_entry_valid;   //present current avaliable entry for bssid, for pairkey:0,5,10,15,20, gtk: pairkey_no+i (i:1~4)
+    int mic_errors_seen; /* Michael MIC errors with the current PTK */
 
     void (* sendto) (void *buffer, uint16_t len);
     void (*config_assoc_ie) (u8 proto, u8 *assoc_buf, u32 assoc_wpa_ie_len);
     void (*install_ppkey) (enum wpa_alg alg, u8 *addr, int key_idx, int set_tx,
-               u8 *seq, unsigned int seq_len, u8 *key, unsigned int key_len, int key_entry_valid);
+               u8 *seq, unsigned int seq_len, u8 *key, unsigned int key_len, enum key_flag key_flag);
     int (*get_ppkey) (uint8_t *ifx, int *alg, uint8_t *addr, int *key_idx,
-               uint8_t *key, size_t key_len, int key_entry_valid);
+               uint8_t *key, size_t key_len, enum key_flag key_flag);
     void (*wpa_deauthenticate)(u8 reason_code);
     void (*wpa_neg_complete)(void);
     struct wpa_gtk_data gd; //used for calllback save param
@@ -145,9 +146,9 @@ typedef void (* WPA_SEND_FUNC)(void *buffer, u16 len);
 typedef void (* WPA_SET_ASSOC_IE)(u8 proto, u8 *assoc_buf, u32 assoc_wpa_ie_len);
 
 typedef void (*WPA_INSTALL_KEY) (enum wpa_alg alg, u8 *addr, int key_idx, int set_tx,
-               u8 *seq, size_t seq_len, u8 *key, size_t key_len, int key_entry_valid);
+               u8 *seq, size_t seq_len, u8 *key, size_t key_len, enum key_flag key_flag);
 
-typedef int (*WPA_GET_KEY) (u8 *ifx, int *alg, u8 *addt, int *keyidx, u8 *key, size_t key_len, int key_entry_valid);
+typedef int (*WPA_GET_KEY) (u8 *ifx, int *alg, u8 *addt, int *keyidx, u8 *key, size_t key_len, enum key_flag key_flag);
 
 typedef void (*WPA_DEAUTH_FUNC)(u8 reason_code);
 

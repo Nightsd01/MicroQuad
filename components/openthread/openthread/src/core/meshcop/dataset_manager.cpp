@@ -36,7 +36,6 @@
 
 #include <stdio.h>
 
-#include "common/as_core_type.hpp"
 #include "common/instance.hpp"
 #include "common/locator_getters.hpp"
 #include "common/logging.hpp"
@@ -66,6 +65,19 @@ DatasetManager::DatasetManager(Instance &aInstance, Dataset::Type aType, Timer::
 const Timestamp *DatasetManager::GetTimestamp(void) const
 {
     return mTimestampValid ? &mTimestamp : nullptr;
+}
+
+int DatasetManager::Compare(const Timestamp &aTimestamp) const
+{
+    const Timestamp *timestamp = GetTimestamp();
+    int              rval      = 1;
+
+    if (timestamp)
+    {
+        rval = timestamp->Compare(aTimestamp);
+    }
+
+    return rval;
 }
 
 Error DatasetManager::Restore(void)
@@ -134,7 +146,7 @@ Error DatasetManager::Save(const Dataset &aDataset)
         }
     }
 
-    compare = Timestamp::Compare(mTimestampValid ? &mTimestamp : nullptr, mLocal.GetTimestamp());
+    compare = mLocal.Compare(mTimestampValid ? &mTimestamp : nullptr);
 
     if (isNetworkkeyUpdated || compare > 0)
     {
@@ -258,8 +270,7 @@ void DatasetManager::SendSet(void)
 
     VerifyOrExit(!mMgmtPending, error = kErrorBusy);
     VerifyOrExit(Get<Mle::MleRouter>().IsChild() || Get<Mle::MleRouter>().IsRouter(), error = kErrorInvalidState);
-
-    VerifyOrExit(Timestamp::Compare(GetTimestamp(), mLocal.GetTimestamp()) < 0, error = kErrorInvalidState);
+    VerifyOrExit(mLocal.Compare(GetTimestamp()) < 0, error = kErrorInvalidState);
 
     if (IsActiveDataset())
     {
@@ -269,7 +280,7 @@ void DatasetManager::SendSet(void)
         IgnoreError(Get<PendingDataset>().Read(pendingDataset));
 
         if ((pendingDataset.GetTimestamp(Dataset::kActive, timestamp) == kErrorNone) &&
-            (Timestamp::Compare(&timestamp, mLocal.GetTimestamp()) == 0))
+            (mLocal.Compare(&timestamp) == 0))
         {
             // stop registration attempts during dataset transition
             ExitNow(error = kErrorInvalidState);
@@ -317,8 +328,8 @@ void DatasetManager::HandleMgmtSetResponse(void *               aContext,
                                            const otMessageInfo *aMessageInfo,
                                            Error                aError)
 {
-    static_cast<DatasetManager *>(aContext)->HandleMgmtSetResponse(AsCoapMessagePtr(aMessage),
-                                                                   AsCoreTypePtr(aMessageInfo), aError);
+    static_cast<DatasetManager *>(aContext)->HandleMgmtSetResponse(
+        static_cast<Coap::Message *>(aMessage), static_cast<const Ip6::MessageInfo *>(aMessageInfo), aError);
 }
 
 void DatasetManager::HandleMgmtSetResponse(Coap::Message *aMessage, const Ip6::MessageInfo *aMessageInfo, Error aError)
@@ -643,7 +654,7 @@ Error DatasetManager::SendGetRequest(const Dataset::Components &aDatasetComponen
 
     if (aAddress != nullptr)
     {
-        messageInfo.SetPeerAddr(AsCoreType(aAddress));
+        messageInfo.SetPeerAddr(*static_cast<const Ip6::Address *>(aAddress));
     }
     else
     {
@@ -705,7 +716,8 @@ exit:
 
 void ActiveDataset::HandleGet(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<ActiveDataset *>(aContext)->HandleGet(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
+    static_cast<ActiveDataset *>(aContext)->HandleGet(*static_cast<Coap::Message *>(aMessage),
+                                                      *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
 void ActiveDataset::HandleGet(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo) const
@@ -855,7 +867,8 @@ exit:
 
 void PendingDataset::HandleGet(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<PendingDataset *>(aContext)->HandleGet(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
+    static_cast<PendingDataset *>(aContext)->HandleGet(*static_cast<Coap::Message *>(aMessage),
+                                                       *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
 void PendingDataset::HandleGet(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo) const

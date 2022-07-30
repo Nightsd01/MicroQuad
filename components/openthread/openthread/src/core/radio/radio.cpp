@@ -37,8 +37,13 @@ namespace ot {
 void Radio::Init(void)
 {
 #if OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
+    Error error = OT_ERROR_NONE;
+
+    OT_UNUSED_VARIABLE(error);
+
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
-    SuccessOrAssert(EnableCsl(0, Mac::kShortAddrInvalid, nullptr));
+    error = EnableCsl(0, Mac::kShortAddrInvalid, nullptr);
+    OT_ASSERT(error == OT_ERROR_NONE);
 #endif
 
     EnableSrcMatch(false);
@@ -47,8 +52,11 @@ void Radio::Init(void)
 
     if (IsEnabled())
     {
-        SuccessOrAssert(Sleep());
-        SuccessOrAssert(Disable());
+        error = Sleep();
+        OT_ASSERT(error == OT_ERROR_NONE);
+
+        error = Disable();
+        OT_ASSERT(error == OT_ERROR_NONE);
     }
 
     SetPanId(Mac::kPanIdBroadcast);

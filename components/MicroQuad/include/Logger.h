@@ -1,3 +1,6 @@
+#ifndef LOGGER_H
+#define LOGGER_H
+
 #include "Arduino.h"
 
 // Setting the log level to none results in no console/SD card logs
@@ -28,3 +31,5 @@ extern void LOG_VERBOSE(const char *format, ...);
 extern void LOG_CONSOLE(const char *format, ...);
 
 extern void DIAGNOSTICS_SAVE(const char* format, ...);
+
+#endif
