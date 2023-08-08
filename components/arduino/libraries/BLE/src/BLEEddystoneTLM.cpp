@@ -9,6 +9,9 @@
  *  Fixes based on EddystoneTLM frame specification https://github.com/google/eddystone/blob/master/eddystone-tlm/tlm-plain.md
  * 
  */
+#include "soc/soc_caps.h"
+#if SOC_BLE_SUPPORTED
+
 #include "sdkconfig.h"
 #if defined(CONFIG_BLUEDROID_ENABLED)
 #include <string.h>
@@ -17,8 +20,6 @@
 #include "BLEEddystoneTLM.h"
 
 static const char LOG_TAG[] = "BLEEddystoneTLM";
-#define ENDIAN_CHANGE_U16(x) ((((x)&0xFF00)>>8) + (((x)&0xFF)<<8))
-#define ENDIAN_CHANGE_U32(x) ((((x)&0xFF000000)>>24) + (((x)&0x00FF0000)>>8)) + ((((x)&0xFF00)<<8) + (((x)&0xFF)<<24))
 
 BLEEddystoneTLM::BLEEddystoneTLM() {
 	beaconUUID = 0xFEAA;
@@ -47,8 +48,12 @@ uint16_t BLEEddystoneTLM::getVolt() {
 } // getVolt
 
 float BLEEddystoneTLM::getTemp() {
-	return ENDIAN_CHANGE_U16(m_eddystoneData.temp) / 256.0f;
+  return EDDYSTONE_TEMP_U16_TO_FLOAT(m_eddystoneData.temp);
 } // getTemp
+
+uint16_t BLEEddystoneTLM::getRawTemp() {
+	return ENDIAN_CHANGE_U16(m_eddystoneData.temp);
+} // getRawTemp
 
 uint32_t BLEEddystoneTLM::getCount() {
 	return ENDIAN_CHANGE_U32(m_eddystoneData.advCount);
@@ -73,35 +78,35 @@ std::string BLEEddystoneTLM::toString() {
   out += " mV\n";
 
   out += "Temperature ";
-  snprintf(val, sizeof(val), "%.2f", ENDIAN_CHANGE_U16(m_eddystoneData.temp) / 256.0f);
+  snprintf(val, sizeof(val), "%.2f", ((int16_t)ENDIAN_CHANGE_U16(m_eddystoneData.temp)) / 256.0f);
   out += val;
   out += " C\n";
 
   out += "Adv. Count ";
-  snprintf(val, sizeof(val), "%d", ENDIAN_CHANGE_U32(m_eddystoneData.advCount));
+  snprintf(val, sizeof(val), "%ld", ENDIAN_CHANGE_U32(m_eddystoneData.advCount));
   out += val;
   out += "\n";
 
   out += "Time in seconds ";
-  snprintf(val, sizeof(val), "%d", rawsec/10);
+  snprintf(val, sizeof(val), "%ld", rawsec/10);
   out += val;
   out += "\n";
 
   out += "Time ";
 
-  snprintf(val, sizeof(val), "%04d", rawsec / 864000);
+  snprintf(val, sizeof(val), "%04ld", rawsec / 864000);
   out += val;
   out += ".";
 
-  snprintf(val, sizeof(val), "%02d", (rawsec / 36000) % 24);
+  snprintf(val, sizeof(val), "%02ld", (rawsec / 36000) % 24);
   out += val;
   out += ":";
 
-  snprintf(val, sizeof(val), "%02d", (rawsec / 600) % 60);
+  snprintf(val, sizeof(val), "%02ld", (rawsec / 600) % 60);
   out += val;
   out += ":";
 
-  snprintf(val, sizeof(val), "%02d", (rawsec / 10) % 60);
+  snprintf(val, sizeof(val), "%02ld", (rawsec / 10) % 60);
   out += val;
   out += "\n";
 
@@ -110,6 +115,21 @@ std::string BLEEddystoneTLM::toString() {
 
 /**
  * Set the raw data for the beacon record.
+ * Example:
+ * uint8_t *payLoad = advertisedDevice.getPayload();
+ * eddystoneTLM.setData(std::string((char*)payLoad+22, advertisedDevice.getPayloadLength() - 22));
+ * Note: the offset 22 works for current implementation of example BLE_EddystoneTLM Beacon.ino, however it is not static and will be reimplemented
+ * Data frame:
+ * | Field  || Len | Type | UUID        | EddyStone TLM |
+ * | Offset || 0   | 1    | 2           | 4             |
+ * | Len    || 1 B | 1 B  | 2 B         | 14 B          |
+ * | Data   || ??  | ??   | 0xAA | 0xFE | ???           |
+ *
+ * EddyStone TLM frame:
+ * | Field  || Type  | Version | Batt mV     | Beacon temp | Cnt since boot | Time since boot |
+ * | Offset || 0     | 1       | 2           | 4           | 6              | 10              |
+ * | Len    || 1 B   | 1 B     | 2 B         | 2 B         | 4 B            | 4 B             |
+ * | Data   || 0x20  | ??      | ??   | ??   | ??    | ??  |   |   |   |    |   |   |   |     |
  */
 void BLEEddystoneTLM::setData(std::string data) {
 	if (data.length() != sizeof(m_eddystoneData)) {
@@ -132,7 +152,7 @@ void BLEEddystoneTLM::setVolt(uint16_t volt) {
 } // setVolt
 
 void BLEEddystoneTLM::setTemp(float temp) {
-	m_eddystoneData.temp = (uint16_t)temp;
+	m_eddystoneData.temp = EDDYSTONE_TEMP_FLOAT_TO_U16(temp);
 } // setTemp
 
 void BLEEddystoneTLM::setCount(uint32_t advCount) {
@@ -144,3 +164,4 @@ void BLEEddystoneTLM::setTime(uint32_t tmil) {
 } // setTime
 
 #endif
+#endif /* SOC_BLE_SUPPORTED */

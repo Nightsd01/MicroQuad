@@ -24,6 +24,7 @@
 #include <Arduino.h>
 #include <esp32-hal-log.h>
 #include <libb64/cencode.h>
+#include "esp_random.h"
 #include "WiFiServer.h"
 #include "WiFiClient.h"
 #include "WebServer.h"
@@ -57,6 +58,7 @@ WebServer::WebServer(IPAddress addr, int port)
 , _headerKeysCount(0)
 , _currentHeaders(nullptr)
 , _contentLength(0)
+, _clientContentLength(0)
 , _chunked(false)
 {
   log_v("WebServer::Webserver(addr=%s, port=%d)", addr.toString().c_str(), port);
@@ -80,6 +82,7 @@ WebServer::WebServer(int port)
 , _headerKeysCount(0)
 , _currentHeaders(nullptr)
 , _contentLength(0)
+, _clientContentLength(0)
 , _chunked(false)
 {
   log_v("WebServer::Webserver(port=%d)", port);
@@ -125,9 +128,9 @@ static String md5str(String &in){
     return String(out);
   memset(_buf, 0x00, 16);
   mbedtls_md5_init(&_ctx);
-  mbedtls_md5_starts_ret(&_ctx);
-  mbedtls_md5_update_ret(&_ctx, (const uint8_t *)in.c_str(), in.length());
-  mbedtls_md5_finish_ret(&_ctx, _buf);
+  mbedtls_md5_starts(&_ctx);
+  mbedtls_md5_update(&_ctx, (const uint8_t *)in.c_str(), in.length());
+  mbedtls_md5_finish(&_ctx, _buf);
   for(i = 0; i < 16; i++) {
     sprintf(out + (i * 2), "%02x", _buf[i]);
   }
@@ -228,7 +231,7 @@ String WebServer::_getRandomHexString() {
   char buffer[33];  // buffer to hold 32 Hex Digit + /0
   int i;
   for(i = 0; i < 4; i++) {
-    sprintf (buffer + (i*8), "%08x", esp_random());
+    sprintf (buffer + (i*8), "%08lx", esp_random());
   }
   return String(buffer);
 }
@@ -283,17 +286,16 @@ void WebServer::serveStatic(const char* uri, FS& fs, const char* path, const cha
 
 void WebServer::handleClient() {
   if (_currentStatus == HC_NONE) {
-    WiFiClient client = _server.available();
-    if (!client) {
+    _currentClient = _server.available();
+    if (!_currentClient) {
       if (_nullDelay) {
         delay(1);
       }
       return;
     }
 
-    log_v("New client: client.localIP()=%s", client.localIP().toString().c_str());
+    log_v("New client: client.localIP()=%s", _currentClient.localIP().toString().c_str());
 
-    _currentClient = client;
     _currentStatus = HC_WAIT_READ;
     _statusChange = millis();
   }
@@ -527,7 +529,7 @@ void WebServer::sendContent_P(PGM_P content, size_t size) {
 }
 
 
-void WebServer::_streamFileCore(const size_t fileSize, const String & fileName, const String & contentType)
+void WebServer::_streamFileCore(const size_t fileSize, const String & fileName, const String & contentType, const int code)
 {
   using namespace mime;
   setContentLength(fileSize);
@@ -536,7 +538,7 @@ void WebServer::_streamFileCore(const size_t fileSize, const String & fileName, 
       contentType != String(FPSTR(mimeTable[none].mimeType))) {
     sendHeader(F("Content-Encoding"), F("gzip"));
   }
-  send(200, contentType, "");
+  send(code, contentType, "");
 }
 
 String WebServer::pathArg(unsigned int i) {

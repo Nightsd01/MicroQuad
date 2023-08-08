@@ -57,6 +57,7 @@
 #include "freertos/semphr.h"
 
 typedef enum {
+    UART_NO_ERROR,
     UART_BREAK_ERROR,
     UART_BUFFER_FULL_ERROR,
     UART_FIFO_OVF_ERROR,
@@ -79,7 +80,13 @@ public:
     //                       Examples: Maximum for 11 bits symbol is 92 (SERIAL_8N2, SERIAL_8E1, SERIAL_8O1, etc), Maximum for 10 bits symbol is 101 (SERIAL_8N1).
     //                       For example symbols_timeout=1 defines a timeout equal to transmission time of one symbol (~11 bit) on current baudrate. 
     //                       For a baudrate of 9600, SERIAL_8N1 (10 bit symbol) and symbols_timeout = 3, the timeout would be 3 / (9600 / 10) = 3.125 ms
-    void setRxTimeout(uint8_t symbols_timeout);
+    bool setRxTimeout(uint8_t symbols_timeout);
+
+    // setRxFIFOFull(uint8_t fifoBytes) will set the number of bytes that will trigger UART_INTR_RXFIFO_FULL interrupt and fill up RxRingBuffer
+    // This affects some functions such as Serial::available() and Serial.read() because, in a UART flow of receiving data, Serial internal 
+    // RxRingBuffer will be filled only after these number of bytes arrive or a RX Timeout happens.
+    // This parameter can be set to 1 in order to receive byte by byte, but it will also consume more CPU time as the ISR will be activates often.
+    bool setRxFIFOFull(uint8_t fifoBytes);
 
     // onReceive will setup a callback that will be called whenever an UART interruption occurs (UART_INTR_RXFIFO_FULL or UART_INTR_RXFIFO_TOUT)
     // UART_INTR_RXFIFO_FULL interrupt triggers at UART_FULL_THRESH_DEFAULT bytes received (defined as 120 bytes by default in IDF)
@@ -91,7 +98,7 @@ public:
     //         false -- The callback will be called when FIFO reaches 120 bytes and also on RX Timeout.
     //                  The stream of incommig bytes will be "split" into blocks of 120 bytes on each callback.
     //                  This option avoid any sort of Rx Overflow, but leaves the UART packet reassembling work to the Application.
-    void onReceive(OnReceiveCb function, bool onlyOnTimeout = true);
+    void onReceive(OnReceiveCb function, bool onlyOnTimeout = false);
 
     // onReceive will be called on error events (see hardwareSerial_error_t)
     void onReceiveError(OnReceiveErrorCb function);
@@ -111,6 +118,12 @@ public:
     {
         return read((uint8_t*) buffer, size);
     }
+    // Overrides Stream::readBytes() to be faster using IDF
+    size_t readBytes(uint8_t *buffer, size_t length);
+    size_t readBytes(char *buffer, size_t length)
+    {
+        return readBytes((uint8_t *) buffer, length);
+    }    
     void flush(void);
     void flush( bool txOnly);
     size_t write(uint8_t);
@@ -148,10 +161,11 @@ public:
 
     // Negative Pin Number will keep it unmodified, thus this function can set individual pins
     // SetPins shall be called after Serial begin()
-    void setPins(int8_t rxPin, int8_t txPin, int8_t ctsPin = -1, int8_t rtsPin = -1);
+    bool setPins(int8_t rxPin, int8_t txPin, int8_t ctsPin = -1, int8_t rtsPin = -1);
     // Enables or disables Hardware Flow Control using RTS and/or CTS pins (must use setAllPins() before)
-    void setHwFlowCtrlMode(uint8_t mode = HW_FLOWCTRL_CTS_RTS, uint8_t threshold = 64);   // 64 is half FIFO Length
-
+    bool setHwFlowCtrlMode(uint8_t mode = HW_FLOWCTRL_CTS_RTS, uint8_t threshold = 64);   // 64 is half FIFO Length
+    // Used to set RS485 modes such as UART_MODE_RS485_HALF_DUPLEX for Auto RTS function on ESP32
+    bool setMode(uint8_t mode);
     size_t setRxBufferSize(size_t new_size);
     size_t setTxBufferSize(size_t new_size);
 
@@ -164,7 +178,7 @@ protected:
     OnReceiveErrorCb _onReceiveErrorCB;
     // _onReceive and _rxTimeout have be consistent when timeout is disabled
     bool _onReceiveTimeout;
-    uint8_t _rxTimeout;
+    uint8_t _rxTimeout, _rxFIFOFull;
     TaskHandle_t _eventTask;
 #if !CONFIG_DISABLE_HAL_LOCKS
     SemaphoreHandle_t _lock;

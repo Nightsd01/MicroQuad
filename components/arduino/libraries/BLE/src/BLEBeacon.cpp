@@ -4,6 +4,9 @@
  *  Created on: Jan 4, 2018
  *      Author: kolban
  */
+#include "soc/soc_caps.h"
+#if SOC_BLE_SUPPORTED
+
 #include "sdkconfig.h"
 #if defined(CONFIG_BLUEDROID_ENABLED)
 #include <string.h>
@@ -40,7 +43,7 @@ uint16_t BLEBeacon::getMinor() {
 }
 
 BLEUUID BLEBeacon::getProximityUUID() {
-	return BLEUUID(m_beaconData.proximityUUID, 16, false);
+	return BLEUUID(m_beaconData.proximityUUID, 16, true);
 }
 
 int8_t BLEBeacon::getSignalPower() {
@@ -81,3 +84,4 @@ void BLEBeacon::setSignalPower(int8_t signalPower) {
 
 
 #endif
+#endif /* SOC_BLE_SUPPORTED */

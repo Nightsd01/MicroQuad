@@ -1,7 +1,7 @@
 #ifndef DIAGNOSTICS_H
 #define DIAGNOSTICS_H
 
-#include "FS.h"
+// #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
 
@@ -15,7 +15,7 @@ class DiagnosticsWriter
         void writeDiagnosticsAtTimestamp(unsigned long long time, String line);
 
     private:
-        File _diagnosticsFile;
+        // File _diagnosticsFile;
         unsigned long _lastFileWrite;
         unsigned long _uncommittedDataSize;
         void _checkIfShouldFlushSD(void);

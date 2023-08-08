@@ -20,6 +20,10 @@
 #ifndef Arduino_h
 #define Arduino_h
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
@@ -39,6 +43,10 @@
 
 #include "stdlib_noniso.h"
 #include "binary.h"
+
+#ifdef __cplusplus
+}
+#endif
 
 #define PI 3.1415926535897932384626433832795
 #define HALF_PI 1.5707963267948966192313216916398
@@ -79,8 +87,9 @@
 #define degrees(rad) ((rad)*RAD_TO_DEG)
 #define sq(x) ((x)*(x))
 
-#define sei()
-#define cli()
+// ESP32xx runs FreeRTOS... disabling interrupts can lead to issues, such as Watchdog Timeout
+#define sei() portENABLE_INTERRUPTS()
+#define cli() portDISABLE_INTERRUPTS()
 #define interrupts() sei()
 #define noInterrupts() cli()
 
@@ -136,9 +145,19 @@ typedef unsigned int word;
 void setup(void);
 void loop(void);
 
+// The default is using Real Hardware random number generator  
+// But when randomSeed() is called, it turns to Psedo random
+// generator, exactly as done in Arduino mainstream
+long random(long);
 long random(long, long);
-#endif
+// Calling randomSeed() will make random()
+// using pseudo random like in Arduino
 void randomSeed(unsigned long);
+// Allow the Application to decide if the random generator
+// will use Real Hardware random generation (true - default)
+// or Pseudo random generation (false) as in Arduino MainStream
+void useRealRandomGenerator(bool useRandomHW);
+#endif
 long map(long, long, long, long, long);
 
 #ifdef __cplusplus
@@ -172,7 +191,6 @@ void shiftOut(uint8_t dataPin, uint8_t clockPin, uint8_t bitOrder, uint8_t val);
 #include "Udp.h"
 #include "HardwareSerial.h"
 #include "Esp.h"
-#include "esp32/spiram.h"
 
 // Use float-compatible stl abs() and round(), we don't use Arduino macros to avoid issues with the C++ libraries
 using std::abs;
@@ -190,8 +208,12 @@ uint16_t makeWord(uint8_t h, uint8_t l);
 size_t getArduinoLoopTaskStackSize(void);
 #define SET_LOOP_TASK_STACK_SIZE(sz) size_t getArduinoLoopTaskStackSize() { return sz;}
 
+bool shouldPrintChipDebugReport(void);
+#define ENABLE_CHIP_DEBUG_REPORT bool shouldPrintChipDebugReport(void){return true;}
+
 // allows user to bypass esp_spiram_test()
-#define BYPASS_SPIRAM_TEST(bypass) bool testSPIRAM(void) { if (bypass) return true; else return esp_spiram_test(); }
+bool esp_psram_extram_test(void);
+#define BYPASS_SPIRAM_TEST(bypass) bool testSPIRAM(void) { if (bypass) return true; else return esp_psram_extram_test(); }
 
 unsigned long pulseIn(uint8_t pin, uint8_t state, unsigned long timeout = 1000000L);
 unsigned long pulseInLong(uint8_t pin, uint8_t state, unsigned long timeout = 1000000L);
@@ -206,8 +228,6 @@ void setToneChannel(uint8_t channel = 0);
 void tone(uint8_t _pin, unsigned int frequency, unsigned long duration = 0);
 void noTone(uint8_t _pin);
 
-// WMath prototypes
-long random(long);
 #endif /* __cplusplus */
 
 #include "pins_arduino.h"

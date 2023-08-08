@@ -76,11 +76,11 @@ int32_t esp_adc_cal_get_reading_error(const esp_adc_error_calc_param_t *param, u
         variable[i] = variable[i-1] * v_cali_1;
         coeff = (*param->coeff)[atten][i][0];
         term[i] = variable[i] * coeff;
-        ESP_LOGV(TAG, "big coef is %llu, big term%d is %llu, coef_id is %d", coeff, i, term[i], i);
+        ESP_LOGV(TAG, "big coef is %llu, big term%d is %llu, coef_id is %d", coeff, (int)i, term[i], (int)i);
 
         term[i] = term[i] / (*param->coeff)[atten][i][1];
         error += (int32_t)term[i] * (*param->sign)[atten][i];
-        ESP_LOGV(TAG, "term%d is %llu, error is %d", i, term[i], error);
+        ESP_LOGV(TAG, "term%d is %llu, error is %d", (int)i, term[i], (int)error);
     }
 
     return error;

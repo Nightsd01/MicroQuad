@@ -11,6 +11,8 @@
  *  Created on: Jul 3, 2017
  *      Author: kolban
  */
+#include "soc/soc_caps.h"
+#if SOC_BLE_SUPPORTED
 #include "sdkconfig.h"
 #if defined(CONFIG_BLUEDROID_ENABLED)
 #include <sstream>
@@ -560,6 +562,17 @@ std::string BLEAdvertisedDevice::toString() {
 		res += ", txPower: ";
 		res += val;
 	}
+	if (haveRSSI()) {
+	       char val[4];
+	       snprintf(val, sizeof(val), "%i", getRSSI());
+	       res += ", rssi: ";
+	       res += val;
+	 }
+	if (haveServiceData()) {
+		for (int i=0; i <getServiceDataCount(); i++) {
+			res += ", serviceData: " + getServiceData(i);
+		}
+	}
 	return res;
 } // toString
 
@@ -580,4 +593,4 @@ size_t BLEAdvertisedDevice::getPayloadLength() {
 }
 
 #endif /* CONFIG_BLUEDROID_ENABLED */
-
+#endif /* SOC_BLE_SUPPORTED */

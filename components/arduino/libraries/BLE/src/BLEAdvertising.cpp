@@ -16,6 +16,9 @@
  * set in the data will be advertised.
  *
  */
+#include "soc/soc_caps.h"
+#if SOC_BLE_SUPPORTED
+
 #include "sdkconfig.h"
 #if defined(CONFIG_BLUEDROID_ENABLED)
 #include "BLEAdvertising.h"
@@ -151,12 +154,12 @@ void BLEAdvertising::setScanFilter(bool scanRequestWhitelistOnly, bool connectWh
  */
 void BLEAdvertising::setAdvertisementData(BLEAdvertisementData& advertisementData) {
 	log_v(">> setAdvertisementData");
-	// esp_err_t errRc = ::esp_ble_gap_config_adv_data_raw(
-	// 	(uint8_t*)advertisementData.getPayload().data(),
-	// 	advertisementData.getPayload().length());
-	// if (errRc != ESP_OK) {
-	// 	log_e("esp_ble_gap_config_adv_data_raw: %d %s", errRc, GeneralUtils::errorToString(errRc));
-	// }
+	esp_err_t errRc = ::esp_ble_gap_config_adv_data_raw(
+		(uint8_t*)advertisementData.getPayload().data(),
+		advertisementData.getPayload().length());
+	if (errRc != ESP_OK) {
+		log_e("esp_ble_gap_config_adv_data_raw: %d %s", errRc, GeneralUtils::errorToString(errRc));
+	}
 	m_customAdvData = true;   // Set the flag that indicates we are using custom advertising data.
 	log_v("<< setAdvertisementData");
 } // setAdvertisementData
@@ -528,7 +531,7 @@ void BLEAdvertising::handleGAPEvent(
 	}
 }
 
-#ifdef CONFIG_BT_BLE_50_FEATURES_SUPPORTED
+#ifdef SOC_BLE_50_SUPPORTED
 
 /**
 * @brief           Creator
@@ -763,7 +766,7 @@ void BLEMultiAdvertising::setDuration(uint8_t instance, int duration, int max_ev
 	ext_adv[instance] = { instance, duration, max_events };
 }
 
-#endif // CONFIG_BT_BLE_50_FEATURES_SUPPORTED
-
+#endif // SOC_BLE_50_SUPPORTED
 
 #endif /* CONFIG_BLUEDROID_ENABLED */
+#endif /* SOC_BLE_SUPPORTED */

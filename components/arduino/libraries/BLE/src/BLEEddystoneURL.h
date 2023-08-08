@@ -7,6 +7,9 @@
 
 #ifndef _BLEEddystoneURL_H_
 #define _BLEEddystoneURL_H_
+#include "soc/soc_caps.h"
+#if SOC_BLE_SUPPORTED
+
 #include "BLEUUID.h"
 
 #define EDDYSTONE_URL_FRAME_TYPE 0x10
@@ -35,9 +38,10 @@ private:
 	struct {
 		uint8_t frameType;
 		int8_t  advertisedTxPower;
-		uint8_t url[16];
+		uint8_t url[18];  // 18 bytes: 1 byte for URL scheme + up to 17 bytes of URL
 	} __attribute__((packed)) m_eddystoneData;
 
 }; // BLEEddystoneURL
 
+#endif /* SOC_BLE_SUPPORTED */
 #endif /* _BLEEddystoneURL_H_ */

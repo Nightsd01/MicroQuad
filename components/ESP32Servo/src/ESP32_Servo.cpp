@@ -51,7 +51,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
 #include "ESP32_Servo.h"
-#include "esp32-hal-ledc.h"
+#include <esp32-hal-ledc.h>
 #include "Arduino.h"
 
 // initialize the class variable ServoCount
@@ -141,8 +141,9 @@ int Servo::attach(int pin, int min, int max)
         this->max = max;    //store this value in uS
         // Set up this channel
         // if you want anything other than default timer width, you must call setTimerWidth() before attach
-        ledcSetup(this->servoChannel, REFRESH_CPS, this->timer_width); // channel #, 50 Hz, timer width
-        ledcAttachPin(this->pinNumber, this->servoChannel);   // GPIO pin assigned to channel    
+        
+        // ledcSetup(this->servoChannel, REFRESH_CPS, this->timer_width); // channel #, 50 Hz, timer width
+        ledcAttach(this->pinNumber, REFRESH_CPS, this->timer_width);   // GPIO pin assigned to channel    
         return this->servoChannel;    
     }
     else return 0;  
@@ -152,7 +153,7 @@ void Servo::detach()
 {
     if (this->attached())
     {
-        ledcDetachPin(this->pinNumber);
+        ledcDetach(this->pinNumber);
         //keep track of detached servos channels so we can reuse them if needed
         ChannelUsed[this->servoChannel] = -1;
         this->pinNumber = -1;
@@ -244,9 +245,9 @@ void Servo::setTimerWidth(int value)
     if ((this->servoChannel <= MAX_SERVOS) && (this->attached()))
     {
         // detach, setup and attach again to reflect new timer width
-        ledcDetachPin(this->pinNumber);
-        ledcSetup(this->servoChannel, REFRESH_CPS, this->timer_width);
-        ledcAttachPin(this->pinNumber, this->servoChannel);
+        ledcDetach(this->pinNumber);
+        // ledcSetup(this->servoChannel, REFRESH_CPS, this->timer_width);
+        ledcAttach(this->pinNumber, REFRESH_CPS, this->timer_width);
     }        
 }
 

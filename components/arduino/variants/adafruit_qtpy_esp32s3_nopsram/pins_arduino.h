@@ -2,6 +2,7 @@
 #define Pins_Arduino_h
 
 #include <stdint.h>
+#include "soc/soc_caps.h"
 
 #define USB_VID            0x239A
 #define USB_PID            0x8119
@@ -22,6 +23,12 @@
 #define NEOPIXEL_POWER      38    // power pin
 #define NEOPIXEL_POWER_ON   HIGH  // power pin state when on
 
+static const uint8_t LED_BUILTIN = SOC_GPIO_PIN_COUNT+PIN_NEOPIXEL;
+#define BUILTIN_LED  LED_BUILTIN // backward compatibility
+#define LED_BUILTIN  LED_BUILTIN
+#define RGB_BUILTIN  LED_BUILTIN
+#define RGB_BRIGHTNESS 64
+
 static const uint8_t TX = 5;
 static const uint8_t RX = 16;
 #define TX1 TX
@@ -30,6 +37,7 @@ static const uint8_t RX = 16;
 static const uint8_t SDA = 7;
 static const uint8_t SCL = 6;
 
+#define WIRE1_PIN_DEFINED 1             // See Wire.cpp at bool TwoWire::initPins(int sdaPin, int sclPin)
 static const uint8_t SDA1 = 41;
 static const uint8_t SCL1 = 40;
 
