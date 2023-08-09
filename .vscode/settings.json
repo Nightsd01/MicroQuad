@@ -2,11 +2,11 @@
     "C_Cpp.intelliSenseEngine": "Tag Parser",
     "idf.adapterTargetName": "esp32s3",
     "idf.customExtraPaths": "/Users/bradhesse/.espressif/tools/xtensa-esp32-elf/esp-2020r3-8.4.0/xtensa-esp32-elf/bin:/Users/bradhesse/.espressif/tools/xtensa-esp32s2-elf/esp-2020r3-8.4.0/xtensa-esp32s2-elf/bin:/Users/bradhesse/.espressif/tools/xtensa-esp32s3-elf/esp-2020r3-8.4.0/xtensa-esp32s3-elf/bin:/Users/bradhesse/.espressif/tools/riscv32-esp-elf/1.24.0.123_64eb9ff-8.4.0/riscv32-esp-elf/bin:/Users/bradhesse/.espressif/tools/esp32ulp-elf/2.28.51-esp-20191205/esp32ulp-elf-binutils/bin:/Users/bradhesse/.espressif/tools/esp32s2ulp-elf/2.28.51-esp-20191205/esp32s2ulp-elf-binutils/bin:/Users/bradhesse/.espressif/tools/openocd-esp32/v0.10.0-esp32-20210401/openocd-esp32/bin",
-    "idf.customExtraVars": "{\"OPENOCD_SCRIPTS\":\"/Users/bradhesse/.espressif/tools/openocd-esp32/v0.10.0-esp32-20210401/openocd-esp32/share/openocd/scripts\"}",
+    "idf.customExtraVars": {"OPENOCD_SCRIPTS":"/Users/bradhesse/.espressif/tools/openocd-esp32/v0.10.0-esp32-20210401/openocd-esp32/share/openocd/scripts"},
     "idf.espIdfPath": "/Users/bradhesse/esp/esp-idf",
     "idf.espAdfPath": "/Users/bradhesse/.espressif/esp-adf",
     "idf.espMdfPath": "/Users/bradhesse/.espressif/esp-mdf",
-    "idf.port": "/dev/cu.usbserial-AU00WHL7",
+    "idf.port": "/dev/cu.usbmodem2101",
     "idf.pythonBinPath": "/Users/bradhesse/.espressif/python_env/idf4.3_py2.7_env/bin/python",
     "idf.toolsPath": "/Users/bradhesse/.espressif",
     "files.associations": {
@@ -86,10 +86,40 @@
         "gpio.h": "c",
         "compare": "cpp",
         "error.h": "c",
-        "ctr_drbg.h": "c"
+        "ctr_drbg.h": "c",
+        "forward_list": "cpp",
+        "rope": "cpp",
+        "slist": "cpp",
+        "ranges": "cpp",
+        "span": "cpp",
+        "stacktrace": "cpp",
+        "valarray": "cpp",
+        "any": "cpp",
+        "barrier": "cpp",
+        "bit": "cpp",
+        "cfenv": "cpp",
+        "charconv": "cpp",
+        "complex": "cpp",
+        "concepts": "cpp",
+        "coroutine": "cpp",
+        "csetjmp": "cpp",
+        "cuchar": "cpp",
+        "expected": "cpp",
+        "netfwd": "cpp",
+        "source_location": "cpp",
+        "latch": "cpp",
+        "numbers": "cpp",
+        "scoped_allocator": "cpp",
+        "semaphore": "cpp",
+        "shared_mutex": "cpp",
+        "spanstream": "cpp",
+        "stop_token": "cpp",
+        "syncstream": "cpp",
+        "typeindex": "cpp",
+        "variant": "cpp"
     },
     "idf.openOcdConfigs": [
-        "interface/ftdi/esp32_devkitj_v1.cfg",
-        "target/esp32s3.cfg"
-    ]
+        "board/esp32s3-builtin.cfg"
+    ],
+    "idf.flashType": "JTAG"
 }

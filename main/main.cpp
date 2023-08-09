@@ -15,8 +15,8 @@
 #include "BLEServer.h"
 #include "BLE2902.h"
 
-#include "FS.h"
-#include "SD.h"
+// #include "FS.h"
+// #include "SD.h"
 #include "SPI.h"
 
 #include "Logger.h"
@@ -29,17 +29,18 @@
 #include "esp_log.h"
 #include "soc/timer_group_struct.h"
 #include "soc/timer_group_reg.h"
+#include "IMU.h"
 
 #include <esp_partition.h>
 
-// #include <FastLED.h>
+#include <FastLED.h>
 
 // static bool _enableEmergencyMode = false;
 
 // LED Setup
 #define NUM_LEDS 1
-#define LED_DATA_PIN 14
-// CRGB leds[NUM_LEDS];
+#define LED_DATA_PIN 38
+CRGB leds[NUM_LEDS];
 
 #define NUM_MOTORS 4
 
@@ -72,11 +73,17 @@
 #define NUM_BATTERY_CELLS 2.0f
 #define BATTERY_CELL_MAX_VOLTAGE 4.2f
 #define BATTERY_CELL_MIN_VOLTAGE 3.3f
-#define BATTERY_SCALE 0.001777081468218f
+#define BATTERY_SCALE 0.001639280125196f
 
 #define MIN_THROTTLE 1015
 
 #define ARM_MICROSECONDS 1000.0f
+
+#define SPI0_CS_PIN 10
+#define SPI0_MOSI_PIN 11
+#define SPI0_SCLK_PIN 12
+#define SPI0_MISO_PIN 13
+#define IMU_INT_PIN 3
 
 BLECharacteristic *controlCharacteristic;
 BLECharacteristic *telemetryCharacteristic;
@@ -126,14 +133,16 @@ static bool completedFirstArm = false;
 // When the quadcopter enters into unacceptable orientation for more than 2 measurements, 
 // the drone will cut power to the motors for safety and must be rebooted
 static bool enteredEmergencyMode = false;
+
+static IMU *imu = NULL;
 static position_values_t previousIMUValues;
 
-static ParameterProvider _parameterProvider;
+// static ParameterProvider _parameterProvider;
 
 static void updateArmStatus(void) {
-  // FastLED.clear();
-  // leds[0] = (armed ? CRGB::Green : CRGB::Red);
-  // FastLED.show();
+  FastLED.clear();
+  leds[0] = (armed ? CRGB(0, 255, 0) : CRGB::Red);
+  FastLED.show();
   if (armed && !completedFirstArm) {
     LOG_INFO("Setting up motor outputs");
     completedFirstArm = true;
@@ -346,22 +355,22 @@ void setup() {
 
     LOG_INFO("Initializing SD diagnostics");
 
-    DebugUtilityInitialize(DEBUG_LOG_PATH, DIAGNOSTICS_PATH, SD_CS_PIN, LogLevel::verbose);
+    DebugUtilityInitialize(DEBUG_LOG_PATH, DIAGNOSTICS_PATH, SD_CS_PIN, LogLevel::verbose, false /* logToSDCard */);
 
     initController();
 
-    Wire.begin(1, 4);
     Wire.setClock(400000);
+    Wire.begin(18, 17);
 
     // Wait for serial to become available
     while (!Serial);
 
     LOG_INFO("Initializing Arming Signal LED");
-    // FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
-    // FastLED.addLeds<WS2812B, LED_DATA_PIN>(leds, NUM_LEDS);
-    // FastLED.clear();
-    // leds[0] = CRGB::Green;
-    // FastLED.show();
+    FastLED.addLeds<WS2812, LED_DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
+    FastLED.addLeds<WS2812, LED_DATA_PIN>(leds, NUM_LEDS);
+    FastLED.clear();
+    leds[0] = CRGB(0, 255, 0);
+    FastLED.show();
 
     LOG_INFO("Initializing bluetooth connection");
 
@@ -370,21 +379,21 @@ void setup() {
     BLEServer *server = BLEDevice::createServer();
     server->setCallbacks(new MyServerCallbacks());
 
-    LOG_INFO("Setting up parameter provider");
-    _parameterProvider.begin("/prm.csv");
-    std::string testVal = _parameterProvider.get(TEST_VALUE, std::string("default_val"));
-    bool enableEmerg = _parameterProvider.get(ENABLE_EMERGENCY_MODE_DETECTION, 0) == 1;
-    LOG_INFO("Enable emergency mode: %d", enableEmerg);
-    LOG_INFO("Got test value: %s", testVal.c_str());
+    // LOG_INFO("Setting up parameter provider");
+    // _parameterProvider.begin("/prm.csv");
+    // std::string testVal = _parameterProvider.get(TEST_VALUE, std::string("default_val"));
+    // bool enableEmerg = _parameterProvider.get(ENABLE_EMERGENCY_MODE_DETECTION, 0) == 1;
+    // LOG_INFO("Enable emergency mode: %d", enableEmerg);
+    // LOG_INFO("Got test value: %s", testVal.c_str());
 
-    _parameterProvider.watch(ENABLE_EMERGENCY_MODE_DETECTION, (std::function<void(int)>)([&](int newValue) {
-      LOG_INFO("VALUE CHANGED: %d", newValue == 1);
-    }));
+    // _parameterProvider.watch(ENABLE_EMERGENCY_MODE_DETECTION, (std::function<void(int)>)([&](int newValue) {
+    //   LOG_INFO("VALUE CHANGED: %d", newValue == 1);
+    // }));
     
-    _parameterProvider.watch(TEST_VALUE, (std::function<void(std::string)>)([&](std::string newValue) {
-      LOG_INFO("TEST STRING VALUE CHANGED: %s", newValue.c_str());
-      someStr = newValue;
-    }));
+    // _parameterProvider.watch(TEST_VALUE, (std::function<void(std::string)>)([&](std::string newValue) {
+    //   LOG_INFO("TEST STRING VALUE CHANGED: %s", newValue.c_str());
+    //   someStr = newValue;
+    // }));
 
     BLEService *service = server->createService(BLEUUID(std::string(SERVICE_UUID)), 30, 0);
 
@@ -481,6 +490,17 @@ void setup() {
     //   LOG_ERROR("Accelerometer DMP initialization failed with status code = %i", dmpStatus);
     // }
 
+    LOG_INFO("Initializing IMU");
+    bool setupSuccess = false;
+    imu = new IMU(SPI0_CS_PIN, SPI0_MISO_PIN, SPI0_MOSI_PIN, SPI0_SCLK_PIN, IMU_INT_PIN, [&](imu_update_t update) {
+
+    }, &setupSuccess);
+
+    if (!setupSuccess) {
+      LOG_ERROR("IMU Setup Failure");
+    } else {
+      LOG_INFO("Successfully set up IMU");
+    }
     LOG_INFO("Configuring controller");
     controller->setControlScalingValues({
       .yaw = 180.0f,
@@ -533,8 +553,8 @@ float batteryPercent(float batteryVoltage) {
 }
 
 float batteryLevel() {
-    // int val = analogRead(BATTERY_SENSE_PIN);
-    int val = 0.0f;
+    int val = analogRead(BATTERY_SENSE_PIN);
+    // int val = 0.0f;
     return BATTERY_SCALE * (float)val;
 }
 
@@ -599,12 +619,12 @@ void loop() {
     String serialString = Serial.readString();
     if (serialString.indexOf("enable_emerg") != -1) {
       LOG_INFO("Updating");
-      _parameterProvider.update(ENABLE_EMERGENCY_MODE_DETECTION, 1);
+      // _parameterProvider.update(ENABLE_EMERGENCY_MODE_DETECTION, 1);
     }
 
     if (serialString.indexOf("testing") != -1) {
       LOG_INFO("Updating string");
-      _parameterProvider.update(TEST_VALUE, std::string("some_new_val2"));
+      // _parameterProvider.update(TEST_VALUE, std::string("some_new_val2"));
     }
   }
 
@@ -643,11 +663,13 @@ void loop() {
     startedMonitoringTimestamp = timestamp;
     controller->startMonitoringPID();
   }
+
+  imu->loopHandler();
   
-  if (!dmpReady) {
-    LOG_ERROR("DMP NOT READY");
-    return;
-  };
+  // if (!dmpReady) {
+  //   LOG_ERROR("DMP NOT READY");
+  //   return;
+  // };
 
   // while (!mpuInterrupt && fifoCount < packetSize) {
   //   if (mpuInterrupt && fifoCount < packetSize) {

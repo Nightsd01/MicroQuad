@@ -620,7 +620,7 @@ void fill_raw_noise16into8(uint8_t *pData, uint8_t num_points, uint8_t octaves, 
 /// @todo Why isn't this declared in the header (noise.h)?
 void fill_raw_2dnoise8(uint8_t *pData, int width, int height, uint8_t octaves, q44 freq44, fract8 amplitude, int skip, uint16_t x, int scalex, uint16_t y, int scaley, uint16_t time) {
   if(octaves > 1) {
-    // fill_raw_2dnoise8(pData, width, height, octaves-1, freq44, amplitude, skip+1, x*(uint8_t)freq44, freq44 * (uint8_t)scalex, (uint8_t)y*freq44, freq44 * (uint8_t)scaley, time);
+    fill_raw_2dnoise8(pData, width, height, octaves-1, freq44, amplitude, skip+1, x*freq44, (uint16_t)scalex *  freq44  , y *freq44, (uint16_t)scaley *  freq44  , time);
   } else {
     // amplitude is always 255 on the lowest level
     amplitude=255;
@@ -696,7 +696,8 @@ int32_t nmax=0;
 
 void fill_raw_2dnoise16into8(uint8_t *pData, int width, int height, uint8_t octaves, q44 freq44, fract8 amplitude, int skip, uint32_t x, int scalex, uint32_t y, int scaley, uint32_t time) {
   if(octaves > 1) {
-    fill_raw_2dnoise8(pData, width, height, octaves-1, freq44, amplitude, skip+1, x*freq44, (uint16_t)scalex *  freq44  , y *freq44, (uint16_t)scaley *  freq44  , time);
+    fill_raw_2dnoise16into8(pData, width, height, octaves-1, freq44, amplitude, skip+1, x*freq44, (uint16_t)scalex *freq44, y*freq44, (uint16_t)scaley * freq44, time);
+    
   } else {
     // amplitude is always 255 on the lowest level
     amplitude=255;

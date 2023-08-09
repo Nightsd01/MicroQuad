@@ -20,7 +20,8 @@ extern void DebugUtilityInitialize(
     const char *sdDebugLogDirectory, 
     const char *sdDiagnosticsDirectory, 
     int sdCsPin, 
-    LogLevel logLevel = LogLevel::warn
+    LogLevel logLevel = LogLevel::warn,
+    bool logToSDCard = false
 );
 
 extern void LOG_ERROR(const char *format, ...);

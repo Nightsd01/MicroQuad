@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "DiagnosticsWriter.h"
+// #include "DiagnosticsWriter.h"
 #include "esp_log.h"
 
 #define MAIN_CORE_ID 1
@@ -13,10 +13,11 @@ typedef struct log_task_t {
     unsigned long long timestamp;
 } log_task_t;
 
-static DiagnosticsWriter *_debugLogWriter = NULL;
-static DiagnosticsWriter *_diagnosticsCsvWriter = NULL;
+// static DiagnosticsWriter *_debugLogWriter = NULL;
+// static DiagnosticsWriter *_diagnosticsCsvWriter = NULL;
 static LogLevel _logLevel = LogLevel::warn;
 static bool _initialized = false;
+static bool _logToSDCard = false;
 const char *TAG = "MicroQuad";
 static std::vector<log_task_t *> _preInitializationLogs;
 
@@ -63,7 +64,9 @@ static void _log(String statement, LogLevel level, unsigned long ts)
         }
     }
 
-    _debugLogWriter->writeDiagnostics(line);
+    if (_logToSDCard) {
+        // _debugLogWriter->writeDiagnostics(line);
+    }
 }
 
 static void _logAndFreeTask(log_task_t *task)
@@ -84,20 +87,22 @@ void DebugUtilityInitialize(
     const char *sdDebugLogDirectory, 
     const char *sdDiagnosticsDirectory, 
     int sdCsPin, 
-    LogLevel logLevel
+    LogLevel logLevel,
+    bool logToSDCard
 )
 {
     if (_initialized) {
         ESP_LOGE(TAG, "Already initialized debug utility");
         return;
     }
+    _logToSDCard = logToSDCard;
     _initialized = true;
     _logLevel = logLevel;
-    if (sdDiagnosticsDirectory != NULL) {
-        _diagnosticsCsvWriter = new DiagnosticsWriter(sdDiagnosticsDirectory, sdCsPin);
+    if (logToSDCard && sdDiagnosticsDirectory != NULL) {
+        // _diagnosticsCsvWriter = new DiagnosticsWriter(sdDiagnosticsDirectory, sdCsPin);
     }
-    if (sdDebugLogDirectory != NULL) {
-        _debugLogWriter = new DiagnosticsWriter(sdDebugLogDirectory, sdCsPin);
+    if (logToSDCard && sdDebugLogDirectory != NULL) {
+        // _debugLogWriter = new DiagnosticsWriter(sdDebugLogDirectory, sdCsPin);
     }
 
     for (int i = 0; i < _preInitializationLogs.size(); i++) {
@@ -215,7 +220,10 @@ void LOG_CONSOLE(const char *format, ...)
 
 void DIAGNOSTICS_SAVE(const char *format, ...)
 {
-    if (_diagnosticsCsvWriter == NULL) {
+    // if (!_logToSDCard || _diagnosticsCsvWriter == NULL) {
+    //     return;
+    // }
+    if (!_logToSDCard) {
         return;
     }
     va_list args;
@@ -227,7 +235,7 @@ void DIAGNOSTICS_SAVE(const char *format, ...)
         return;
     }
     String result = String(buffer);
-    _diagnosticsCsvWriter->writeDiagnostics(result);
+    // _diagnosticsCsvWriter->writeDiagnostics(result);
     free(buffer);
     va_end(args);
 }

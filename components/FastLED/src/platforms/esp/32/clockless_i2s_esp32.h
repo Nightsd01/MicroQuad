@@ -86,6 +86,8 @@
 
 #pragma once
 
+#define CONFIG_IDF_TARGET_ESP32S3
+
 #ifndef FASTLED_INTERNAL
 #pragma message "NOTE: ESP32 support using I2S parallel driver. All strips must use the same chipset"
 #endif
@@ -96,6 +98,8 @@ FASTLED_NAMESPACE_BEGIN
 extern "C" {
 #endif
     
+#include <soc/gpio_periph.h>
+#include <rom/gpio.h>
 #include "esp_heap_caps.h"
 #include "soc/soc.h"
 #include "soc/gpio_sig_map.h"
@@ -234,8 +238,7 @@ public:
         PIN_FUNC_SELECT(GPIO_PIN_MUX_REG[DATA_PIN], PIN_FUNC_GPIO);
         gpio_set_direction(mPin, (gpio_mode_t)GPIO_MODE_DEF_OUTPUT);
         pinMode(mPin,OUTPUT);
-        // TODO: Bradhesse
-        // gpio_matrix_out(mPin, i2s_base_pin_index + my_index, false, false);
+        gpio_matrix_out(mPin, i2s_base_pin_index + my_index, false, false);
     }
     
     virtual uint16_t getMaxRefreshRate() const { return 400; }
@@ -454,12 +457,12 @@ protected:
             i2s = &I2S0;
             periph_module_enable(PERIPH_I2S0_MODULE);
             interruptSource = ETS_I2S0_INTR_SOURCE;
-            i2s_base_pin_index = I2S0O_DATA_OUT0_IDX;
+            i2s_base_pin_index = 140;
         } else {
             i2s = &I2S1;
             periph_module_enable(PERIPH_I2S1_MODULE);
             interruptSource = ETS_I2S1_INTR_SOURCE;
-            i2s_base_pin_index = I2S1O_DATA_OUT0_IDX;
+            i2s_base_pin_index = 166;
         }
         
         // -- Reset everything

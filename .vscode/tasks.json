@@ -220,7 +220,7 @@
                 "focus": false,
                 "panel": "new"
             },
-            "command": "openocd -s ${command:espIdf.getOpenOcdScriptValue} ${command:espIdf.getOpenOcdConfigs}",
+            "command": "openocd -f board/esp32s3-builtin.cfg",
             "windows": {
                 "command": "openocd.exe -s ${command:espIdf.getOpenOcdScriptValue} ${command:espIdf.getOpenOcdConfigs}",
                 "options": {

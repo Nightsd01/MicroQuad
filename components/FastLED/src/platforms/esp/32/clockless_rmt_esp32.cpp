@@ -6,8 +6,10 @@
 #define FASTLED_INTERNAL
 #include "FastLED.h"
 
-// RMTMEM address is declared in <target>.peripherals.ld
-extern rmt_mem_t RMTMEM;
+#include <rom/gpio.h>
+#include <soc/rmt_periph.h>
+
+#include <driver/rmt_types_legacy.h>
 
 // -- Forward reference
 class ESP32RMTController;
@@ -223,6 +225,8 @@ void IRAM_ATTR ESP32RMTController::showPixels()
     }
 }
 
+extern rmt_mem_t RMTMEM;
+
 // -- Start up the next controller
 //    This method is static so that it can dispatch to the
 //    appropriate startOnChannel method of the given controller.
@@ -294,8 +298,8 @@ void IRAM_ATTR ESP32RMTController::tx_start()
     // Inline the code for rmt_tx_start, so it can be placed in IRAM
 #if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32H2
     // rmt_ll_tx_reset_pointer(&RMT, mRMT_channel)
-    RMT.tx_conf[mRMT_channel].mem_rd_rst = 1;
-    RMT.tx_conf[mRMT_channel].mem_rd_rst = 0;
+    RMT.tx_conf[mRMT_channel].mem_rd_rst_chn = 1;
+    RMT.tx_conf[mRMT_channel].mem_rd_rst_chn = 0;
     RMT.tx_conf[mRMT_channel].mem_rst = 1;
     RMT.tx_conf[mRMT_channel].mem_rst = 0;
     // rmt_ll_clear_tx_end_interrupt(&RMT, mRMT_channel)
@@ -349,8 +353,7 @@ void IRAM_ATTR ESP32RMTController::doneOnChannel(rmt_channel_t channel, void * a
     //    Otherwise the pin will stay connected to the RMT controller,
     //    and if the same RMT controller is used for another output
     //    pin the RMT output will be routed to both pins.
-    // TODO: Bradhesse
-    // gpio_matrix_out(pController->mPin, SIG_GPIO_OUT_IDX, 0, 0);
+    gpio_matrix_out(pController->mPin, SIG_GPIO_OUT_IDX, 0, 0);
 
     // -- Turn off the interrupts
     // rmt_set_tx_intr_en(channel, false);
