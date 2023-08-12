@@ -1,4 +1,4 @@
-#define I2CDEV_ARDUINO_WIRE
+
 
 #include <QuadcopterController.h>
 #include <DebugHelper.h>
@@ -32,15 +32,14 @@
 #include "IMU.h"
 
 #include <esp_partition.h>
-
-#include <FastLED.h>
+#include "led_controller.h"
 
 // static bool _enableEmergencyMode = false;
 
 // LED Setup
-#define NUM_LEDS 1
-#define LED_DATA_PIN 38
-CRGB leds[NUM_LEDS];
+#define LED_DATA_PIN GPIO_NUM_38
+
+LEDController ledController(LED_DATA_PIN);
 
 #define NUM_MOTORS 4
 
@@ -140,9 +139,7 @@ static position_values_t previousIMUValues;
 // static ParameterProvider _parameterProvider;
 
 static void updateArmStatus(void) {
-  FastLED.clear();
-  leds[0] = (armed ? CRGB(0, 255, 0) : CRGB::Red);
-  FastLED.show();
+  ledController.showRGB(armed ? 255 : 0, armed ? 0 : 255, 0);
   if (armed && !completedFirstArm) {
     LOG_INFO("Setting up motor outputs");
     completedFirstArm = true;
@@ -176,6 +173,14 @@ std::vector<std::string> split(std::string to_split, std::string delimiter) {
     return matches;
 
 }
+
+struct bluetooth_event_data_t {
+  BLEUUID uuid;
+  std::string value;
+  uint8_t *data;
+};
+
+static std::vector<bluetooth_event_data_t> _bluetoothEvents;
 
 class MessageCallbacks : public BLECharacteristicCallbacks
 {
@@ -353,10 +358,6 @@ void setup() {
     Serial.begin(115200);
     LOG_INFO("BEGAN APP");
 
-    LOG_INFO("Initializing SD diagnostics");
-
-    DebugUtilityInitialize(DEBUG_LOG_PATH, DIAGNOSTICS_PATH, SD_CS_PIN, LogLevel::verbose, false /* logToSDCard */);
-
     initController();
 
     Wire.setClock(400000);
@@ -364,13 +365,6 @@ void setup() {
 
     // Wait for serial to become available
     while (!Serial);
-
-    LOG_INFO("Initializing Arming Signal LED");
-    FastLED.addLeds<WS2812, LED_DATA_PIN, RGB>(leds, NUM_LEDS);  // GRB ordering is typical
-    FastLED.addLeds<WS2812, LED_DATA_PIN>(leds, NUM_LEDS);
-    FastLED.clear();
-    leds[0] = CRGB(0, 255, 0);
-    FastLED.show();
 
     LOG_INFO("Initializing bluetooth connection");
 
@@ -507,22 +501,26 @@ void setup() {
       .pitch = 20.0f,
       .roll = 20.0f  
     }, 1.0f);  
+    LOG_INFO("Initializing Arming Signal LED");
+    // while (true) {
+    ledController.showRGB(0, 255, 0);
 
     LOG_INFO("SETUP COMPLETE");
     LOG_INFO("SETUP COMPLETE AFTER %lu ms", millis() - initializationTime);
 
-    int loopCount = 0;
+    // int loopCount = 0;
 
-    while (true) {
-      if (loopCount < 10) {
-        Serial.println("Before loop");
-      }
-      loop();
-      if (loopCount < 10) {
-        Serial.println("After loop");
-      }
-      loopCount++;
-    }
+    // while (true) {
+    //   if (loopCount < 10) {
+    //     Serial.println("Before loop");
+    //   }
+    //   loop();
+    //   if (loopCount < 10) {
+    //     Serial.println("After loop");
+    //   }
+    //   loopCount++;
+    // }
+
 }
 
 void uploadDebugData() {
@@ -664,7 +662,7 @@ void loop() {
     controller->startMonitoringPID();
   }
 
-  imu->loopHandler();
+  // imu->loopHandler();
   
   // if (!dmpReady) {
   //   LOG_ERROR("DMP NOT READY");

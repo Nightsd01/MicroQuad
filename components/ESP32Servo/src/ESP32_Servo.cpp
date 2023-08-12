@@ -143,7 +143,7 @@ int Servo::attach(int pin, int min, int max)
         // if you want anything other than default timer width, you must call setTimerWidth() before attach
         
         // ledcSetup(this->servoChannel, REFRESH_CPS, this->timer_width); // channel #, 50 Hz, timer width
-        ledcAttach(this->pinNumber, REFRESH_CPS, this->timer_width);   // GPIO pin assigned to channel    
+        // ledcAttach(this->pinNumber, REFRESH_CPS, this->timer_width);   // GPIO pin assigned to channel    
         return this->servoChannel;    
     }
     else return 0;  
