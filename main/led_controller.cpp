@@ -7,15 +7,6 @@
 #include "soc/gpio_struct.h"
 #include "freertos/task.h"
 
-// class LEDController {
-//     public:
-//         LEDController(int dataPin);
-//         void showRGB(int red, int green, int blue);
-//     private:
-//         int _dataPin;
-// }
-// real val: 13.92 us
-// need val: 
 LEDController::LEDController(int dataPin) 
 {
     _dataPin = dataPin;
@@ -36,16 +27,16 @@ LEDController::LEDController(int dataPin)
 
 void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
 {
-    uint32_t pin = _dataPin;
-    uint32_t highStartPulseCycles = _highStartPulseCycles;
-    uint32_t highEndPulseCycles = _highEndPulseCycles;
-    uint32_t lowStartPulseCycles = _lowStartPulseCycles;
-    uint32_t lowEndPulseCycles = _lowEndPulseCycles;
+    const uint32_t pin = _dataPin;
+    const uint32_t highStartPulseCycles = _highStartPulseCycles;
+    const uint32_t highEndPulseCycles = _highEndPulseCycles;
+    const uint32_t lowStartPulseCycles = _lowStartPulseCycles;
+    const uint32_t lowEndPulseCycles = _lowEndPulseCycles;
+    const uint8_t bytes[3] = {green, red, blue};
     portDISABLE_INTERRUPTS();
-    uint8_t bytes[3] = {green, red, blue};
     for (int i = 0; i < 3; i++) {
         for (int bit = 7; bit >= 0; bit--) {
-            bool isHigh = (bytes[i] >> i) & 1;
+            const bool isHigh = (bytes[i] >> i) & 1;
             uint32_t cycles = isHigh ? highStartPulseCycles : lowStartPulseCycles;
             GPIO.out1_w1ts.val = ((uint32_t)1 << pin);
             while(cycles--) {
