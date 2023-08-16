@@ -21,8 +21,6 @@
 
 #include "Logger.h"
 
-#include <ESP32_Servo.h> 
-
 #include "led_strip.h"
 #include "driver/rmt.h"
 #include "esp_system.h"
@@ -125,8 +123,6 @@ static volatile bool interruptLock = false;
 bool sendDebugData = false;
 bool recordDebugData = false;
 
-Servo motors[NUM_MOTORS];
-
 static bool completedFirstArm = false;
 
 // When the quadcopter enters into unacceptable orientation for more than 2 measurements, 
@@ -145,10 +141,8 @@ static void updateArmStatus(void) {
     completedFirstArm = true;
     
     for (int i = 0; i < NUM_MOTORS; i++) {
-      motors[i].attach(motorPins[i]);
-      motors[i].write(0);
+      pinMode(motorPins[i], OUTPUT);
     }
-    delay(2000);
   }
 }
 
@@ -179,8 +173,6 @@ struct bluetooth_event_data_t {
   std::string value;
   uint8_t *data;
 };
-
-static std::vector<bluetooth_event_data_t> _bluetoothEvents;
 
 class MessageCallbacks : public BLECharacteristicCallbacks
 {
@@ -216,44 +208,44 @@ class MessageCallbacks : public BLECharacteristicCallbacks
           uint8_t *armData = characteristic->getData();
           armed = armData[0];
           if (armed) {
-            LOG_INFO("ARMED");
+            // LOG_INFO("ARMED");
           } else {
-            LOG_INFO("DISARMED");
+            // LOG_INFO("DISARMED");
           }
         } else if (characteristic->getUUID().equals(resetCharacteristic->getUUID())) {
-          LOG_INFO("SET RESET FLAG");
+          // LOG_INFO("SET RESET FLAG");
           resetFlag = true;
         } else if (characteristic->getUUID().equals(motorDebugCharacteristic->getUUID())) {
           std::string value = characteristic->getValue();
           std::vector<std::string> components = split(value, ":");
           if (components.size() == 0) {
-            LOG_ERROR("ERROR: Incorrect motor debug packet (1)");
+            // LOG_ERROR("ERROR: Incorrect motor debug packet (1)");
             return;
           }
           if (components[0] == "motordebug_enabled") {
             if (components.size() == 1) {
-              LOG_ERROR("ERROR: Incorrect motor debug packet (2)");
+              // LOG_ERROR("ERROR: Incorrect motor debug packet (2)");
               return;
             }
             std::string value = components[1];
             motorDebugEnabled = value == "1";
-            LOG_INFO("Changing motor debug status to %s", motorDebugEnabled ? "enabled" : "disabled");
+            // LOG_INFO("Changing motor debug status to %s", motorDebugEnabled ? "enabled" : "disabled");
           } else if (components[0] == "motordebug_value") {
             if (components.size() < 3) {
-              LOG_ERROR("ERROR: Incorrect motor debug packet (3)");
+              // LOG_ERROR("ERROR: Incorrect motor debug packet (3)");
               return;
             }
             int motorNumber = atoi(components[1].c_str()) - 1;
             int motorValue = atoi(components[2].c_str());
             double motorWriteValue = ((((double)motorValue) / 255.0f) * 1000.0f) + 1000.0f;
-            LOG_INFO("Updating motor %i to %f", motorNumber, motorWriteValue);
+            // LOG_INFO("Updating motor %i to %f", motorNumber, motorWriteValue);
             motorDebugValues[motorNumber] = motorWriteValue;
           } else {
-            LOG_ERROR("ERROR: Incorrect motor debug packet (4)");
+            // LOG_ERROR("ERROR: Incorrect motor debug packet (4)");
             return;
           }
         } else if (characteristic->getUUID().equals(calibrationCharacteristic->getUUID())) {
-          LOG_INFO("CALIBRATING");
+          // LOG_INFO("CALIBRATING");
           // ESP_LOGI(TAG, "Calibrating MPU");
           // mpud::raw_axes_t accelBias, gyroBias;
           // ESP_ERROR_CHECK(MPU.computeOffsets(&accelBias, &gyroBias));
@@ -262,13 +254,13 @@ class MessageCallbacks : public BLECharacteristicCallbacks
           // calibrateMPU();
         } else if (characteristic->getUUID().equals(debugCharacteristic->getUUID())) {
           if (characteristic->getValue() == "request") {
-            LOG_INFO("Recording debug data transmission");
+            // LOG_INFO("Recording debug data transmission");
             sendDebugData = true;
           } else if (characteristic->getValue() == "record:1") {
-            LOG_INFO("Recording debug data start");
+            // LOG_INFO("Recording debug data start");
             recordDebugData = true;
           } else if (characteristic->getValue() == "record:0") {
-            LOG_INFO("Recording debug data stop");
+            // LOG_INFO("Recording debug data stop");
             recordDebugData = false;
           }
         }
@@ -344,6 +336,24 @@ static void initController()
   );
 }
 
+static long lastIMUPrintTime = 0;
+static long measurements = 0;
+static void _receivedIMUUpdate(imu_update_t update) 
+{
+  if (millis() - lastIMUPrintTime > 500) {
+    lastIMUPrintTime = millis();
+    const float magnitudeAccel = sqrt(pow(update.accel_x, 2) + pow(update.accel_y, 2) + pow(update.accel_z, 2));
+    const float xNorm = update.accel_x / magnitudeAccel;
+    const float yNorm = update.accel_y / magnitudeAccel;
+    const float zNorm = update.accel_z / magnitudeAccel;
+    const float pitch = atan2(yNorm, sqrt(pow(xNorm, 2) + pow(zNorm, 2)));
+    const float roll = atan2(0.0f - xNorm, sqrt(pow(yNorm, 2) + pow(zNorm, 2)));
+    ESP_LOGI("imu", "%f, %f, %f, %f, %f, %f, %f, %f, %ldhz", pitch, roll, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, measurements * 2);
+    measurements = 0;
+  }
+  measurements++;
+}
+
 // 1 - correct
 // 2 - wrong
 // 3 - wrong
@@ -372,22 +382,6 @@ void setup() {
     BLEDevice::init(DEVICE_NAME);
     BLEServer *server = BLEDevice::createServer();
     server->setCallbacks(new MyServerCallbacks());
-
-    // LOG_INFO("Setting up parameter provider");
-    // _parameterProvider.begin("/prm.csv");
-    // std::string testVal = _parameterProvider.get(TEST_VALUE, std::string("default_val"));
-    // bool enableEmerg = _parameterProvider.get(ENABLE_EMERGENCY_MODE_DETECTION, 0) == 1;
-    // LOG_INFO("Enable emergency mode: %d", enableEmerg);
-    // LOG_INFO("Got test value: %s", testVal.c_str());
-
-    // _parameterProvider.watch(ENABLE_EMERGENCY_MODE_DETECTION, (std::function<void(int)>)([&](int newValue) {
-    //   LOG_INFO("VALUE CHANGED: %d", newValue == 1);
-    // }));
-    
-    // _parameterProvider.watch(TEST_VALUE, (std::function<void(std::string)>)([&](std::string newValue) {
-    //   LOG_INFO("TEST STRING VALUE CHANGED: %s", newValue.c_str());
-    //   someStr = newValue;
-    // }));
 
     BLEService *service = server->createService(BLEUUID(std::string(SERVICE_UUID)), 30, 0);
 
@@ -442,52 +436,12 @@ void setup() {
     advertisement->setAdvertisementData(adv);
     advertisement->start();
 
-    // // initialize device
-    // LOG_INFO(F("Initializing I2C devices 1..."));
-    // mpu.initialize();
-    // LOG_INFO(F("Initializing I2C devices 2..."));
-    // pinMode(ACCEL_INTERRUPT_PIN, INPUT);
-    
-    // // verify connection
-    // LOG_INFO(F("Testing device connections..."));
-    // const bool initialized = mpu.testConnection();
-    // initialized ? LOG_INFO("MPU6050 connection successful") : LOG_ERROR("MPU6050 connection failed");
-
     updateArmStatus();
-
-    // if (!initialized) {
-    //   return;
-    // }
-
-    // LOG_INFO("Initializing DMP");
-    // uint8_t dmpStatus = mpu.dmpInitialize();
-    // LOG_INFO("Initialized DMP");
-
-    // if (dmpStatus == 0) {
-    //   LOG_INFO(F("Enabling DMP..."));
-    //   mpu.setDLPFMode(0);
-    //   mpu.setDMPEnabled(true);
-    //   attachInterrupt(digitalPinToInterrupt(ACCEL_INTERRUPT_PIN), dmpDataReady, RISING);
-    //   mpuIntStatus = mpu.getIntStatus();
-    //   dmpReady = true;
-    //   packetSize = mpu.dmpGetFIFOPacketSize();
-    //   LOG_INFO("Supplying DMP offsets");
-      
-    //   // supply your own gyro offsets here, scaled for min sensitivity
-    //   mpu.setXAccelOffset(3898);
-    //   mpu.setYAccelOffset(971);
-    //   mpu.setZAccelOffset(1402);
-    //   mpu.setXGyroOffset(55);
-    //   mpu.setYGyroOffset(21);
-    //   mpu.setZGyroOffset(-17);
-    // } else {
-    //   LOG_ERROR("Accelerometer DMP initialization failed with status code = %i", dmpStatus);
-    // }
 
     LOG_INFO("Initializing IMU");
     bool setupSuccess = false;
     imu = new IMU(SPI0_CS_PIN, SPI0_MISO_PIN, SPI0_MOSI_PIN, SPI0_SCLK_PIN, IMU_INT_PIN, [&](imu_update_t update) {
-
+      _receivedIMUUpdate(update);
     }, &setupSuccess);
 
     if (!setupSuccess) {
@@ -495,6 +449,9 @@ void setup() {
     } else {
       LOG_INFO("Successfully set up IMU");
     }
+
+    while (!setupSuccess) {};
+
     LOG_INFO("Configuring controller");
     controller->setControlScalingValues({
       .yaw = 180.0f,
@@ -502,24 +459,9 @@ void setup() {
       .roll = 20.0f  
     }, 1.0f);  
     LOG_INFO("Initializing Arming Signal LED");
-    // while (true) {
     ledController.showRGB(0, 255, 0);
 
-    LOG_INFO("SETUP COMPLETE");
     LOG_INFO("SETUP COMPLETE AFTER %lu ms", millis() - initializationTime);
-
-    // int loopCount = 0;
-
-    // while (true) {
-    //   if (loopCount < 10) {
-    //     Serial.println("Before loop");
-    //   }
-    //   loop();
-    //   if (loopCount < 10) {
-    //     Serial.println("After loop");
-    //   }
-    //   loopCount++;
-    // }
 
 }
 
@@ -590,9 +532,9 @@ void updateMotors(motor_outputs_t outputs) {
   }
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!armed) {
-      motors[i].write(map(ARM_MICROSECONDS, 1000.0f, 2000.0f, 0, 180));
+      analogWrite(motorPins[i], 0);
     } else {
-      motors[i].write(map(outputs.values[i], 1000, 2000, 0, 180));
+      analogWrite(motorPins[i], map(outputs.values[i], 1000, 2000, 0, 255));
     }
   }
 }
@@ -662,7 +604,7 @@ void loop() {
     controller->startMonitoringPID();
   }
 
-  // imu->loopHandler();
+  imu->loopHandler();
   
   // if (!dmpReady) {
   //   LOG_ERROR("DMP NOT READY");
@@ -761,18 +703,19 @@ void loop() {
   //   // Save a diagnostics entry to the CSV file on the SD card
   //   DIAGNOSTICS_SAVE("%d, %.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %lu", armed, batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3], xPortGetFreeHeapSize());
 
-  //   if (motorDebugEnabled) {
-  //       updateMotors({.values = {
-  //         motorDebugValues[0],
-  //         motorDebugValues[1],
-  //         motorDebugValues[2],
-  //         motorDebugValues[3]
-  //       }});
-  //   } else if (throttleValue < 20 || enteredEmergencyMode) {
-  //     updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
-  //   } else {
-  //     updateMotors(outputs);
-  //   }
+    if (motorDebugEnabled) {
+        updateMotors({.values = {
+          motorDebugValues[0],
+          motorDebugValues[1],
+          motorDebugValues[2],
+          motorDebugValues[3]
+        }});
+    } 
+    // else if (throttleValue < 20 || enteredEmergencyMode) {
+    //   updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
+    // } else {
+    //   updateMotors(outputs);
+    // }
   //   setMotorOutputs = true;
   // }
 }

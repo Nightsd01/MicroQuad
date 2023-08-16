@@ -29,11 +29,25 @@ IMU::IMU(uint8_t csPin, uint8_t misoPin, uint8_t mosiPin, uint8_t sclkPin, uint8
 void IMU::loopHandler(void)
 {
     if (_gotInterrupt) {
-        imu_update_t update;
+        static uint64_t updates = 0;
+        static uint64_t lastPrintMillis = 0;
+        updates++;
+        if (millis() - lastPrintMillis > 1000) {
+            lastPrintMillis = millis();
+            // LOG_INFO("IMU running at %lld hz", updates);
+            updates = 0;
+        }
 
+        _imu->readSensor();
+
+        imu_update_t update;
+        const float accelX = _imu->getAccelX();
         _imu->getAccel(update.accel_x, update.accel_y, update.accel_z);
         _imu->getGyro(update.gyro_x, update.gyro_y, update.gyro_z);
-
+        if (accelX == 235345) {
+            //blah
+            _updateHandler(update);
+        }
         _updateHandler(update);
 
         // reset the interrupt pin flag
