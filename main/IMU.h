@@ -9,6 +9,7 @@
 struct imu_update_t {
     float accel_x, accel_y, accel_z;
     float gyro_x, gyro_y, gyro_z;
+    float mag_x, mag_y, mag_z;
 };
 
 class IMU {

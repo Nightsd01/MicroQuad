@@ -38,7 +38,7 @@ class Mpu6x00 {
         /**
           * Returns true on success, false on failure.
           */
-        bool begin(void)
+        bool begin(bool setupAuxDevice)
         {
             pinMode(m_csPin, OUTPUT);
 
@@ -76,12 +76,45 @@ class Mpu6x00 {
             writeRegister(REG_CONFIG, 0);
             delayMicroseconds(1);
 
+            if (!setupAuxDevice) {
+                return true;
+            }
+
+            // configure the auxillary i2c bus to use the external sensor
+            writeRegister(REG_I2C_MST_CTRL, 29);
+
+            // Write configuration to the QMC5883L
+            writeRegister(REG_I2C_SLV0_ADDR, EXT_SENS_QMC5883L_I2C_ADDR);
+            delayMicroseconds(1);
+            writeRegister(REG_I2C_SLV0_REG, EXT_SENS_CTRL1_ADDR);
+            delayMicroseconds(1);
+            writeRegister(REG_I2C_SLV0_DO, BIT_QMC5883L_CTRL_MODE_CONTINUOUS | BIT_QMC5883L_CTRL_RATE_200HZ | BIT_QMC5883L_CTRL_SCALE_8G);
+            delayMicroseconds(1);
+            writeRegister(REG_I2C_SLV0_CTRL, 0x80 | 0x01);
+            delayMicroseconds(1);
+
+            // Set FIFO enable for everything except SLV1 and SLV2
+            writeRegister(REG_FIFO_EN, 255);
+            delayMicroseconds(1);
+
+            writeRegister(REG_I2C_SLV0_CTRL, 0x80);
+            delayMicroseconds(1);
+
+            // configure the auxillary i2c bus to use the external sensor
+            writeRegister(REG_I2C_MST_CTRL, 29);
+
+            // Bits 0-6 are the address, bit 7 is to enable the external sensor bus
+            writeRegister(REG_I2C_SLV0_ADDR, EXT_SENS_QMC5883L_I2C_ADDR | 0x80);
+            delayMicroseconds(1);
+
+
             return true;
         }
 
         void readSensor(void)
         {
             readRegisters(REG_ACCEL_XOUT_H, m_buffer, 14, SPI_FULL_CLK_HZ);
+            readRegisters(REG_EXT_SENS_DATA_BEGIN, ext_sensor_buffer, EXT_SENS_DATA_LEN, SPI_FULL_CLK_HZ);
         }
 
         void getGyro(float & gx, float & gy, float & gz)
@@ -96,6 +129,13 @@ class Mpu6x00 {
             ax = getRawValue(1) * m_accelScale; 
             ay = getRawValue(3) * m_accelScale; 
             az = getRawValue(5) * m_accelScale; 
+        }
+
+        void getMag(float & mx, float & my, float & mz)
+        {
+            mx = getExtSensX();
+            my = getExtSensY();
+            mz = getExtSensZ();
         }
 
         float getAccelX(void)
@@ -158,6 +198,21 @@ class Mpu6x00 {
             return getRawValue(13); 
         }
 
+        int16_t getExtSensX(void)
+        {
+            return (uint16_t)((ext_sensor_buffer[0] << 8) | ext_sensor_buffer[1]);
+        }
+
+        int16_t getExtSensY(void)
+        {
+            return (uint16_t)((ext_sensor_buffer[2] << 8) | ext_sensor_buffer[3]);
+        }
+
+        int16_t getExtSensZ(void)
+        {
+            return (uint16_t)((ext_sensor_buffer[4] << 8) | ext_sensor_buffer[5]);
+        }
+
     protected:
 
         Mpu6x00(
@@ -188,19 +243,37 @@ class Mpu6x00 {
         static const uint8_t BIT_I2C_IF_DIS       = 0x10;
         static const uint8_t BIT_RESET            = 0x80;
 
-        // Registers
-        static const uint8_t REG_SMPLRT_DIV   = 0x19;
-        static const uint8_t REG_CONFIG       = 0x1A;
-        static const uint8_t REG_GYRO_CONFIG  = 0x1B;
-        static const uint8_t REG_ACCEL_CONFIG = 0x1C;
-        static const uint8_t REG_INT_PIN_CFG  = 0x37;
-        static const uint8_t REG_INT_ENABLE   = 0x38;
-        static const uint8_t REG_ACCEL_XOUT_H = 0x3B;
-        static const uint8_t REG_USER_CTRL    = 0x6A;
-        static const uint8_t REG_PWR_MGMT_1   = 0x6B;
-        static const uint8_t REG_PWR_MGMT_2   = 0x6C;
-        static const uint8_t REG_WHO_AM_I     = 0x75;
+        // Slave i2c sensor configuration bits
+        static const uint8_t BIT_I2C_SLV0_EN = 0x80;
+        static const uint8_t BIT_QMC5883L_CTRL_MODE_CONTINUOUS = 0x01;
+        static const uint8_t BIT_QMC5883L_CTRL_RATE_200HZ = 0xC;
+        static const uint8_t BIT_QMC5883L_CTRL_SCALE_8G = 0x10;
 
+        // Registers
+        static const uint8_t REG_SMPLRT_DIV          = 0x19;
+        static const uint8_t REG_CONFIG              = 0x1A;
+        static const uint8_t REG_GYRO_CONFIG         = 0x1B;
+        static const uint8_t REG_ACCEL_CONFIG        = 0x1C;
+        static const uint8_t REG_INT_PIN_CFG         = 0x37;
+        static const uint8_t REG_INT_ENABLE          = 0x38;
+        static const uint8_t REG_ACCEL_XOUT_H        = 0x3B;
+        static const uint8_t REG_USER_CTRL           = 0x6A;
+        static const uint8_t REG_PWR_MGMT_1          = 0x6B;
+        static const uint8_t REG_PWR_MGMT_2          = 0x6C;
+        static const uint8_t REG_WHO_AM_I            = 0x75;
+        static const uint8_t REG_EXT_SENS_DATA_BEGIN = 0x49;
+        static const uint8_t REG_EXT_SENS_DATA_END   = 0x60;
+        static const uint8_t REG_I2C_SLV0_ADDR       = 0x25;
+        static const uint8_t REG_I2C_SLV0_REG        = 0x26;
+        static const uint8_t REG_I2C_SLV0_CTRL       = 0x27;
+        static const uint8_t REG_I2C_MST_CTRL        = 0x24;
+        static const uint8_t REG_FIFO_EN             = 0x23;
+        static const uint8_t EXT_SENS_CTRL1_ADDR     = 0x09;
+        static const uint8_t REG_I2C_SLV0_DO         = 0x63;
+
+        static const uint8_t EXT_SENS_QMC5883L_I2C_ADDR = 0x0D;
+        static const uint8_t EXT_SENS_DATA_LEN = 24;
+        static const uint8_t EXT_SENS_I2C_400KHZ_CLK_VAL = 31;
         static const uint32_t SPI_FULL_CLK_HZ = 20000000;
         static const uint32_t SPI_INIT_CLK_HZ = 1000000;
 
@@ -217,6 +290,7 @@ class Mpu6x00 {
         float m_accelScale;
 
         uint8_t m_buffer[15];
+        uint8_t ext_sensor_buffer[24];
 
         void init(
                 const uint8_t deviceId,

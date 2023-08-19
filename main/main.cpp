@@ -336,21 +336,66 @@ static void initController()
   );
 }
 
+
+#define DT          0.01  // Sample period in seconds. Adjust as necessary.
+#define ALPHA       0.98  // Filter coefficient. Adjust as necessary.
+
+// Global variables to store the filtered roll and pitch angles
+float roll  = 0.0f;
+float pitch = 0.0f;
+
+// Function to compute roll and pitch from accelerometer data
+void computeAccelAngles(float ax, float ay, float az, float* rollAccel, float* pitchAccel) {
+    // Roll (phi) and Pitch (theta) from accelerometer data
+    *rollAccel  = atan2(ay, az) * 180.0 / M_PI;
+    *pitchAccel = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
+}
+
+// Function to update roll and pitch using a complementary filter
+void updateAngles(float ax, float ay, float az, float gx, float gy, float gz) {
+    float rollAccel, pitchAccel;
+
+    // Compute roll and pitch angles from accelerometer data
+    computeAccelAngles(ax, ay, az, &rollAccel, &pitchAccel);
+
+    // Integrate gyroscope data
+    roll  += gx * DT;
+    pitch += gy * DT;
+
+    // Complementary filter
+    roll  = ALPHA * (roll  + gx * DT) + (1 - ALPHA) * rollAccel;
+    pitch = ALPHA * (pitch + gy * DT) + (1 - ALPHA) * pitchAccel;
+}
+
 static long lastIMUPrintTime = 0;
 static long measurements = 0;
+static float previousGyroX, previousGyroY;
+static long long lastMicros = 0;
+// static float roll = 0.0f, pitch = 0.0f;
 static void _receivedIMUUpdate(imu_update_t update) 
 {
-  if (millis() - lastIMUPrintTime > 500) {
+  if (micros() == 0) {
+    return;
+  }
+  const float measurementIntervalInSeconds = (float)(micros() - lastMicros) / 1000000.0f;
+  if (millis() - lastIMUPrintTime > 50 || update.mag_x != 0) {
     lastIMUPrintTime = millis();
     const float magnitudeAccel = sqrt(pow(update.accel_x, 2) + pow(update.accel_y, 2) + pow(update.accel_z, 2));
-    const float xNorm = update.accel_x / magnitudeAccel;
-    const float yNorm = update.accel_y / magnitudeAccel;
-    const float zNorm = update.accel_z / magnitudeAccel;
-    const float pitch = atan2(yNorm, sqrt(pow(xNorm, 2) + pow(zNorm, 2)));
-    const float roll = atan2(0.0f - xNorm, sqrt(pow(yNorm, 2) + pow(zNorm, 2)));
-    ESP_LOGI("imu", "%f, %f, %f, %f, %f, %f, %f, %f, %ldhz", pitch, roll, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, measurements * 2);
+    // const float xNorm = update.accel_x / magnitudeAccel;
+    // const float yNorm = update.accel_y / magnitudeAccel;
+    // const float zNorm = update.accel_z / magnitudeAccel;
+    // float accelPitch = 180 * atan2(-xNorm, sqrt(pow(yNorm, 2) + pow(zNorm, 2)))/M_PI;
+    // float accelRoll = 180 * atan2(yNorm, zNorm)/M_PI;
+    // roll += update.gyro_x * measurementIntervalInSeconds;
+    // pitch += update.gyro_y * measurementIntervalInSeconds;
+    // roll = 0.98f * (roll + update.gyro_x * measurementIntervalInSeconds) + (1.0 - 0.98f) * accelRoll;
+    // pitch = 0.98f * (pitch + update.gyro_y * measurementIntervalInSeconds) + (1.0 - 0.98f) * accelPitch;
+
+    updateAngles(update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z);
+    ESP_LOGI("imu", "%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %ldhz", pitch, roll, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, update.mag_x, update.mag_y, update.mag_z, measurements * 2);
     measurements = 0;
   }
+  lastMicros = micros();
   measurements++;
 }
 

@@ -15,7 +15,7 @@ IMU::IMU(uint8_t csPin, uint8_t misoPin, uint8_t mosiPin, uint8_t sclkPin, uint8
     _imu = new Mpu6000(_spi, csPin);
     _updateHandler = updateHandler;
 
-    if (!_imu->begin()) {
+    if (!_imu->begin(false /* setupAuxDevice */)) {
         LOG_ERROR("Failed to initialize MPU6000 IMU");
         return;
     }
@@ -41,13 +41,9 @@ void IMU::loopHandler(void)
         _imu->readSensor();
 
         imu_update_t update;
-        const float accelX = _imu->getAccelX();
         _imu->getAccel(update.accel_x, update.accel_y, update.accel_z);
         _imu->getGyro(update.gyro_x, update.gyro_y, update.gyro_z);
-        if (accelX == 235345) {
-            //blah
-            _updateHandler(update);
-        }
+        _imu->getMag(update.mag_x, update.mag_y, update.mag_z);
         _updateHandler(update);
 
         // reset the interrupt pin flag
