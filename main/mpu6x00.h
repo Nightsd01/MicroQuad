@@ -213,6 +213,40 @@ class Mpu6x00 {
             return (uint16_t)((ext_sensor_buffer[4] << 8) | ext_sensor_buffer[5]);
         }
 
+        void setGyroOffsetX(int16_t x)
+        {
+            writeRegister(REG_XG_OFFS_USRH, (uint8_t)((x >> 8) & 0xFF));
+            delayMicroseconds(1);
+            writeRegister(REG_XG_OFFS_USRL, (uint8_t)(x & 0xFF));
+            delayMicroseconds(1);
+        }
+
+        void setGyroOffsetY(int16_t y)
+        {
+            writeRegister(REG_YG_OFFS_USRH, (uint8_t)((y >> 8) & 0xFF));
+            delayMicroseconds(1);
+            writeRegister(REG_YG_OFFS_USRL, (uint8_t)(y & 0xFF));
+            delayMicroseconds(1);
+        }
+
+        void setGyroOffsetZ(int16_t z)
+        {
+            writeRegister(REG_ZG_OFFS_USRH, (uint8_t)((z >> 8) & 0xFF));
+            delayMicroseconds(1);
+            writeRegister(REG_ZG_OFFS_USRL, (uint8_t)(z & 0xFF));
+            delayMicroseconds(1);
+        }
+
+        void setGyroOffsets(int16_t x, int16_t y, int16_t z)
+        {
+            // Write X
+            setGyroOffsetX(x);
+            // Write Y
+            setGyroOffsetY(y);
+            // Write Z
+            setGyroOffsetZ(z);
+        }
+
     protected:
 
         Mpu6x00(
@@ -270,6 +304,12 @@ class Mpu6x00 {
         static const uint8_t REG_FIFO_EN             = 0x23;
         static const uint8_t EXT_SENS_CTRL1_ADDR     = 0x09;
         static const uint8_t REG_I2C_SLV0_DO         = 0x63;
+        static const uint8_t REG_XG_OFFS_USRH        = 0x13;
+        static const uint8_t REG_XG_OFFS_USRL        = 0x14;
+        static const uint8_t REG_YG_OFFS_USRH        = 0x15;
+        static const uint8_t REG_YG_OFFS_USRL        = 0x16;
+        static const uint8_t REG_ZG_OFFS_USRH        = 0x17;
+        static const uint8_t REG_ZG_OFFS_USRL        = 0x18;
 
         static const uint8_t EXT_SENS_QMC5883L_I2C_ADDR = 0x0D;
         static const uint8_t EXT_SENS_DATA_LEN = 24;
@@ -380,7 +420,7 @@ class Mpu6000 : public Mpu6x00 {
         Mpu6000(
                 SPIClass & spi,
                 const uint8_t csPin,
-                const gyroFsr_e gyroFsr = GYRO_2000DPS,
+                const gyroFsr_e gyroFsr = GYRO_250DPS,
                 const accelFsr_e accelFsr = ACCEL_16G)
             : Mpu6x00(0x68, spi, csPin, gyroFsr, accelFsr)
         {
@@ -388,7 +428,7 @@ class Mpu6000 : public Mpu6x00 {
 
         Mpu6000(
                 const uint8_t csPin,
-                const gyroFsr_e gyroFsr = GYRO_2000DPS,
+                const gyroFsr_e gyroFsr = GYRO_250DPS,
                 const accelFsr_e accelFsr = ACCEL_16G)
             : Mpu6x00(0x68, SPI, csPin, gyroFsr, accelFsr)
         {
@@ -402,7 +442,7 @@ class Mpu6500 : public Mpu6x00 {
         Mpu6500(
                 SPIClass & spi,
                 const uint8_t csPin,
-                const gyroFsr_e gyroFsr = GYRO_2000DPS,
+                const gyroFsr_e gyroFsr = GYRO_250DPS,
                 const accelFsr_e accelFsr = ACCEL_16G)
             : Mpu6x00(0x70, spi, csPin, gyroFsr, accelFsr)
         {
@@ -410,7 +450,7 @@ class Mpu6500 : public Mpu6x00 {
 
         Mpu6500(
                 const uint8_t csPin,
-                const gyroFsr_e gyroFsr = GYRO_2000DPS,
+                const gyroFsr_e gyroFsr = GYRO_250DPS,
                 const accelFsr_e accelFsr = ACCEL_16G)
             : Mpu6x00(0x70, SPI, csPin, gyroFsr, accelFsr)
         {
