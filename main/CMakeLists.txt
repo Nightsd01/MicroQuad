@@ -4,6 +4,7 @@ idf_component_register(
     REQUIRES arduino
     REQUIRES MicroQuad
     REQUIRES bt
+    REQUIRES Fusion
 )
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DCONFIG_MPU_SPI")

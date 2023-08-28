@@ -31,6 +31,8 @@
 
 #include <esp_partition.h>
 #include "led_controller.h"
+#include <Fusion.h>
+
 
 // static bool _enableEmergencyMode = false;
 
@@ -67,7 +69,7 @@ LEDController ledController(LED_DATA_PIN);
 
 // Battery capacity sensing constants
 #define BATTERY_SENSE_PIN 9
-#define NUM_BATTERY_CELLS 2.0f
+#define NUM_BATTERY_CELLS 1.0f
 #define BATTERY_CELL_MAX_VOLTAGE 4.2f
 #define BATTERY_CELL_MIN_VOLTAGE 3.3f
 #define BATTERY_SCALE 0.001639280125196f
@@ -131,8 +133,13 @@ static bool enteredEmergencyMode = false;
 
 static IMU *imu = NULL;
 static position_values_t previousIMUValues;
+static FusionAhrs _fusion;
+static FusionOffset _offset;
 
-// static ParameterProvider _parameterProvider;
+static volatile bool _calibrate = false;
+static volatile CalibrationAxis _calibrationAxis = CalibrationAxis::x;
+static volatile int _calibrationValue = 0;
+
 
 static void updateArmStatus(void) {
   ledController.showRGB(armed ? 255 : 0, armed ? 0 : 255, 0);
@@ -168,11 +175,6 @@ std::vector<std::string> split(std::string to_split, std::string delimiter) {
 
 }
 
-struct bluetooth_event_data_t {
-  BLEUUID uuid;
-  std::string value;
-  uint8_t *data;
-};
 
 class MessageCallbacks : public BLECharacteristicCallbacks
 {
@@ -245,13 +247,27 @@ class MessageCallbacks : public BLECharacteristicCallbacks
             return;
           }
         } else if (characteristic->getUUID().equals(calibrationCharacteristic->getUUID())) {
-          // LOG_INFO("CALIBRATING");
-          // ESP_LOGI(TAG, "Calibrating MPU");
-          // mpud::raw_axes_t accelBias, gyroBias;
-          // ESP_ERROR_CHECK(MPU.computeOffsets(&accelBias, &gyroBias));
-          // ESP_ERROR_CHECK(MPU.setAccelOffset(accelBias));
-          // ESP_ERROR_CHECK(MPU.setGyroOffset(gyroBias));
-          // calibrateMPU();
+          std::string value = characteristic->getValue();
+          std::vector<std::string> components = split(value, "=");
+          if (components.size() != 2) {
+            LOG_ERROR("Invalid calibration command");
+            return;
+          }
+          CalibrationAxis axis;
+          if (components[0] == "x") {
+            axis = CalibrationAxis::x;
+          } else if (components[0] == "y") {
+            axis = CalibrationAxis::y;
+          } else if (components[0] == "z") {
+            axis = CalibrationAxis::z;
+          } else {
+            LOG_ERROR("Invalid calibration axis");
+            return;
+          }
+          const int val = atoi(components[1].c_str());
+          _calibrate = true;
+          _calibrationAxis = axis;
+          _calibrationValue = val;
         } else if (characteristic->getUUID().equals(debugCharacteristic->getUUID())) {
           if (characteristic->getValue() == "request") {
             // LOG_INFO("Recording debug data transmission");
@@ -284,24 +300,10 @@ class MyServerCallbacks : public BLEServerCallbacks
     }
 };
 
-// MPU control/status vars
-bool dmpReady = false;  // set true if DMP init was successful
-uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
-uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
-uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
-uint16_t fifoCount;     // count of all bytes currently in FIFO
-uint8_t fifoBuffer[512]; // FIFO storage buffer
-
-// VectorFloat gravity;    // [x, y, z]            gravity vector
-// Quaternion quat;           // [w, x, y, z]         quaternion container
-float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
-
 QuadcopterController *controller;
 DebugHelper *helper;
 
 #define SD_CS_PIN 10
-#define DEBUG_LOG_PATH "/logs"
-#define DIAGNOSTICS_PATH "/diags"
 
 // Interrupt Detection Routine
 volatile bool mpuInterrupt = false;
@@ -336,67 +338,41 @@ static void initController()
   );
 }
 
+// Define calibration (replace with actual calibration data if available)
+static const FusionMatrix gyroscopeMisalignment = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+static const FusionVector gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
+static const FusionVector gyroscopeOffset = {34.73820755, -17.36320755, -13.21698113};
+static const FusionMatrix accelerometerMisalignment = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+static const FusionVector accelerometerSensitivity = {1.0f, 1.0f, 1.0f};
+static const FusionVector accelerometerOffset = {0.00874871934, -0.01485571462, -1.02888};
 
-#define DT          0.01  // Sample period in seconds. Adjust as necessary.
-#define ALPHA       0.98  // Filter coefficient. Adjust as necessary.
-
-// Global variables to store the filtered roll and pitch angles
-float roll  = 0.0f;
-float pitch = 0.0f;
-
-// Function to compute roll and pitch from accelerometer data
-void computeAccelAngles(float ax, float ay, float az, float* rollAccel, float* pitchAccel) {
-    // Roll (phi) and Pitch (theta) from accelerometer data
-    *rollAccel  = atan2(ay, az) * 180.0 / M_PI;
-    *pitchAccel = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
-}
-
-// Function to update roll and pitch using a complementary filter
-void updateAngles(float ax, float ay, float az, float gx, float gy, float gz) {
-    float rollAccel, pitchAccel;
-
-    // Compute roll and pitch angles from accelerometer data
-    computeAccelAngles(ax, ay, az, &rollAccel, &pitchAccel);
-
-    // Integrate gyroscope data
-    roll  += gx * DT;
-    pitch += gy * DT;
-
-    // Complementary filter
-    roll  = ALPHA * (roll  + gx * DT) + (1 - ALPHA) * rollAccel;
-    pitch = ALPHA * (pitch + gy * DT) + (1 - ALPHA) * pitchAccel;
-}
-
-static long lastIMUPrintTime = 0;
-static long measurements = 0;
-static float previousGyroX, previousGyroY;
-static long long lastMicros = 0;
-// static float roll = 0.0f, pitch = 0.0f;
+static uint64_t _previousMicros = 0;
+static uint64_t _previousLogMillis = 0;
 static void _receivedIMUUpdate(imu_update_t update) 
 {
-  if (micros() == 0) {
-    return;
-  }
-  const float measurementIntervalInSeconds = (float)(micros() - lastMicros) / 1000000.0f;
-  if (millis() - lastIMUPrintTime > 50 || update.mag_x != 0) {
-    lastIMUPrintTime = millis();
-    const float magnitudeAccel = sqrt(pow(update.accel_x, 2) + pow(update.accel_y, 2) + pow(update.accel_z, 2));
-    // const float xNorm = update.accel_x / magnitudeAccel;
-    // const float yNorm = update.accel_y / magnitudeAccel;
-    // const float zNorm = update.accel_z / magnitudeAccel;
-    // float accelPitch = 180 * atan2(-xNorm, sqrt(pow(yNorm, 2) + pow(zNorm, 2)))/M_PI;
-    // float accelRoll = 180 * atan2(yNorm, zNorm)/M_PI;
-    // roll += update.gyro_x * measurementIntervalInSeconds;
-    // pitch += update.gyro_y * measurementIntervalInSeconds;
-    // roll = 0.98f * (roll + update.gyro_x * measurementIntervalInSeconds) + (1.0 - 0.98f) * accelRoll;
-    // pitch = 0.98f * (pitch + update.gyro_y * measurementIntervalInSeconds) + (1.0 - 0.98f) * accelPitch;
+  const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
+  _previousMicros = micros();
 
-    updateAngles(update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z);
-    ESP_LOGI("imu", "%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %ldhz", pitch, roll, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, update.mag_x, update.mag_y, update.mag_z, measurements * 2);
-    measurements = 0;
+  FusionVector gyroscope = {update.gyro_x, update.gyro_y, update.gyro_z}; // replace this with actual gyroscope data in degrees/s
+  FusionVector accelerometer = {update.accel_x, update.accel_y, update.accel_z};
+
+  // Apply calibration
+  // gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
+  // accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
+
+  // // Update gyroscope offset correction algorithm
+  // gyroscope = FusionOffsetUpdate(&_offset, gyroscope);
+
+  // Update gyroscope AHRS algorithm
+  FusionAhrsUpdateNoMagnetometer(&_fusion, gyroscope, accelerometer, deltaTimeSeconds);
+  const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&_fusion));
+  const FusionVector earth = FusionAhrsGetEarthAcceleration(&_fusion);
+
+  // Log to console 10x per second
+  if (millis() - _previousLogMillis > 100) {
+    printf("%ld, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %i, %i, %i\n", millis(), deltaTimeSeconds, euler.angle.yaw, euler.angle.pitch, euler.angle.roll, earth.axis.x, earth.axis.y, earth.axis.z, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, (int)update.gyro_raw_x, (int)update.gyro_raw_y, (int)update.gyro_raw_z);
+    _previousLogMillis = millis();
   }
-  lastMicros = micros();
-  measurements++;
 }
 
 // 1 - correct
@@ -482,6 +458,18 @@ void setup() {
     advertisement->start();
 
     updateArmStatus();
+
+    LOG_INFO("Initializing attitude & heading reference system");
+    // FusionOffsetInitialise(&_offset, 4000);
+    FusionAhrsInitialise(&_fusion);
+
+    const FusionAhrsSettings settings = {
+      .convention = FusionConventionNwu,
+      .gain = 0.5f,
+      .accelerationRejection = 90.0f,
+      .recoveryTriggerPeriod = 5000, /* 5 seconds */
+    };
+    FusionAhrsSetSettings(&_fusion, &settings);
 
     LOG_INFO("Initializing IMU");
     bool setupSuccess = false;
@@ -599,6 +587,11 @@ void loop() {
   if (interruptLock) {
     return;
   }
+  if (Serial.available()) { // Check if data is available to read
+    char receivedChar = (char)Serial.read(); // Read a byte
+    Serial.print("Received: ");
+    Serial.println(receivedChar); // Echo the received byte
+  }
 
   if (Serial.available() > 0) {
     String serialString = Serial.readString();
@@ -611,6 +604,8 @@ void loop() {
       LOG_INFO("Updating string");
       // _parameterProvider.update(TEST_VALUE, std::string("some_new_val2"));
     }
+
+    LOG_INFO("Got string: %s", serialString.c_str());
   }
 
   if (someStr != previousStr) {
@@ -650,6 +645,24 @@ void loop() {
   }
 
   imu->loopHandler();
+
+  if (_calibrate) {
+    _calibrate = false; 
+    imu->calibrate(_calibrationAxis, _calibrationValue);
+    char *axisStr = "";
+    switch (_calibrationAxis) {
+      case CalibrationAxis::x: 
+        axisStr = "x";
+        break;
+      case CalibrationAxis::y: 
+        axisStr = "y";
+        break;
+      case CalibrationAxis::z: 
+        axisStr = "z";
+        break;
+    }
+    LOG_INFO("Calibrating %s axis to %i", axisStr, _calibrationValue);
+  }
   
   // if (!dmpReady) {
   //   LOG_ERROR("DMP NOT READY");
