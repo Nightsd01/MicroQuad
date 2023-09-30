@@ -9,3 +9,4 @@ idf_component_register(
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DCONFIG_MPU_SPI")
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC CONFIG_MPU_CHIP_MODEL="MPU6000")
+target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DENABLE_EMERGENCY_MODE")

@@ -30,6 +30,7 @@ class IMU {
         imu_update_t _offsets;
         imu_update_t _mostRecentUpdate;
         bool _calibrated;
+        float _accelScale;
 };
 
 #endif 

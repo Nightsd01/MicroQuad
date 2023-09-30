@@ -71,7 +71,7 @@ class QuadcopterController
         // Call this in arduino setup()
         QuadcopterController(quadcopter_config_t config,
                              DebugHelper *debugHelper,
-                             unsigned long timeMillis,
+                             unsigned long timeMicros,
                              double minThrottle = 1000.0f,
                              double maxThrottle = 2000.0f);
 
@@ -94,7 +94,7 @@ class QuadcopterController
         // motor 1 = index 0, motor 2 = index 1, etc.
         motor_outputs_t calculateOutputs(position_values_t imuValues,
                                          controller_values_t controllerValues,
-                                         unsigned long timeMillis,
+                                         unsigned long timeMicros,
                                          bool recordData);
 
         void startMonitoringPID(void);
@@ -109,7 +109,7 @@ class QuadcopterController
         float _throttleScaling;
         double _minThrottle;
         double _maxThrottle;
-        double _previousUpdateMillis;
+        double _previousUpdateMicros;
         quadcopter_config_t _config;
         position_values_t _controlScalingValues;
         bool _monitoringPid;

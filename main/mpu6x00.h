@@ -80,6 +80,8 @@ class Mpu6x00 {
                 return true;
             }
 
+            _magnetometer = true;
+
             // configure the auxillary i2c bus to use the external sensor
             writeRegister(REG_I2C_MST_CTRL, 29);
 
@@ -114,7 +116,9 @@ class Mpu6x00 {
         void readSensor(void)
         {
             readRegisters(REG_ACCEL_XOUT_H, m_buffer, 14, SPI_FULL_CLK_HZ);
-            readRegisters(REG_EXT_SENS_DATA_BEGIN, ext_sensor_buffer, EXT_SENS_DATA_LEN, SPI_FULL_CLK_HZ);
+            if (_magnetometer) {
+                readRegisters(REG_EXT_SENS_DATA_BEGIN, ext_sensor_buffer, EXT_SENS_DATA_LEN, SPI_FULL_CLK_HZ);
+            }
         }
 
         void getGyro(float & gx, float & gy, float & gz)
@@ -270,10 +274,11 @@ class Mpu6x00 {
 
 
     private:
+        bool _magnetometer;
 
         // Configuration bits  
         static const uint8_t BIT_RAW_RDY_EN       = 0x01;
-        static const uint8_t BIT_CLK_SEL_PLLGYROZ = 0x03;
+        static const uint8_t BIT_CLK_SEL_PLLGYROZ = 0x01;
         static const uint8_t BIT_I2C_IF_DIS       = 0x10;
         static const uint8_t BIT_RESET            = 0x80;
 
@@ -420,7 +425,7 @@ class Mpu6000 : public Mpu6x00 {
         Mpu6000(
                 SPIClass & spi,
                 const uint8_t csPin,
-                const gyroFsr_e gyroFsr = GYRO_250DPS,
+                const gyroFsr_e gyroFsr = GYRO_500DPS,
                 const accelFsr_e accelFsr = ACCEL_16G)
             : Mpu6x00(0x68, spi, csPin, gyroFsr, accelFsr)
         {
@@ -428,7 +433,7 @@ class Mpu6000 : public Mpu6x00 {
 
         Mpu6000(
                 const uint8_t csPin,
-                const gyroFsr_e gyroFsr = GYRO_250DPS,
+                const gyroFsr_e gyroFsr = GYRO_500DPS,
                 const accelFsr_e accelFsr = ACCEL_16G)
             : Mpu6x00(0x68, SPI, csPin, gyroFsr, accelFsr)
         {
@@ -442,7 +447,7 @@ class Mpu6500 : public Mpu6x00 {
         Mpu6500(
                 SPIClass & spi,
                 const uint8_t csPin,
-                const gyroFsr_e gyroFsr = GYRO_250DPS,
+                const gyroFsr_e gyroFsr = GYRO_500DPS,
                 const accelFsr_e accelFsr = ACCEL_16G)
             : Mpu6x00(0x70, spi, csPin, gyroFsr, accelFsr)
         {
@@ -450,7 +455,7 @@ class Mpu6500 : public Mpu6x00 {
 
         Mpu6500(
                 const uint8_t csPin,
-                const gyroFsr_e gyroFsr = GYRO_250DPS,
+                const gyroFsr_e gyroFsr = GYRO_500DPS,
                 const accelFsr_e accelFsr = ACCEL_16G)
             : Mpu6x00(0x70, SPI, csPin, gyroFsr, accelFsr)
         {

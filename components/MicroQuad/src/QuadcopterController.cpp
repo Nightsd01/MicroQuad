@@ -25,10 +25,10 @@ static position_values_t _desiredAttitudeValues(controller_values_t controllerVa
                                                 position_values_t scalingValues,
                                                 DebugHelper *helper,
                                                 double currentHeading,
-                                                double updateIntervalMillis)
+                                                double updateIntervalMicros)
 {
     // printf("Current heading = %f\n", currentHeading);
-    const double timescale = updateIntervalMillis / 1000000.0f;
+    const double timescale = updateIntervalMicros / 1000000.0f;
 
     // this produces a value between -1.0 to 1.0
     const double scaledYawStickOutput = (((double)controllerValues.leftStickInput.x / 255.0f) * 2.0f) - 1.0f;
@@ -55,7 +55,7 @@ static position_values_t _desiredAttitudeValues(controller_values_t controllerVa
 // Public functions
 QuadcopterController::QuadcopterController(quadcopter_config_t config,
                                            DebugHelper *debugHelper,
-                                           unsigned long timeMillis,
+                                           unsigned long timeMicros,
                                            double minThrottle,
                                            double maxThrottle)
 {
@@ -63,28 +63,37 @@ QuadcopterController::QuadcopterController(quadcopter_config_t config,
     _config = config;
     _minThrottle = minThrottle;
     _maxThrottle = maxThrottle;
-    _previousUpdateMillis = timeMillis;
+    _previousUpdateMicros = timeMicros;
     _controlScalingValues = {
         .yaw = DEFAULT_YAW_ANGLE_CHANGE_PER_SECOND,
         .pitch = MAX_PITCH_CONTROL_ANGLE,
         .roll = MAX_ROLL_CONTROL_ANGLE
     };
     _throttleScaling = DEFAULT_THROTTLE_SCALING;
-    _yawController = new PIDController({
-        .gains = _config.yawGains,
-        .outputMax = MAX_PID_OUTPUT,
-        .outputMin = -MAX_PID_OUTPUT
-    });
-    _pitchController = new PIDController({
-        .gains = _config.pitchGains,
-        .outputMax = MAX_PID_OUTPUT,
-        .outputMin = -MAX_PID_OUTPUT
-    });
-    _rollController = new PIDController({
-        .gains = _config.rollGains,
-        .outputMax = MAX_PID_OUTPUT,
-        .outputMin = -MAX_PID_OUTPUT
-    });
+    _yawController = new PIDController(
+        _debugHelper,
+        {
+            .gains = _config.yawGains,
+            .outputMax = MAX_PID_OUTPUT,
+            .outputMin = -MAX_PID_OUTPUT
+        }
+    );
+    _pitchController = new PIDController(
+        _debugHelper,
+        {
+            .gains = _config.pitchGains,
+            .outputMax = MAX_PID_OUTPUT,
+            .outputMin = -MAX_PID_OUTPUT
+        }
+    );
+    _rollController = new PIDController(
+        _debugHelper,
+        {
+            .gains = _config.rollGains,
+            .outputMax = MAX_PID_OUTPUT,
+            .outputMin = -MAX_PID_OUTPUT
+        }
+    );
 }
 
 void QuadcopterController::setControlScalingValues(position_values_t controlScalingValues, float throttleScaling)
@@ -96,14 +105,14 @@ void QuadcopterController::setControlScalingValues(position_values_t controlScal
 void QuadcopterController::startMonitoringPID(void)
 {
     _monitoringPid = true;
-    _startTime = millis();
+    _startTime = micros();
 }
 
 static unsigned long lastUpdateMillis = 0;
 
 motor_outputs_t QuadcopterController::calculateOutputs(position_values_t imuValues,
                                                        controller_values_t controllerValues,
-                                                       unsigned long timeMillis,
+                                                       unsigned long timeMicros,
                                                        bool recordData)
 {
     position_values_t desiredValues = _desiredAttitudeValues(
@@ -111,7 +120,7 @@ motor_outputs_t QuadcopterController::calculateOutputs(position_values_t imuValu
         _controlScalingValues,
         _debugHelper,
         imuValues.yaw,
-        timeMillis - _previousUpdateMillis
+        timeMicros - _previousUpdateMicros
     );
 
     const double throttle = (((double)controllerValues.leftStickInput.y / 255.0f) * _minThrottle * _throttleScaling) + _minThrottle;
@@ -121,22 +130,22 @@ motor_outputs_t QuadcopterController::calculateOutputs(position_values_t imuValu
     double rollUpdate = 0.0f;
 
     if (_monitoringPid) {
-        yawUpdate = _yawController->compute(desiredValues.yaw, imuValues.yaw, timeMillis);
-        pitchUpdate = _pitchController->compute(desiredValues.pitch, imuValues.pitch, timeMillis);
-        rollUpdate = _rollController->compute(desiredValues.roll, imuValues.roll, timeMillis);
+        yawUpdate = _yawController->compute(0.0f, imuValues.yaw, timeMicros, throttle > 1300, PIDAxis::yaw);
+        pitchUpdate = _pitchController->compute(desiredValues.pitch, imuValues.pitch, timeMicros, throttle > 1300, PIDAxis::pitch);
+        rollUpdate = _rollController->compute(desiredValues.roll, imuValues.roll, timeMicros, throttle > 1300, PIDAxis::roll);
     }
 
-    _previousUpdateMillis = timeMillis;
+    _previousUpdateMicros = timeMicros;
     motor_outputs_t outputs = {
         .values = {
-            MIN(MAX(throttle + pitchUpdate - rollUpdate + yawUpdate, _minThrottle), _maxThrottle),
-            MIN(MAX(throttle - pitchUpdate + rollUpdate + yawUpdate, _minThrottle), _maxThrottle),
             MIN(MAX(throttle + pitchUpdate + rollUpdate - yawUpdate, _minThrottle), _maxThrottle),
-            MIN(MAX(throttle - pitchUpdate - rollUpdate - yawUpdate, _minThrottle), _maxThrottle)
+            MIN(MAX(throttle - pitchUpdate - rollUpdate - yawUpdate, _minThrottle), _maxThrottle),
+            MIN(MAX(throttle + pitchUpdate - rollUpdate + yawUpdate, _minThrottle), _maxThrottle),
+            MIN(MAX(throttle - pitchUpdate + rollUpdate + yawUpdate, _minThrottle), _maxThrottle)
         }
     };
 
-    if (_monitoringPid && recordData && millis() - lastUpdateMillis > 3) {
+    if (recordData) {
         _debugHelper->updates[0] = yawUpdate;
         _debugHelper->updates[1] = pitchUpdate;
         _debugHelper->updates[2] = rollUpdate;
@@ -147,16 +156,15 @@ motor_outputs_t QuadcopterController::calculateOutputs(position_values_t imuValu
         _debugHelper->ypr[0] = imuValues.yaw;
         _debugHelper->ypr[1] = imuValues.pitch;
         _debugHelper->ypr[2] = imuValues.roll;
+        _debugHelper->throttle = throttle;
         _debugHelper->desiredValues[0] = desiredValues.yaw;
         _debugHelper->desiredValues[1] = desiredValues.pitch;
         _debugHelper->desiredValues[2] = desiredValues.roll;
-        lastUpdateMillis = millis();
-        _debugHelper->saveValues(millis());
     }
 
     static unsigned long lastLogTime = 0;
-    if (millis() - lastLogTime > 200) {
-        LOG_INFO("Yaw = %f, pitch = %f, roll = %f, throttle = %f, pitch update = %f, roll update = %f, yaw update = %f", imuValues.yaw, imuValues.pitch, imuValues.roll, throttle, pitchUpdate, rollUpdate, yawUpdate);
+    if (millis() - lastLogTime > 1000) {
+        LOG_INFO("Yaw = %f, pitch = %f, roll = %f, throttle = %f, pitch update = %f, roll update = %f, yaw update = %f, desired yaw: %f, desired roll: %f, desired pitch: %f, right controller X: %f, right controller Y: %f", imuValues.yaw, imuValues.pitch, imuValues.roll, throttle, pitchUpdate, rollUpdate, yawUpdate, desiredValues.yaw, desiredValues.pitch, desiredValues.roll, controllerValues.rightStickInput.x, controllerValues.rightStickInput.y);
         lastLogTime = millis();
     }
 

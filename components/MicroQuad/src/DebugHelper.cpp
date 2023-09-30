@@ -10,6 +10,7 @@
 #include <cassert>
 
 #include "Arduino.h"
+#include "Logger.h"
 
 template< typename... Args >
 std::string string_sprintf( const char* format, Args... args ) {
@@ -43,62 +44,55 @@ DebugHelper::DebugHelper()
 void DebugHelper::printValues(unsigned long timestamp) {
   if (millis() - lastTime > 100) {
     lastTime = millis();
-    printf(
-      "%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %ld\n",
-      ypr[0],
-      ypr[1],
-      ypr[2],
-      desiredValues[0],
-      desiredValues[1],
-      desiredValues[2],
-      inputTimescale,
-      updates[0],
-      updates[1],
-      updates[2],
-      motorValues[0],
-      motorValues[1],
-      motorValues[2],
-      motorValues[3],
-      timestamp
-    );
+    // printf(
+    //   "%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %ld\n",
+    //   ypr[0],
+    //   ypr[1],
+    //   ypr[2],
+    //   desiredValues[0],
+    //   desiredValues[1],
+    //   desiredValues[2],
+    //   inputTimescale,
+    //   updates[0],
+    //   updates[1],
+    //   updates[2],
+    //   motorValues[0],
+    //   motorValues[1],
+    //   motorValues[2],
+    //   motorValues[3],
+    //   timestamp
+    // );
   }
 }
 
+static unsigned long lastPrintMillis = 0;
+static int samples = 0;
 void DebugHelper::saveValues(unsigned long timestamp) {
-  // std::string column = string_sprintf(
-  //   "%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %ld\n",
-  //   ypr[0],
-  //   ypr[1],
-  //   ypr[2],
-  //   desiredValues[0],
-  //   desiredValues[1],
-  //   desiredValues[2],
-  //   inputTimescale,
-  //   updates[0],
-  //   updates[1],
-  //   updates[2],
-  //   motorValues[0],
-  //   motorValues[1],
-  //   motorValues[2],
-  //   motorValues[3],
-  //   timestamp
-  // );
-
-  // _statements.push_back(column);
-
   while (reallocating) {}
   _growHeapIfNeeded();
   while (reallocating) {}
   float ts = (float)timestamp;
   memcpy(&data[_currentByteIndex], &ypr, sizeof(float) * 3);
-  memcpy(&data[_currentByteIndex + (3 * sizeof(float))], &gyroYpr, sizeof(float) * 3);
-  memcpy(&data[_currentByteIndex + (6 * sizeof(float))], &accelPr, sizeof(float) * 2);
-  memcpy(&data[_currentByteIndex + (8 * sizeof(float))], &desiredValues, sizeof(float) * 3);
-  memcpy(&data[_currentByteIndex + (11 * sizeof(float))], &updates, sizeof(float) * 3);
-  memcpy(&data[_currentByteIndex + (14 * sizeof(float))], &motorValues, sizeof(float) * 4);
-  memcpy(&data[_currentByteIndex + (18 * sizeof(float))], &ts, sizeof(float));
+  // memcpy(&data[_currentByteIndex + (3 * sizeof(float))], &gyroYpr, sizeof(float) * 3);
+  memcpy(&data[_currentByteIndex + (3 * sizeof(float))], &accelRaw, sizeof(float) * 3);
+  memcpy(&data[_currentByteIndex + (6 * sizeof(float))], &gyroRaw, sizeof(float) * 3);
+  memcpy(&data[_currentByteIndex + (9 * sizeof(float))], &desiredValues, sizeof(float) * 3);
+  memcpy(&data[_currentByteIndex + (12 * sizeof(float))], &updates, sizeof(float) * 3);
+  memcpy(&data[_currentByteIndex + (15 * sizeof(float))], &motorValues, sizeof(float) * 4);
+  memcpy(&data[_currentByteIndex + (19 * sizeof(float))], &throttle, sizeof(float));
+  memcpy(&data[_currentByteIndex + (20 * sizeof(float))], &ts, sizeof(float));
+  memcpy(&data[_currentByteIndex + (21 * sizeof(float))], &yawPidValues, sizeof(float) * 3);
+  memcpy(&data[_currentByteIndex + (24 * sizeof(float))], &pitchPidValues, sizeof(float) * 3);
+  memcpy(&data[_currentByteIndex + (27 * sizeof(float))], &rollPidValues, sizeof(float) * 3);
+  memcpy(&data[_currentByteIndex + (30 * sizeof(float))], &voltage, sizeof(float));
   _currentByteIndex += DEBUG_PACKET_SIZE;
   _currentSamples++;
+  samples++;
+  if (millis() - lastPrintMillis > 200) {
+    LOG_INFO("Recording at %ihz", samples * 5);
+    samples = 0;
+    lastPrintMillis = millis();
+  } 
 }
 
 void DebugHelper::_growHeapIfNeeded(void) {

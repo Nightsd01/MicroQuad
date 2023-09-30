@@ -1,6 +1,12 @@
 #ifndef PIDCONTROLLER_H
 #define PIDCONTROLLER_H
 
+#include "DebugHelper.h"
+
+enum PIDAxis {
+    yaw, pitch, roll
+};
+
 struct gains_t {
     double proportionalGain; // Kp
     double integralGain; // Ki
@@ -16,12 +22,14 @@ struct quadcopter_tuning_parameters_t {
 class PIDController
 {
     public:
-        PIDController(quadcopter_tuning_parameters_t params);
+        PIDController(DebugHelper *helper, quadcopter_tuning_parameters_t params);
 
         double compute(
             double setPoint,
             double imuValue,
-            unsigned long timestamp
+            unsigned long timestamp,
+            bool enableIntegral,
+            PIDAxis axis
         );
 
         void reset(unsigned long timestamp);
@@ -31,7 +39,8 @@ class PIDController
         unsigned long _previousTimestamp;
         double _terms[3];
         double _iState;
-        double _previousImuValue;
+        double _previousError;
+        DebugHelper *_helper;
 };
 
 #endif

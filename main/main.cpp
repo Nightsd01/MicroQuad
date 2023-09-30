@@ -14,6 +14,9 @@
 #include "BLEUtils.h"
 #include "BLEServer.h"
 #include "BLE2902.h"
+#include <esp_gap_ble_api.h>
+#include <esp_gattc_api.h>
+#include <esp_gatt_common_api.h>// ESP32 BLE
 
 // #include "FS.h"
 // #include "SD.h"
@@ -33,18 +36,61 @@
 #include "led_controller.h"
 #include <Fusion.h>
 
+template<typename T>
+class CircularBuffer {
+private:
+    std::vector<T> buffer;
+    std::size_t capacity;
+    std::size_t currentPos;
+    bool wrapped;
+
+public:
+    explicit CircularBuffer(std::size_t size) : capacity(size), currentPos(0), wrapped(false) {
+        buffer.resize(capacity);
+    }
+
+    void push(const T& value) {
+        buffer[currentPos] = value;
+
+        ++currentPos;
+        if (currentPos == capacity) {
+            wrapped = true;
+            currentPos = 0;
+        }
+    }
+
+    T& operator[](std::size_t index) {
+        if (index >= capacity) {
+            abort();
+        }
+        
+        if (wrapped) {
+            return buffer[(currentPos + index) % capacity];
+        } else {
+            return buffer[index];
+        }
+    }
+
+    int size(void) {
+      return buffer.size();
+    }
+};
 
 // static bool _enableEmergencyMode = false;
 
 // LED Setup
+// micro whoop
 #define LED_DATA_PIN GPIO_NUM_38
+
+// mini quad
+// #define LED_DATA_PIN GPIO_NUM_14
 
 LEDController ledController(LED_DATA_PIN);
 
 #define NUM_MOTORS 4
 
 // Accelerometer i2c pin definition
-#define ACCEL_INTERRUPT_PIN 45
+// #define ACCEL_INTERRUPT_PIN 45
 
 // Bluetooth constants
 #define SERVICE_UUID "ab0828b1-198e-4351-b779-901fa0e0371e"
@@ -78,11 +124,19 @@ LEDController ledController(LED_DATA_PIN);
 
 #define ARM_MICROSECONDS 1000.0f
 
+// micro whoop
 #define SPI0_CS_PIN 10
 #define SPI0_MOSI_PIN 11
 #define SPI0_SCLK_PIN 12
 #define SPI0_MISO_PIN 13
 #define IMU_INT_PIN 3
+
+// mini quad
+// #define SPI0_CS_PIN 38
+// #define SPI0_MOSI_PIN 36
+// #define SPI0_SCLK_PIN 35
+// #define SPI0_MISO_PIN 37
+// #define IMU_INT_PIN 21
 
 BLECharacteristic *controlCharacteristic;
 BLECharacteristic *telemetryCharacteristic;
@@ -94,8 +148,8 @@ BLECharacteristic *debugCharacteristic;
 
 float yawValue = 0;
 float throttleValue = 0;
-float pitchValue = 0;
-float rollValue = 0;
+float pitchValue = 127.50f;
+float rollValue = 127.50f;
 
 bool updateParams = false;
 
@@ -109,7 +163,7 @@ long long lastTelemetryUpdateTimeMillis = 0;
 motor_outputs_t previousMotorOutputs;
 bool setMotorOutputs = false;
 
-const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_5, GPIO_NUM_6, GPIO_NUM_7, GPIO_NUM_8};
+const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
 
 bool resetFlag = false;
 
@@ -175,6 +229,7 @@ std::vector<std::string> split(std::string to_split, std::string delimiter) {
 
 }
 
+static bool _didRead = false;
 
 class MessageCallbacks : public BLECharacteristicCallbacks
 {
@@ -282,6 +337,13 @@ class MessageCallbacks : public BLECharacteristicCallbacks
         }
         interruptLock = false;
     }
+
+    void onRead(BLECharacteristic* pCharacteristic, esp_ble_gatts_cb_param_t* param)
+    {
+      if (pCharacteristic->getUUID().toString() == DEBUG_CHARACTERISTIC_UUID) {
+        _didRead = true;
+      }
+    }
 };
 
 class MyServerCallbacks : public BLEServerCallbacks
@@ -290,6 +352,11 @@ class MyServerCallbacks : public BLEServerCallbacks
     {
         LOG_INFO("Connected");
         deviceConnected = true;
+        // Set the MTU size
+        esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
+        if (status != ESP_OK) {
+            LOG_ERROR("set local MTU failed, error code = %x", status);
+        }
     };
 
     void onDisconnect(BLEServer *server)
@@ -297,6 +364,17 @@ class MyServerCallbacks : public BLEServerCallbacks
         LOG_INFO("Disconnected");
         deviceConnected = false;
         armed = false;
+        // Set the MTU size
+        esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
+        if (status != ESP_OK) {
+            LOG_ERROR("set local MTU failed, error code = %x", status);
+        }
+        server->startAdvertising();
+    }
+
+    void onMtuChanged(BLEServer* pServer, esp_ble_gatts_cb_param_t* param)
+    {
+      LOG_INFO("MTU changed to: %i", param->mtu);
     }
 };
 
@@ -318,36 +396,42 @@ static void initController()
   controller = new QuadcopterController(
     {
       .yawGains = {
-        .proportionalGain = 0.0f,
+        .proportionalGain = 1.2f,
         .integralGain = 0.0f,
         .derivativeGain = 0.0f,
       },
       .pitchGains = {
-        .proportionalGain = 0.1f,
-        .integralGain = 0.001f,
-        .derivativeGain = 0.01f,
+        .proportionalGain = 1.8f,
+        .integralGain = 0.0f,
+        .derivativeGain = 0.0f,
       },
       .rollGains = {
-        .proportionalGain = 0.1f,
-        .integralGain = 0.001f,
-        .derivativeGain = 0.01f,
+        .proportionalGain = 1.8f,
+        .integralGain = 0.0f,
+        .derivativeGain = 0.0f,
       },
     },
     helper, 
-    0
+    micros()
   );
 }
 
-// Define calibration (replace with actual calibration data if available)
-static const FusionMatrix gyroscopeMisalignment = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
-static const FusionVector gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
-static const FusionVector gyroscopeOffset = {34.73820755, -17.36320755, -13.21698113};
-static const FusionMatrix accelerometerMisalignment = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
-static const FusionVector accelerometerSensitivity = {1.0f, 1.0f, 1.0f};
-static const FusionVector accelerometerOffset = {0.00874871934, -0.01485571462, -1.02888};
-
+static FusionEuler _euler;
 static uint64_t _previousMicros = 0;
 static uint64_t _previousLogMillis = 0;
+static const FusionMatrix gyroscopeMisalignment = {0.7071f, -0.7071f, 0.0f, 0.7071f, 0.7071f, 0.0f, 0.0f, 0.0f, 1.0f};
+static const FusionVector gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
+static const FusionVector gyroscopeOffset = {0.0f, 0.0f, 0.0f};
+static const FusionMatrix accelerometerMisalignment = {0.7071f, -0.7071f, 0.0f, 0.7071f, 0.7071f, 0.0f, 0.0f, 0.0f, 1.0f};
+static const FusionVector accelerometerSensitivity = {1.0f, 1.0f, 1.0f};
+static const FusionVector accelerometerOffset = {0.0f, 0.0f, 0.0f};
+static bool _receivedImuUpdate = false;
+static bool _gotFirstIMUUpdate = false;
+
+static float _previousFilteredAccelValues[3] = {0.0f, 0.0f, 1.0f};
+static float _previousFilteredGyroValues[3] = {0.0f, 0.0f, 0.0f};
+static const float _accelerometerLowPassAlpha = 0.02f; // lower alpha = more smoothing but more lag
+static const float _gyroscopeLowPassAlpha = 0.02f; // lower alpha = more smoothing but more lag
 static void _receivedIMUUpdate(imu_update_t update) 
 {
   const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
@@ -356,21 +440,33 @@ static void _receivedIMUUpdate(imu_update_t update)
   FusionVector gyroscope = {update.gyro_x, update.gyro_y, update.gyro_z}; // replace this with actual gyroscope data in degrees/s
   FusionVector accelerometer = {update.accel_x, update.accel_y, update.accel_z};
 
-  // Apply calibration
-  // gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
-  // accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
+  accelerometer.axis.x = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[0]) + (_accelerometerLowPassAlpha * accelerometer.axis.x);
+  accelerometer.axis.y = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[1]) + (_accelerometerLowPassAlpha * accelerometer.axis.y);
+  accelerometer.axis.z = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[2]) + (_accelerometerLowPassAlpha * accelerometer.axis.z);
+  gyroscope.axis.x = ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[0]) + (_gyroscopeLowPassAlpha * gyroscope.axis.x);
+  gyroscope.axis.y = ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[1]) + (_gyroscopeLowPassAlpha * gyroscope.axis.y);
+  gyroscope.axis.z = ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[2]) + (_gyroscopeLowPassAlpha * gyroscope.axis.z);
+  gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
+  accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
 
-  // // Update gyroscope offset correction algorithm
-  // gyroscope = FusionOffsetUpdate(&_offset, gyroscope);
-
+  
   // Update gyroscope AHRS algorithm
   FusionAhrsUpdateNoMagnetometer(&_fusion, gyroscope, accelerometer, deltaTimeSeconds);
-  const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&_fusion));
-  const FusionVector earth = FusionAhrsGetEarthAcceleration(&_fusion);
+  _euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&_fusion));
+  _receivedImuUpdate = true;
+  _gotFirstIMUUpdate = true;
+
+  helper->accelRaw[0] = accelerometer.axis.x;
+  helper->accelRaw[1] = accelerometer.axis.y;
+  helper->accelRaw[2] = accelerometer.axis.z;
+  helper->gyroRaw[0] = gyroscope.axis.x;
+  helper->gyroRaw[1] = gyroscope.axis.y;
+  helper->gyroRaw[2] = gyroscope.axis.z;
 
   // Log to console 10x per second
   if (millis() - _previousLogMillis > 100) {
-    printf("%ld, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %i, %i, %i\n", millis(), deltaTimeSeconds, euler.angle.yaw, euler.angle.pitch, euler.angle.roll, earth.axis.x, earth.axis.y, earth.axis.z, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, (int)update.gyro_raw_x, (int)update.gyro_raw_y, (int)update.gyro_raw_z);
+    const FusionVector earth = FusionAhrsGetEarthAcceleration(&_fusion);
+    printf("%ld, %f, %f, %f, %f, %d, %d, %d, %f, %f, %f, %f, %f, %f, %i, %i, %i\n", millis(), deltaTimeSeconds, _euler.angle.yaw, _euler.angle.pitch, _euler.angle.roll, update.accel_raw_x, update.accel_raw_y, update.accel_raw_z, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, (int)update.gyro_raw_x, (int)update.gyro_raw_y, (int)update.gyro_raw_z);
     _previousLogMillis = millis();
   }
 }
@@ -389,6 +485,8 @@ void setup() {
     Serial.begin(115200);
     LOG_INFO("BEGAN APP");
 
+    helper = new DebugHelper();
+
     initController();
 
     Wire.setClock(400000);
@@ -401,6 +499,7 @@ void setup() {
 
     // Setup BLE Server
     BLEDevice::init(DEVICE_NAME);
+    BLEDevice::setMTU(180);
     BLEServer *server = BLEDevice::createServer();
     server->setCallbacks(new MyServerCallbacks());
 
@@ -437,6 +536,12 @@ void setup() {
 
     service->start();
 
+    // Set the MTU size
+    esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
+    if (status != ESP_OK) {
+        LOG_ERROR("set local MTU failed, error code = %x", status);
+    }
+
     // Register device info service, that contains the device's UUID, manufacturer and name.
     service = server->createService(DEVINFO_UUID);
     BLECharacteristic *characteristic = service->createCharacteristic(DEVINFO_MANUFACTURER_UUID, BLECharacteristic::PROPERTY_READ);
@@ -465,7 +570,7 @@ void setup() {
 
     const FusionAhrsSettings settings = {
       .convention = FusionConventionNwu,
-      .gain = 0.5f,
+      .gain = 0.2f,
       .accelerationRejection = 90.0f,
       .recoveryTriggerPeriod = 5000, /* 5 seconds */
     };
@@ -499,8 +604,9 @@ void setup() {
 }
 
 void uploadDebugData() {
+  LOG_INFO("Begin debug data upload");
   int currentByteIndex = 0;
-  const int packetSize = 20;
+  const int packetSize = 160;
   uint8_t *data = helper->data;
   uint64_t dataSize = helper->totalDataSize();
   String firstInfo = String("debug:") + String((int)dataSize);
@@ -516,7 +622,12 @@ void uploadDebugData() {
     debugCharacteristic->notify();
     delay(30);
     currentByteIndex += packetSize;
+    _didRead = false;
   }
+
+  debugCharacteristic->setValue("==TERMINATE==");
+  debugCharacteristic->notify();
+  LOG_INFO("End debug data upload");
 }
 
 float batteryPercent(float batteryVoltage) {
@@ -554,6 +665,16 @@ void updateClientTelemetryIfNeeded(float batVoltage) {
   packet += String(batVoltage);
   packet += TELEM_DELIMITER;
   packet += String(batteryPercent(batVoltage));
+
+  if (_gotFirstIMUUpdate) {
+    packet += TELEM_DELIMITER;
+    packet += String(_euler.angle.yaw);
+    packet += TELEM_DELIMITER;
+    packet += String(_euler.angle.pitch);
+    packet += TELEM_DELIMITER;
+    packet += String(_euler.angle.roll);
+  }
+
 
   telemetryCharacteristic->setValue(packet.c_str());
   telemetryCharacteristic->notify();
@@ -637,6 +758,7 @@ void loop() {
   
   const float batteryVoltage = batteryLevel();
   updateClientTelemetryIfNeeded(batteryVoltage);
+  helper->voltage = batteryVoltage;
 
   if (!startMonitoringPid && throttleValue > 20.0f) {
     startMonitoringPid = true;
@@ -663,94 +785,88 @@ void loop() {
     }
     LOG_INFO("Calibrating %s axis to %i", axisStr, _calibrationValue);
   }
+
+  if (!_receivedImuUpdate) {
+    return;
+  }
+  _receivedImuUpdate = false;
   
-  // if (!dmpReady) {
-  //   LOG_ERROR("DMP NOT READY");
-  //   return;
-  // };
-
-  // while (!mpuInterrupt && fifoCount < packetSize) {
-  //   if (mpuInterrupt && fifoCount < packetSize) {
-  //     fifoCount = mpu.getFIFOCount();
-  //   }
-  // }
-
-  // mpuInterrupt = false;
-  // mpuIntStatus = mpu.getIntStatus();
-
-  // fifoCount = mpu.getFIFOCount();
-
-  // if (fifoCount < packetSize) {
-  //   return;
-  // }
-
-  // if ((mpuIntStatus & _BV(MPU6050_INTERRUPT_FIFO_OFLOW_BIT)) || fifoCount > 1024) {
-  //   mpu.resetFIFO();
-  //   LOG_ERROR("MPU6050 FIFO overflow!");
-  //   return;
-  // }
-
-  // if (mpuIntStatus & _BV(MPU6050_INTERRUPT_DMP_INT_BIT)) {
-  //   while (fifoCount >= packetSize) {
-  //     mpu.getFIFOBytes(fifoBuffer, packetSize);
-  //     fifoCount -= packetSize;
-  //   }
-
-  //   // NOTE TO SELF:
-  //   // The pitch and roll axes are flipped
-  //   mpu.dmpGetQuaternion(&quat, fifoBuffer);
-  //   mpu.dmpGetGravity(&gravity, &quat);
-  //   mpu.dmpGetYawPitchRoll(ypr, &quat, &gravity);
-
   //   // need to flip pitch & roll
   //   const float rollVal = ypr[2];
   //   ypr[2] = ypr[1] * -1; // need to flip roll
   //   ypr[1] = rollVal;
 
-  //   if (!updateParams) {
-  //     return;
-  //   }
+    controller_values_t controllerValues = {
+      .leftStickInput = {
+        .x = yawValue,
+        .y = throttleValue
+      },
+      .rightStickInput = {
+        .x = rollValue,
+        .y = pitchValue
+      }
+    };
 
-  //   controller_values_t controllerValues = {
-  //     .leftStickInput = {
-  //       .x = yawValue,
-  //       .y = throttleValue
-  //     },
-  //     .rightStickInput = {
-  //       .x = rollValue,
-  //       .y = pitchValue
-  //     }
-  //   };
+    // position_values_t positionValues = {
+    //   .yaw = ypr[0] * (180.0f / (M_PI * 2.0)) + 90.0f,
+    //   .pitch = ypr[1] * (180.0f / (M_PI * 2.0)),
+    //   .roll = ypr[2] * (180.0f / (M_PI * 2.0))
+    // };
 
-  //   position_values_t positionValues = {
-  //     .yaw = ypr[0] * (180.0f / (M_PI * 2.0)) + 90.0f,
-  //     .pitch = ypr[1] * (180.0f / (M_PI * 2.0)),
-  //     .roll = ypr[2] * (180.0f / (M_PI * 2.0))
-  //   };
+    position_values_t positionValues = {
+      .yaw = _euler.angle.yaw,
+      .pitch = _euler.angle.pitch,
+      .roll = _euler.angle.roll
+    };
 
   //   // TODO: Replace with parameter provider check instead of a compiler flag
-  //   #ifdef ENABLE_EMERGENCY_MODE 
-  //     // Check if we need to enter into emergency mode
-  //     if ((fabs(positionValues.pitch) > 40.0f && fabs(previousIMUValues.pitch) > 40.0f) 
-  //         || (fabs(positionValues.roll) > 40.0f && fabs(previousIMUValues.roll) > 40.0f)) {
-  //       // The drone has entered into an unacceptable orientation - this kills the motors
-  //       enteredEmergencyMode = true;
-  //       LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", positionValues.pitch, positionValues.roll);
-  //     }
-  //   #endif
+    #ifdef ENABLE_EMERGENCY_MODE 
+      // Check if we need to enter into emergency mode
+      if ((fabs(positionValues.pitch) > 80.0f && fabs(previousIMUValues.pitch) > 80.0f) 
+          || (fabs(positionValues.roll) > 80.0f && fabs(previousIMUValues.roll) > 80.0f)) {
+        // The drone has entered into an unacceptable orientation - this kills the motors
+        enteredEmergencyMode = true;
+        armed = false;
+        updateArmStatus();
+        LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", positionValues.pitch, positionValues.roll);
+      }
+    #endif
 
-  //   previousIMUValues = positionValues;
+    if (enteredEmergencyMode) {
+      updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
+      return;
+    }
 
-  //   motor_outputs_t outputs = controller->calculateOutputs(positionValues, controllerValues, timestamp - startedMonitoringTimestamp, recordDebugData);
+    previousIMUValues = positionValues;
 
-  //   samples++;
-  //   if (millis() - lastPrint > 1000) {
-  //     lastPrint = millis();
-  //     LOG_INFO("%i samples per second", samples);
-  //     samples = 0;
-  //   }
+    if (motorDebugEnabled) {
+        updateMotors({.values = {
+          motorDebugValues[0],
+          motorDebugValues[1],
+          motorDebugValues[2],
+          motorDebugValues[3]
+        }});
+        return;
+    }
 
-  //   previousMotorOutputs = outputs;
+    static bool beganRun = false;
+    if (!beganRun && throttleValue < 20.0f) {
+      return;
+    } else if (!beganRun) {
+      beganRun = true;
+    }
+
+    motor_outputs_t outputs = controller->calculateOutputs(positionValues, controllerValues, micros(), recordDebugData);
+
+    samples++;
+    if (millis() - lastPrint > 1000) {
+      lastPrint = millis();
+      LOG_INFO("%i samples per second", samples);
+      LOG_INFO("Throttle = %f", throttleValue);
+      samples = 0;
+    }
+
+    previousMotorOutputs = outputs;
 
   //   static bool savedCSVHeader = false;
   //   if (!savedCSVHeader) {
@@ -761,19 +877,22 @@ void loop() {
   //   // Save a diagnostics entry to the CSV file on the SD card
   //   DIAGNOSTICS_SAVE("%d, %.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %lu", armed, batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3], xPortGetFreeHeapSize());
 
-    if (motorDebugEnabled) {
-        updateMotors({.values = {
-          motorDebugValues[0],
-          motorDebugValues[1],
-          motorDebugValues[2],
-          motorDebugValues[3]
-        }});
-    } 
-    // else if (throttleValue < 20 || enteredEmergencyMode) {
-    //   updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
-    // } else {
-    //   updateMotors(outputs);
-    // }
-  //   setMotorOutputs = true;
+    if (throttleValue < 20) {
+      updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
+    } else {
+      // Update motors only at 300hz
+      static unsigned long lastMotorUpdateMillis = 0;
+      if (millis() - lastMotorUpdateMillis >= 3) {
+        lastMotorUpdateMillis = millis();
+        updateMotors(outputs);
+      }
+    }
+    setMotorOutputs = true;
+
+    static unsigned long lastRecordMillis = millis();
+    if (recordDebugData && millis() - lastRecordMillis >= 5) {
+        helper->saveValues(millis());
+        lastRecordMillis = millis();
+    }
   // }
 }
