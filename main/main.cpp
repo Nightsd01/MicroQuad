@@ -186,7 +186,7 @@ static bool completedFirstArm = false;
 static bool enteredEmergencyMode = false;
 
 static IMU *imu = NULL;
-static position_values_t previousIMUValues;
+static imu_output_t _imuValues;
 static FusionAhrs _fusion;
 static FusionOffset _offset;
 
@@ -393,27 +393,42 @@ void dmpDataReady() {
 static void initController()
 {
   delete controller;
-  controller = new QuadcopterController(
-    {
-      .yawGains = {
-        .proportionalGain = 1.2f,
-        .integralGain = 0.0f,
-        .derivativeGain = 0.0f,
+  controller = new QuadcopterController({
+    .angleGains = {
+      {
+        .kP = 3.5f,
+        .kI = 0.02f,
+        .kD = 0.0f
       },
-      .pitchGains = {
-        .proportionalGain = 1.8f,
-        .integralGain = 0.0f,
-        .derivativeGain = 0.0f,
+      {
+        .kP = 3.5f,
+        .kI = 0.02f,
+        .kD = 0.25f
       },
-      .rollGains = {
-        .proportionalGain = 1.8f,
-        .integralGain = 0.0f,
-        .derivativeGain = 0.0f,
-      },
+      {
+        .kP = 3.5f,
+        .kI = 0.02f,
+        .kD = 0.25f
+      }
     },
-    helper, 
-    micros()
-  );
+    .rateGains = {
+      {
+        .kP = 0.1f,
+        .kI = 0.01f,
+        .kD = 0.0f
+      },
+      {
+        .kP = 0.1f,
+        .kI = 0.01f,
+        .kD = 0.004f
+      },
+      {
+        .kP = 0.1f,
+        .kI = 0.01f,
+        .kD = 0.004f
+      }
+    }
+  }, helper, micros());
 }
 
 static FusionEuler _euler;
@@ -430,8 +445,8 @@ static bool _gotFirstIMUUpdate = false;
 
 static float _previousFilteredAccelValues[3] = {0.0f, 0.0f, 1.0f};
 static float _previousFilteredGyroValues[3] = {0.0f, 0.0f, 0.0f};
-static const float _accelerometerLowPassAlpha = 0.02f; // lower alpha = more smoothing but more lag
-static const float _gyroscopeLowPassAlpha = 0.02f; // lower alpha = more smoothing but more lag
+static const float _accelerometerLowPassAlpha = 0.01f; // lower alpha = more smoothing but more lag
+static const float _gyroscopeLowPassAlpha = 0.2f; // lower alpha = more smoothing but more lag
 static void _receivedIMUUpdate(imu_update_t update) 
 {
   const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
@@ -443,9 +458,15 @@ static void _receivedIMUUpdate(imu_update_t update)
   accelerometer.axis.x = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[0]) + (_accelerometerLowPassAlpha * accelerometer.axis.x);
   accelerometer.axis.y = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[1]) + (_accelerometerLowPassAlpha * accelerometer.axis.y);
   accelerometer.axis.z = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[2]) + (_accelerometerLowPassAlpha * accelerometer.axis.z);
+  _previousFilteredAccelValues[0] = accelerometer.axis.x;
+  _previousFilteredAccelValues[1] = accelerometer.axis.y;
+  _previousFilteredAccelValues[2] = accelerometer.axis.z;
   gyroscope.axis.x = ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[0]) + (_gyroscopeLowPassAlpha * gyroscope.axis.x);
   gyroscope.axis.y = ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[1]) + (_gyroscopeLowPassAlpha * gyroscope.axis.y);
   gyroscope.axis.z = ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[2]) + (_gyroscopeLowPassAlpha * gyroscope.axis.z);
+  _previousFilteredGyroValues[0] = gyroscope.axis.x;
+  _previousFilteredGyroValues[1] = gyroscope.axis.y;
+  _previousFilteredGyroValues[2] = gyroscope.axis.z;
   gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
   accelerometer = FusionCalibrationInertial(accelerometer, accelerometerMisalignment, accelerometerSensitivity, accelerometerOffset);
 
@@ -453,6 +474,12 @@ static void _receivedIMUUpdate(imu_update_t update)
   // Update gyroscope AHRS algorithm
   FusionAhrsUpdateNoMagnetometer(&_fusion, gyroscope, accelerometer, deltaTimeSeconds);
   _euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&_fusion));
+
+  _imuValues = {
+    .gyroOutput = {gyroscope.axis.x, gyroscope.axis.y, gyroscope.axis.z},
+    .accelOutput = {_euler.angle.yaw, _euler.angle.pitch, _euler.angle.roll}
+  };
+
   _receivedImuUpdate = true;
   _gotFirstIMUUpdate = true;
 
@@ -590,12 +617,6 @@ void setup() {
 
     while (!setupSuccess) {};
 
-    LOG_INFO("Configuring controller");
-    controller->setControlScalingValues({
-      .yaw = 180.0f,
-      .pitch = 20.0f,
-      .roll = 20.0f  
-    }, 1.0f);  
     LOG_INFO("Initializing Arming Signal LED");
     ledController.showRGB(0, 255, 0);
 
@@ -654,7 +675,7 @@ void updateClientTelemetryIfNeeded(float batVoltage) {
 
   for (int i = 0; i < 4; i++) {
     if (setMotorOutputs) {
-      packet += String(previousMotorOutputs.values[i]);
+      packet += String(previousMotorOutputs[i]);
       packet += TELEM_DELIMITER;
     } else {
       packet += "0";
@@ -688,7 +709,7 @@ void updateMotors(motor_outputs_t outputs) {
     if (!armed) {
       analogWrite(motorPins[i], 0);
     } else {
-      analogWrite(motorPins[i], map(outputs.values[i], 1000, 2000, 0, 255));
+      analogWrite(motorPins[i], map(outputs[i], 1000, 2000, 0, 255));
     }
   }
 }
@@ -763,7 +784,6 @@ void loop() {
   if (!startMonitoringPid && throttleValue > 20.0f) {
     startMonitoringPid = true;
     startedMonitoringTimestamp = timestamp;
-    controller->startMonitoringPID();
   }
 
   imu->loopHandler();
@@ -796,6 +816,10 @@ void loop() {
   //   ypr[2] = ypr[1] * -1; // need to flip roll
   //   ypr[1] = rollVal;
 
+  if (!startMonitoringPid) {
+    return;
+  }
+
     controller_values_t controllerValues = {
       .leftStickInput = {
         .x = yawValue,
@@ -807,45 +831,39 @@ void loop() {
       }
     };
 
-    // position_values_t positionValues = {
+    // imu_output_t positionValues = {
     //   .yaw = ypr[0] * (180.0f / (M_PI * 2.0)) + 90.0f,
     //   .pitch = ypr[1] * (180.0f / (M_PI * 2.0)),
     //   .roll = ypr[2] * (180.0f / (M_PI * 2.0))
     // };
 
-    position_values_t positionValues = {
-      .yaw = _euler.angle.yaw,
-      .pitch = _euler.angle.pitch,
-      .roll = _euler.angle.roll
-    };
-
   //   // TODO: Replace with parameter provider check instead of a compiler flag
     #ifdef ENABLE_EMERGENCY_MODE 
       // Check if we need to enter into emergency mode
-      if ((fabs(positionValues.pitch) > 80.0f && fabs(previousIMUValues.pitch) > 80.0f) 
-          || (fabs(positionValues.roll) > 80.0f && fabs(previousIMUValues.roll) > 80.0f)) {
+      if (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f) {
         // The drone has entered into an unacceptable orientation - this kills the motors
         enteredEmergencyMode = true;
         armed = false;
         updateArmStatus();
-        LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", positionValues.pitch, positionValues.roll);
+        LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.angle.pitch, _euler.angle.roll);
       }
     #endif
 
     if (enteredEmergencyMode) {
-      updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
+      motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
+      updateMotors(motors);
       return;
     }
 
-    previousIMUValues = positionValues;
 
     if (motorDebugEnabled) {
-        updateMotors({.values = {
+        motor_outputs_t motors = {
           motorDebugValues[0],
           motorDebugValues[1],
           motorDebugValues[2],
           motorDebugValues[3]
-        }});
+        };
+        updateMotors(motors);
         return;
     }
 
@@ -856,7 +874,8 @@ void loop() {
       beganRun = true;
     }
 
-    motor_outputs_t outputs = controller->calculateOutputs(positionValues, controllerValues, micros(), recordDebugData);
+    motor_outputs_t outputs;
+    controller->calculateOutputs(_imuValues, controllerValues, micros(), recordDebugData, &outputs);
 
     samples++;
     if (millis() - lastPrint > 1000) {
@@ -878,7 +897,8 @@ void loop() {
   //   DIAGNOSTICS_SAVE("%d, %.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %lu", armed, batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3], xPortGetFreeHeapSize());
 
     if (throttleValue < 20) {
-      updateMotors({.values = {1000.0f, 1000.0f, 1000.0f, 1000.0f}});
+      motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
+      updateMotors(motors);
     } else {
       // Update motors only at 300hz
       static unsigned long lastMotorUpdateMillis = 0;

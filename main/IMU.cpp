@@ -17,10 +17,10 @@ static void handleInterrupt(void)
     ±1000 dps: 32.8 LSB/dps
     ±2000 dps: 16.4 LSB/dps
 */
-#define GYRO_FSR Mpu6x00::GYRO_2000DPS
+#define GYRO_FSR Mpu6000::GYRO_2000DPS
 #define GYRO_SENSITIVITY 16.4
 
-#define ACCEL_FSR Mpu6x00::ACCEL_16G
+#define ACCEL_FSR Mpu6000::ACCEL_16G
 
 /**
  * These calibration values were determined by sitting the device on a flat surface

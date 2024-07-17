@@ -4,7 +4,7 @@
 #include <SPI.h>
 #include <functional>
 
-#include "mpu6x00.h"
+#include "mpu6000.h"
 
 struct imu_update_t {
     float accel_x, accel_y, accel_z;

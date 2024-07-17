@@ -3,44 +3,38 @@
 
 #include "DebugHelper.h"
 
+#define RAD_TO_DEG 57.295779513082320876798154814105
+#define DEG_TO_RAD 0.017453292519943295769236907684886
+#define ERROR_LEN 11
+#define INTEGRAL_MAX 10.0f
+
 enum PIDAxis {
     yaw, pitch, roll
 };
 
-struct gains_t {
-    double proportionalGain; // Kp
-    double integralGain; // Ki
-    double derivativeGain; // Kd
-};
-
-struct quadcopter_tuning_parameters_t {
-    gains_t gains;
-    double outputMax;
-    double outputMin;
+typedef struct gains_t {
+    double kP; // Kp
+    double kI; // Ki
+    double kD; // Kd
 };
 
 class PIDController
 {
     public:
-        PIDController(DebugHelper *helper, quadcopter_tuning_parameters_t params);
-
-        double compute(
-            double setPoint,
-            double imuValue,
-            unsigned long timestamp,
-            bool enableIntegral,
-            PIDAxis axis
+        PIDController(
+            gains_t gains,
+            DebugHelper *helper
         );
 
-        void reset(unsigned long timestamp);
+        float computeOutput(float current, float set);
 
     private:
-        quadcopter_tuning_parameters_t _params;
-        unsigned long _previousTimestamp;
-        double _terms[3];
-        double _iState;
-        double _previousError;
         DebugHelper *_helper;
+        gains_t _gains;
+        float _error;
+        float _previousError;
+        float _integral;
+        float _derivative;
 };
 
 #endif
