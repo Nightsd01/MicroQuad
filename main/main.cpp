@@ -5,10 +5,10 @@
 #include <ParameterProvider.h>
 #include <RegisteredParameters.h>
 
-// uses MPU6050 digital motion processor for smooth accelerometer readings
 #include <Wire.h>
 #include <string>
 
+// ESP32 BLE
 #include "BLEDevice.h"
 #include "BLECharacteristic.h"
 #include "BLEUtils.h"
@@ -16,15 +16,12 @@
 #include "BLE2902.h"
 #include <esp_gap_ble_api.h>
 #include <esp_gattc_api.h>
-#include <esp_gatt_common_api.h>// ESP32 BLE
+#include <esp_gatt_common_api.h>
 
-// #include "FS.h"
-// #include "SD.h"
 #include "SPI.h"
 
 #include "Logger.h"
 
-#include "led_strip.h"
 #include "driver/rmt.h"
 #include "esp_system.h"
 #include "esp_log.h"
@@ -35,46 +32,6 @@
 #include <esp_partition.h>
 #include "led_controller.h"
 #include <Fusion.h>
-
-template<typename T>
-class CircularBuffer {
-private:
-    std::vector<T> buffer;
-    std::size_t capacity;
-    std::size_t currentPos;
-    bool wrapped;
-
-public:
-    explicit CircularBuffer(std::size_t size) : capacity(size), currentPos(0), wrapped(false) {
-        buffer.resize(capacity);
-    }
-
-    void push(const T& value) {
-        buffer[currentPos] = value;
-
-        ++currentPos;
-        if (currentPos == capacity) {
-            wrapped = true;
-            currentPos = 0;
-        }
-    }
-
-    T& operator[](std::size_t index) {
-        if (index >= capacity) {
-            abort();
-        }
-        
-        if (wrapped) {
-            return buffer[(currentPos + index) % capacity];
-        } else {
-            return buffer[index];
-        }
-    }
-
-    int size(void) {
-      return buffer.size();
-    }
-};
 
 // static bool _enableEmergencyMode = false;
 
@@ -131,13 +88,6 @@ LEDController ledController(LED_DATA_PIN);
 #define SPI0_MISO_PIN 13
 #define IMU_INT_PIN 3
 
-// mini quad
-// #define SPI0_CS_PIN 38
-// #define SPI0_MOSI_PIN 36
-// #define SPI0_SCLK_PIN 35
-// #define SPI0_MISO_PIN 37
-// #define IMU_INT_PIN 21
-
 BLECharacteristic *controlCharacteristic;
 BLECharacteristic *telemetryCharacteristic;
 BLECharacteristic *armCharacteristic;
@@ -166,8 +116,6 @@ bool setMotorOutputs = false;
 const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
 
 bool resetFlag = false;
-
-#define MPU_6050_I2C_ADDR 0x69
 
 bool motorDebugEnabled = false;
 double motorDebugValues[4] = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
@@ -381,15 +329,6 @@ class MyServerCallbacks : public BLEServerCallbacks
 QuadcopterController *controller;
 DebugHelper *helper;
 
-#define SD_CS_PIN 10
-
-// Interrupt Detection Routine
-volatile bool mpuInterrupt = false;
-void dmpDataReady() {
-    // Since this is an interrupt, do not put much logic in here.
-    mpuInterrupt = true;
-}
-
 static void initController()
 {
   delete controller;
@@ -498,14 +437,7 @@ static void _receivedIMUUpdate(imu_update_t update)
   }
 }
 
-// 1 - correct
-// 2 - wrong
-// 3 - wrong
-// 4 - correct
-
 // Initial setup
-static std::string someStr;
-static std::string previousStr;
 void setup() {
     esp_partition_type_t type;
     const unsigned long initializationTime = millis();
@@ -728,31 +660,6 @@ void loop() {
   unsigned long timestamp = micros();
   if (interruptLock) {
     return;
-  }
-  if (Serial.available()) { // Check if data is available to read
-    char receivedChar = (char)Serial.read(); // Read a byte
-    Serial.print("Received: ");
-    Serial.println(receivedChar); // Echo the received byte
-  }
-
-  if (Serial.available() > 0) {
-    String serialString = Serial.readString();
-    if (serialString.indexOf("enable_emerg") != -1) {
-      LOG_INFO("Updating");
-      // _parameterProvider.update(ENABLE_EMERGENCY_MODE_DETECTION, 1);
-    }
-
-    if (serialString.indexOf("testing") != -1) {
-      LOG_INFO("Updating string");
-      // _parameterProvider.update(TEST_VALUE, std::string("some_new_val2"));
-    }
-
-    LOG_INFO("Got string: %s", serialString.c_str());
-  }
-
-  if (someStr != previousStr) {
-    LOG_INFO("static string changed: %s", someStr.c_str());
-    previousStr = someStr;
   }
 
   if (armed != previousArmStatus) {
