@@ -36,7 +36,7 @@ void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
     portDISABLE_INTERRUPTS();
     for (int i = 0; i < 3; i++) {
         for (int bit = 7; bit >= 0; bit--) {
-            const bool isHigh = (bytes[i] >> i) & 1;
+            const bool isHigh = (bytes[i] >> bit) & 1;
             uint32_t cycles = isHigh ? highStartPulseCycles : lowStartPulseCycles;
             GPIO.out1_w1ts.val = ((uint32_t)1 << pin);
             while(cycles--) {
