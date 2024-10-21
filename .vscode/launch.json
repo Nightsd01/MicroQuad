@@ -1,28 +1,22 @@
 {
-  "version": "0.2.0",
   "configurations": [
     {
-      "name": "GDB",
-      "type": "cppdbg",
-      "request": "launch",
-      "MIMode": "gdb",
-      "miDebuggerPath": "${command:espIdf.getXtensaGdb}",
+      "type": "gdbtarget",
+      "request": "attach",
+      "miDebuggerPath": "${env:HOME}/.espressif/tools/xtensa-esp-elf-gdb/12.1_20221002/xtensa-esp-elf-gdb/bin/xtensa-esp32s3-elf-gdb",
+      "name": "Eclipse CDT Remote",
       "program": "${workspaceFolder}/build/${command:espIdf.getProjectName}.elf",
-      "windows": {
-        "program": "${workspaceFolder}\\build\\${command:espIdf.getProjectName}.elf"
-      },
-      "cwd": "${workspaceFolder}",
-      "environment": [{ "name": "PATH", "value": "${config:idf.customExtraPaths}" }],
-      "setupCommands": [
-        { "text": "target remote :3333" },
-        { "text": "set remote hardware-watchpoint-limit 2"},
-        { "text": "mon reset halt" },
-        { "text": "thb app_main" },
-        { "text": "flushregs" }
+      "initCommands": [
+        "set remote hardware-watchpoint-limit {IDF_TARGET_CPU_WATCHPOINT_NUM}",
+        "mon reset halt",
+        "maintenance flush register-cache"
       ],
-      "externalConsole": false,
-      "logging": {
-        "engineLogging": true
+      "gdb": "${command:espIdf.getToolchainGdb}",
+      "target": {
+        "connectCommands": [
+          "set remotetimeout 20",
+          "-target-select extended-remote localhost:3333"
+        ]
       }
     }
   ]
