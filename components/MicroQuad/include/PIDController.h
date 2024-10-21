@@ -16,7 +16,7 @@ typedef struct gains_t {
     double kP; // Kp
     double kI; // Ki
     double kD; // Kd
-};
+} gains_t;
 
 class PIDController
 {

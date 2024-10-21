@@ -29,8 +29,8 @@ QuadcopterController::QuadcopterController(
     _debugHelper = debugHelper;
     _config = config;
     for (int i = 0; i < 3; i++) {
-        _angleControllers[i] = PIDController(config.angleGains[i], debugHelper);
-        _rateControllers[i] = PIDController(config.rateGains[i], debugHelper);
+        _angleControllers[i] = std::make_unique<PIDController>(config.angleGains[i], debugHelper);
+        _rateControllers[i] = std::make_unique<PIDController>(config.rateGains[i], debugHelper);
     }
 }
 
@@ -38,18 +38,17 @@ static unsigned long lastUpdateMillis = 0;
 
 static float _initialYaw = 0.0f;
 
-void QuadcopterController::calculateOutputs(
+motor_outputs_t QuadcopterController::calculateOutputs(
     imu_output_t imuValues,
     controller_values_t controllerValues,
     unsigned long timeMicros,
-    bool recordData,
-    motor_outputs_t *result
+    bool recordData
 )
 {
     const double throttle = (double)controllerValues.leftStickInput.y; // 0.0 to 255.0
 
-    if (_initialYaw = 0.0f) {
-        _intiialYaw = imuValues.accelOutput[0];
+    if (_initialYaw == 0.0f) {
+        _initialYaw = imuValues.accelOutput[0];
     }
 
     // x, y, and z
@@ -60,10 +59,10 @@ void QuadcopterController::calculateOutputs(
         // Calculate the angle controller result, which is the desired yaw/pitch/roll rate
         // We then feed this into the rate controller to get the desired motor output
         // TODO: For now, use initialYaw for desired yaw and 0.0f for pitch and roll
-        angleControllerOutputs[i] = _angleControllers[i].computeOutput(imuValues.accelOutput[i], i == 0 ? _intiialYaw : 0.0f);
+        angleControllerOutputs[i] = _angleControllers[i]->computeOutput(imuValues.accelOutput[i], i == 0 ? _initialYaw : 0.0f);
 
         // Calculate the rate controller result, which is the desired motor output
-        rateControllerOutputs[i] = _rateControllers[i].computeOutput(imuValues.gyroOutput[i], angleControllerOutputs[i]);
+        rateControllerOutputs[i] = _rateControllers[i]->computeOutput(imuValues.gyroOutput[i], angleControllerOutputs[i]);
     }
     
     // Axes 1
@@ -97,5 +96,5 @@ void QuadcopterController::calculateOutputs(
         _debugHelper->desiredValues[2] = 0.0f; // TODO
     }
 
-    *result = motors;
+    return motors;
 }

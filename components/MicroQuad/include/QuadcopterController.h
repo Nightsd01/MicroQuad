@@ -5,6 +5,8 @@
 #include "DebugHelper.h"
 
 #include <stdint.h>
+#include <array>
+#include <memory>
 
 #define THROTTLE_MIN 1000.0f
 #define THROTTLE_MAX 2000.0f
@@ -26,7 +28,7 @@ typedef struct {
     stick_input_values_t rightStickInput;
 } controller_values_t;
 
-typedef double motor_outputs_t[4];
+typedef std::array<double, 4> motor_outputs_t;
 
 typedef struct { // yaw, pitch, and roll gains
     gains_t angleGains[3];
@@ -45,17 +47,16 @@ class QuadcopterController
 
         // Should be called at a relatively constant frequency with
         // new accel/gyro/compass readings.
-        void calculateOutputs(
+        motor_outputs_t calculateOutputs(
             imu_output_t imuValues,
             controller_values_t controllerValues,
             unsigned long timeMicros,
-            bool recordData,
-            motor_outputs_t *result
+            bool recordData
         );
 
     private:
-        PIDController _angleControllers[3];
-        PIDController _rateControllers[3];
+        std::array<std::unique_ptr<PIDController>, 3> _angleControllers;
+        std::array<std::unique_ptr<PIDController>, 3> _rateControllers;
         double _throttle;
         double _previousUpdateMicros;
         quadcopter_config_t _config;
