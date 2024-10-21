@@ -17,10 +17,12 @@ static void handleInterrupt(void)
     ±1000 dps: 32.8 LSB/dps
     ±2000 dps: 16.4 LSB/dps
 */
-#define GYRO_FSR Mpu6000::GYRO_2000DPS
+#define GYRO_FSR ICM42688::GyroFS::dps2000
 #define GYRO_SENSITIVITY 16.4
+#define UPDATE_RATE_GYRO_HZ ICM42688::ODR::odr4k
+#define UPDATE_RATE_ACCEL_HZ ICM42688::ODR::odr4k
 
-#define ACCEL_FSR Mpu6000::ACCEL_16G
+#define ACCEL_FSR ICM42688::AccelFS::gpm16
 
 /**
  * These calibration values were determined by sitting the device on a flat surface
@@ -40,55 +42,47 @@ IMU::IMU(uint8_t csPin, uint8_t misoPin, uint8_t mosiPin, uint8_t sclkPin, uint8
     digitalWrite(csPin, HIGH);
     _spi.begin(sclkPin, misoPin, mosiPin, csPin);
 
-    _imu = new Mpu6000(_spi, csPin, GYRO_FSR, ACCEL_FSR);
+    _imu = new ICM42688(_spi, csPin);
+    _imu->setAccelFS(ACCEL_FSR);
+    _imu->setGyroFS(GYRO_FSR);
     _updateHandler = updateHandler;
 
     const float fsrVals[4] = {2.0f, 4.0f, 8.0f, 16.0f};
     _accelScale = fsrVals[(int)(ACCEL_FSR)] / 32768.0f;
 
-    if (!_imu->begin(false /* setupAuxDevice */)) {
-        LOG_ERROR("Failed to initialize MPU6000 IMU");
+    if (_imu->begin() < 0) {
+        LOG_ERROR("Failed to initialize ICM42688P IMU");
         return;
     }
 
-    calibrate(CalibrationAxis::x, GYRO_OFFSET_X);
-    calibrate(CalibrationAxis::y, GYRO_OFFSET_Y);
-    calibrate(CalibrationAxis::z, GYRO_OFFSET_Z);
-
+    _imu->setGyroODR(UPDATE_RATE_GYRO_HZ);
+    _imu->setAccelODR(UPDATE_RATE_ACCEL_HZ);
 
     *success = true;
 
     pinMode(interruptPin, INPUT);
     attachInterrupt(interruptPin, handleInterrupt, RISING);
+    _imu->enableDataReadyInterrupt();
 }
 
 void IMU::loopHandler(void)
 {
     if (_gotInterrupt) {
-        _imu->readSensor();
-
+        _imu->getAGT();
+        _imu->getRawAGT();
         imu_update_t update;
-        update.accel_raw_x = _imu->getRawAccelX() - ACCEL_OFFSET_X;
-        update.accel_raw_y = _imu->getRawAccelY() - ACCEL_OFFSET_Y;
-        update.accel_raw_z = _imu->getRawAccelZ() - ACCEL_OFFSET_Z;
-        update.accel_x = update.accel_raw_x * _accelScale;
-        update.accel_y = update.accel_raw_y * _accelScale;
-        update.accel_z = update.accel_raw_z * _accelScale;
-        _imu->getGyro(update.gyro_x, update.gyro_y, update.gyro_z);
-        update.gyro_raw_x = _imu->getRawGyroX();
-        update.gyro_raw_y = _imu->getRawGyroY();
-        update.gyro_raw_z = _imu->getRawGyroZ();
-
-        if (_calibrated) {
-            // TODO: Handle accelerometer calibration as well
-            update.gyro_x -= _offsets.gyro_x;
-            update.gyro_y -= _offsets.gyro_y;
-            update.gyro_z -= _offsets.gyro_z;
-        }
-
-        update.gyro_x /= GYRO_SENSITIVITY;
-        update.gyro_y /= GYRO_SENSITIVITY;
-        update.gyro_z /= GYRO_SENSITIVITY;
+        update.accel_raw_x = _imu->rawAccX() - ACCEL_OFFSET_X;
+        update.accel_raw_y = _imu->rawAccY() - ACCEL_OFFSET_Y;
+        update.accel_raw_z = _imu->rawAccZ() - ACCEL_OFFSET_Z;
+        update.accel_x = _imu->accX();
+        update.accel_y = _imu->accY();
+        update.accel_z = _imu->accZ();
+        update.gyro_raw_x = _imu->rawGyrX();
+        update.gyro_raw_y = _imu->rawGyrY();
+        update.gyro_raw_z = _imu->rawGyrZ();
+        update.gyro_x = _imu->gyrX();
+        update.gyro_y = _imu->gyrY();
+        update.gyro_z = _imu->gyrZ();
 
         _updateHandler(update);
 

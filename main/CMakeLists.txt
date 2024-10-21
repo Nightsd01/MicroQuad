@@ -5,6 +5,7 @@ idf_component_register(
     REQUIRES MicroQuad
     REQUIRES bt
     REQUIRES Fusion
+    REQUIRES icm42688P
 )
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DCONFIG_MPU_SPI")

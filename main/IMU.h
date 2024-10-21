@@ -4,7 +4,7 @@
 #include <SPI.h>
 #include <functional>
 
-#include "mpu6000.h"
+#include "ICM42688.h"
 
 struct imu_update_t {
     float accel_x, accel_y, accel_z;
@@ -25,7 +25,7 @@ class IMU {
         void calibrate(CalibrationAxis axis, int val);
     private:
         SPIClass _spi;
-        Mpu6000 *_imu;
+        ICM42688 *_imu;
         std::function<void(imu_update_t)> _updateHandler;
         imu_update_t _offsets;
         imu_update_t _mostRecentUpdate;
