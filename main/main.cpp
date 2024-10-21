@@ -18,6 +18,8 @@
 #include <esp_gattc_api.h>
 #include <esp_gatt_common_api.h>
 
+#include <ESP32Servo.h>
+
 #include "SPI.h"
 
 #include "Logger.h"
@@ -45,6 +47,8 @@
 LEDController ledController(LED_DATA_PIN);
 
 #define NUM_MOTORS 4
+const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
+Servo motors[NUM_MOTORS];
 
 // Accelerometer i2c pin definition
 // #define ACCEL_INTERRUPT_PIN 45
@@ -113,8 +117,6 @@ long long lastTelemetryUpdateTimeMillis = 0;
 motor_outputs_t previousMotorOutputs;
 bool setMotorOutputs = false;
 
-const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
-
 bool resetFlag = false;
 
 bool motorDebugEnabled = false;
@@ -150,7 +152,8 @@ static void updateArmStatus(void) {
     completedFirstArm = true;
     
     for (int i = 0; i < NUM_MOTORS; i++) {
-      pinMode(motorPins[i], OUTPUT);
+      motors[i].attach(motorPins[i], 1000, 2000);
+      motors[i].writeMicroseconds(1000);
     }
   }
 }
@@ -639,9 +642,9 @@ void updateMotors(motor_outputs_t outputs) {
   }
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!armed) {
-      analogWrite(motorPins[i], 0);
+      motors[i].writeMicroseconds(1000);
     } else {
-      analogWrite(motorPins[i], map(outputs[i], 1000, 2000, 0, 255));
+      motors[i].writeMicroseconds(outputs[i]);
     }
   }
 }

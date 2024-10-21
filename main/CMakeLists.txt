@@ -6,6 +6,7 @@ idf_component_register(
     REQUIRES bt
     REQUIRES Fusion
     REQUIRES icm42688P
+    REQUIRES ESP32Servo
 )
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DCONFIG_MPU_SPI")
