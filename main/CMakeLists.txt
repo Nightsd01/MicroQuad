@@ -7,6 +7,7 @@ idf_component_register(
     REQUIRES Fusion
     REQUIRES icm42688P
     REQUIRES ESP32Servo
+    REQUIRES qmc5883l
 )
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DCONFIG_MPU_SPI")

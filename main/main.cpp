@@ -20,6 +20,9 @@
 
 #include <ESP32Servo.h>
 
+// Magnetometer
+#include <DFRobot_QMC5883.h>
+
 #include "SPI.h"
 
 #include "Logger.h"
@@ -134,6 +137,14 @@ static bool completedFirstArm = false;
 // When the quadcopter enters into unacceptable orientation for more than 2 measurements, 
 // the drone will cut power to the motors for safety and must be rebooted
 static bool enteredEmergencyMode = false;
+
+DFRobot_QMC5883 _compass(&Wire, /*I2C addr*/QMC5883_ADDRESS);
+
+// Keep these 2 in sync
+#define MAG_UPDATE_RATE_MILLIS 5
+#define MAG_DATARATE QMC5883_DATARATE_200HZ
+static uint64_t _lastMagnetometerRead = 0;
+static sVector_t _magValues;
 
 static IMU *imu = NULL;
 static imu_output_t _imuValues;
@@ -414,7 +425,7 @@ static void _receivedIMUUpdate(imu_update_t update)
 
   
   // Update gyroscope AHRS algorithm
-  FusionAhrsUpdateNoMagnetometer(&_fusion, gyroscope, accelerometer, deltaTimeSeconds);
+  FusionAhrsUpdateExternalHeading(&_fusion, gyroscope, accelerometer, _magValues.HeadingDegress, deltaTimeSeconds);
   _euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&_fusion));
 
   _imuValues = {
@@ -435,7 +446,7 @@ static void _receivedIMUUpdate(imu_update_t update)
   // Log to console 10x per second
   if (millis() - _previousLogMillis > 100) {
     const FusionVector earth = FusionAhrsGetEarthAcceleration(&_fusion);
-    printf("%ld, %f, %f, %f, %f, %d, %d, %d, %f, %f, %f, %f, %f, %f, %i, %i, %i\n", millis(), deltaTimeSeconds, _euler.angle.yaw, _euler.angle.pitch, _euler.angle.roll, update.accel_raw_x, update.accel_raw_y, update.accel_raw_z, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, (int)update.gyro_raw_x, (int)update.gyro_raw_y, (int)update.gyro_raw_z);
+    printf("%ld, %f, %f, %f, %f, %d, %d, %d, %f, %f, %f, %f, %f, %f, %i, %i, %i, %f\n", millis(), deltaTimeSeconds, _euler.angle.yaw, _euler.angle.pitch, _euler.angle.roll, update.accel_raw_x, update.accel_raw_y, update.accel_raw_z, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, (int)update.gyro_raw_x, (int)update.gyro_raw_y, (int)update.gyro_raw_z, _magValues.HeadingDegress);
     _previousLogMillis = millis();
   }
 }
@@ -446,6 +457,11 @@ void setup() {
     const unsigned long initializationTime = millis();
     Serial.begin(115200);
     LOG_INFO("BEGAN APP");
+  
+    ESP32PWM::allocateTimer(0);
+    ESP32PWM::allocateTimer(1);
+    ESP32PWM::allocateTimer(2);
+    ESP32PWM::allocateTimer(3);
 
     helper = new DebugHelper();
 
@@ -523,6 +539,28 @@ void setup() {
     adv.setCompleteServices(BLEUUID(SERVICE_UUID));
     advertisement->setAdvertisementData(adv);
     advertisement->start();
+
+    LOG_INFO("BLE setup complete");
+    LOG_INFO("Configuring magnetometer");
+
+    while (!_compass.begin()) {
+      LOG_ERROR("Failed to initialize magnetometer");
+      delay(500);
+    }
+    /**
+     * @brief  Set declination angle on your location and fix heading
+     * @n      You can find your declination on: http://magnetic-declination.com/
+     * @n      (+) Positive or (-) for negative
+     * @n      For Bytom / Poland declination angle is 4'26E (positive)
+     * @n      Formula: (deg + (min / 60.0)) / (180 / PI);
+     */
+    const float declinationAngle = (12.0 + (55.0 / 60.0)) / (180 / PI);
+    _compass.setRange(QMC5883_RANGE_2GA);
+    _compass.setMeasurementMode(QMC5883_CONTINOUS);
+    _compass.setDataRate(QMC5883_DATARATE_200HZ);
+    _compass.setSamples(QMC5883_SAMPLES_8);
+    _compass.setDeclinationAngle(declinationAngle);
+    LOG_INFO("Successfully initialized magnetometer");
 
     updateArmStatus();
 
@@ -686,6 +724,12 @@ void loop() {
     resetFlag = false;
     initController();
   }
+
+  if (millis() - _lastMagnetometerRead > MAG_UPDATE_RATE_MILLIS) {
+    _magValues = _compass.readRaw();
+    _compass.getHeadingDegrees();
+    _lastMagnetometerRead = millis();
+  }
   
   const float batteryVoltage = batteryLevel();
   updateClientTelemetryIfNeeded(batteryVoltage);
@@ -716,7 +760,8 @@ void loop() {
     LOG_INFO("Calibrating %s axis to %i", axisStr, _calibrationValue);
   }
 
-  if (!_receivedImuUpdate) {
+  if (!_receivedImuUpdate || _lastMagnetometerRead == 0) {
+    // Wait until we have both an IMU and magnetometer read before proceeding
     return;
   }
   _receivedImuUpdate = false;
@@ -784,14 +829,13 @@ void loop() {
       beganRun = true;
     }
 
-    motor_outputs_t outputs;
-    controller->calculateOutputs(_imuValues, controllerValues, micros(), recordDebugData, &outputs);
+    motor_outputs_t outputs = controller->calculateOutputs(_imuValues, controllerValues, micros(), recordDebugData);
 
     samples++;
     if (millis() - lastPrint > 1000) {
       lastPrint = millis();
       LOG_INFO("%i samples per second", samples);
-      LOG_INFO("Throttle = %f", throttleValue);
+      LOG_INFO("Throttle = %f, motors %f, %f, %f, %f", throttleValue, outputs[0], outputs[1], outputs[2], outputs[3]);
       samples = 0;
     }
 
