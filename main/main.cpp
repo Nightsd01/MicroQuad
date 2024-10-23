@@ -8,16 +8,6 @@
 #include <Wire.h>
 #include <string>
 
-// ESP32 BLE
-#include "BLEDevice.h"
-#include "BLECharacteristic.h"
-#include "BLEUtils.h"
-#include "BLEServer.h"
-#include "BLE2902.h"
-#include <esp_gap_ble_api.h>
-#include <esp_gattc_api.h>
-#include <esp_gatt_common_api.h>
-
 #include <ESP32Servo.h>
 
 // Magnetometer
@@ -33,6 +23,7 @@
 #include "soc/timer_group_struct.h"
 #include "soc/timer_group_reg.h"
 #include "IMU.h"
+#include "BLEController.h"
 
 #include <esp_partition.h>
 #include "led_controller.h"
@@ -52,27 +43,6 @@ LEDController ledController(LED_DATA_PIN);
 #define NUM_MOTORS 4
 const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
 Servo motors[NUM_MOTORS];
-
-// Accelerometer i2c pin definition
-// #define ACCEL_INTERRUPT_PIN 45
-
-// Bluetooth constants
-#define SERVICE_UUID "ab0828b1-198e-4351-b779-901fa0e0371e"
-#define CONTROL_CHARACTERISTIC_UUID "4ac8a682-9736-4e5d-932b-e9b31405049c"
-#define ARM_CHARACTERISTIC_UUID "baf0bcca-634f-11eb-ae93-0242ac130002"
-#define TELEM_CHARACTERISTIC_UUID "e35f992e-5e7c-11eb-ae93-0242ac130002"
-#define RESET_CHARACTERISTIC_UUID "489d3a76-6fdf-11eb-9439-0242ac130002"
-#define MOTOR_DEBUG_CHARACTERISTIC_UUID "dec9fad6-0cf9-11ec-82a8-0242ac130003"
-#define CALIBRATION_CHARACTERISTIC_UUID "498e876e-0dd2-11ec-82a8-0242ac130003"
-#define DEBUG_CHARACTERISTIC_UUID "f0a0afee-0983-4691-adc5-02ee803f5418"
-
-#define DEVINFO_UUID (uint16_t)0x180a
-#define DEVINFO_MANUFACTURER_UUID (uint16_t)0x2a29
-#define DEVINFO_NAME_UUID (uint16_t)0x2a24
-#define DEVINFO_SERIAL_UUID (uint16_t)0x2a25
-
-#define DEVICE_MANUFACTURER "BradHesse"
-#define DEVICE_NAME "MicroQuad"
 
 #define TELEM_DELIMITER ","
 #define TELEM_UPDATE_INTERVAL_MILLIS 100
@@ -95,24 +65,14 @@ Servo motors[NUM_MOTORS];
 #define SPI0_MISO_PIN 13
 #define IMU_INT_PIN 3
 
-BLECharacteristic *controlCharacteristic;
-BLECharacteristic *telemetryCharacteristic;
-BLECharacteristic *armCharacteristic;
-BLECharacteristic *resetCharacteristic;
-BLECharacteristic *motorDebugCharacteristic;
-BLECharacteristic *calibrationCharacteristic;
-BLECharacteristic *debugCharacteristic;
+BLEController _bluetoothController;
 
-float yawValue = 0;
-float throttleValue = 0;
-float pitchValue = 127.50f;
-float rollValue = 127.50f;
+float _yawValue = 0;
+float _throttleValue = 0;
+float _pitchValue = 127.50f;
+float _rollValue = 127.50f;
 
-bool updateParams = false;
-
-bool deviceConnected = false;
-
-bool armed = false;
+bool _armed = false;
 bool previousArmStatus = false;
 
 long long lastTelemetryUpdateTimeMillis = 0;
@@ -120,19 +80,17 @@ long long lastTelemetryUpdateTimeMillis = 0;
 motor_outputs_t previousMotorOutputs;
 bool setMotorOutputs = false;
 
-bool resetFlag = false;
+bool _resetFlag = false;
 
-bool motorDebugEnabled = false;
-double motorDebugValues[4] = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
+bool _motorDebugEnabled = false;
+double _motorDebugValues[4] = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
 
 bool startMonitoringPid = false;
 
-static volatile bool interruptLock = false;
+bool _sendDebugData = false;
+bool _recordDebugData = false;
 
-bool sendDebugData = false;
-bool recordDebugData = false;
-
-static bool completedFirstArm = false;
+static bool _completedFirstArm = false;
 
 // When the quadcopter enters into unacceptable orientation for more than 2 measurements, 
 // the drone will cut power to the motors for safety and must be rebooted
@@ -157,8 +115,8 @@ static volatile int _calibrationValue = 0;
 
 
 static void updateArmStatus(void) {
-  ledController.showRGB(armed ? 255 : 0, armed ? 0 : 255, 0);
-  if (armed && !completedFirstArm) {
+  ledController.showRGB(_armed ? 255 : 0, _armed ? 0 : 255, 0);
+  if (_armed && !_completedFirstArm) {
     LOG_INFO("Setting up motor outputs");
     completedFirstArm = true;
     
@@ -167,178 +125,8 @@ static void updateArmStatus(void) {
       motors[i].writeMicroseconds(1000);
     }
   }
-}
-
-std::vector<std::string> split(std::string to_split, std::string delimiter) {
-    size_t pos = 0;
-    std::vector<std::string> matches{};
-    do {
-        pos = to_split.find(delimiter);
-        int change_end;
-        if (pos == std::string::npos) {
-            pos = to_split.length() - 1;
-            change_end = 1;
-        }
-        else {
-            change_end = 0;
-        }
-        matches.push_back(to_split.substr(0, pos+change_end));
-
-        to_split.erase(0, pos+1);
-    }
-    while (!to_split.empty());
-    return matches;
 
 }
-
-static bool _didRead = false;
-
-class MessageCallbacks : public BLECharacteristicCallbacks
-{
-    void onWrite(BLECharacteristic *characteristic)
-    {
-        interruptLock = true;
-        if (characteristic->getUUID().equals(controlCharacteristic->getUUID())) {
-          std::string data = characteristic->getValue();
-          char *str = (char *)malloc((strlen(data.c_str()) * sizeof(char)) + 10);
-          strcpy(str, data.c_str());
-          char *ptr = strtok(str, ",");
-
-          int i = 0;
-          while (ptr != NULL) {
-            double val = strtod(ptr, NULL);
-            if (i == 0) {
-              throttleValue = val;
-            } else if (i == 1) {
-              yawValue = val;
-            } else if (i == 2) {
-              pitchValue = val;
-            } else {
-              rollValue = val;
-            }
-            i++;
-            ptr = strtok(NULL, ",");
-          }
-
-          free(str);
-
-          updateParams = true;
-        } else if (characteristic->getUUID().equals(armCharacteristic->getUUID())) {
-          uint8_t *armData = characteristic->getData();
-          armed = armData[0];
-          if (armed) {
-            // LOG_INFO("ARMED");
-          } else {
-            // LOG_INFO("DISARMED");
-          }
-        } else if (characteristic->getUUID().equals(resetCharacteristic->getUUID())) {
-          // LOG_INFO("SET RESET FLAG");
-          resetFlag = true;
-        } else if (characteristic->getUUID().equals(motorDebugCharacteristic->getUUID())) {
-          std::string value = characteristic->getValue();
-          std::vector<std::string> components = split(value, ":");
-          if (components.size() == 0) {
-            // LOG_ERROR("ERROR: Incorrect motor debug packet (1)");
-            return;
-          }
-          if (components[0] == "motordebug_enabled") {
-            if (components.size() == 1) {
-              // LOG_ERROR("ERROR: Incorrect motor debug packet (2)");
-              return;
-            }
-            std::string value = components[1];
-            motorDebugEnabled = value == "1";
-            // LOG_INFO("Changing motor debug status to %s", motorDebugEnabled ? "enabled" : "disabled");
-          } else if (components[0] == "motordebug_value") {
-            if (components.size() < 3) {
-              // LOG_ERROR("ERROR: Incorrect motor debug packet (3)");
-              return;
-            }
-            int motorNumber = atoi(components[1].c_str()) - 1;
-            int motorValue = atoi(components[2].c_str());
-            double motorWriteValue = ((((double)motorValue) / 255.0f) * 1000.0f) + 1000.0f;
-            // LOG_INFO("Updating motor %i to %f", motorNumber, motorWriteValue);
-            motorDebugValues[motorNumber] = motorWriteValue;
-          } else {
-            // LOG_ERROR("ERROR: Incorrect motor debug packet (4)");
-            return;
-          }
-        } else if (characteristic->getUUID().equals(calibrationCharacteristic->getUUID())) {
-          std::string value = characteristic->getValue();
-          std::vector<std::string> components = split(value, "=");
-          if (components.size() != 2) {
-            LOG_ERROR("Invalid calibration command");
-            return;
-          }
-          CalibrationAxis axis;
-          if (components[0] == "x") {
-            axis = CalibrationAxis::x;
-          } else if (components[0] == "y") {
-            axis = CalibrationAxis::y;
-          } else if (components[0] == "z") {
-            axis = CalibrationAxis::z;
-          } else {
-            LOG_ERROR("Invalid calibration axis");
-            return;
-          }
-          const int val = atoi(components[1].c_str());
-          _calibrate = true;
-          _calibrationAxis = axis;
-          _calibrationValue = val;
-        } else if (characteristic->getUUID().equals(debugCharacteristic->getUUID())) {
-          if (characteristic->getValue() == "request") {
-            // LOG_INFO("Recording debug data transmission");
-            sendDebugData = true;
-          } else if (characteristic->getValue() == "record:1") {
-            // LOG_INFO("Recording debug data start");
-            recordDebugData = true;
-          } else if (characteristic->getValue() == "record:0") {
-            // LOG_INFO("Recording debug data stop");
-            recordDebugData = false;
-          }
-        }
-        interruptLock = false;
-    }
-
-    void onRead(BLECharacteristic* pCharacteristic, esp_ble_gatts_cb_param_t* param)
-    {
-      if (pCharacteristic->getUUID().toString() == DEBUG_CHARACTERISTIC_UUID) {
-        _didRead = true;
-      }
-    }
-};
-
-class MyServerCallbacks : public BLEServerCallbacks
-{
-    void onConnect(BLEServer *server)
-    {
-        LOG_INFO("Connected");
-        deviceConnected = true;
-        // Set the MTU size
-        esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
-        if (status != ESP_OK) {
-            LOG_ERROR("set local MTU failed, error code = %x", status);
-        }
-    };
-
-    void onDisconnect(BLEServer *server)
-    {
-        LOG_INFO("Disconnected");
-        deviceConnected = false;
-        armed = false;
-        // Set the MTU size
-        esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
-        if (status != ESP_OK) {
-            LOG_ERROR("set local MTU failed, error code = %x", status);
-        }
-        server->startAdvertising();
-    }
-
-    void onMtuChanged(BLEServer* pServer, esp_ble_gatts_cb_param_t* param)
-    {
-      LOG_INFO("MTU changed to: %i", param->mtu);
-    }
-};
 
 QuadcopterController *controller;
 DebugHelper *helper;
@@ -475,72 +263,43 @@ void setup() {
 
     LOG_INFO("Initializing bluetooth connection");
 
+    _bluetoothController.setControlsUpdateHandler([&](controls_update_t update) {
+      _yawValue = update.yaw;
+      _throttleValue = update.throttle;
+      _pitchValue = update.pitch;
+      _rollValue = update.roll;
+    });
+
+    _bluetoothController.setArmStatusUpdateHandler([&](bool armStatus) {
+      _armed = armStatus;
+    });
+
+    _bluetoothController.setResetStatusUpdateHandler([&]() {
+      _resetFlag = true;
+    });
+
+    _bluetoothController.setMotorDebugEnabledUpdateHandler([&](bool motorDebug) {
+      _motorDebugEnabled = motorDebug;
+    });
+
+    _bluetoothController.setMotorDebugUpdateHandler([&](motor_debug_update_t motorDebugUpdate) {
+      _motorDebugValues[motorDebugUpdate.motorNum] = motorDebugUpdate.motorWriteValue;
+    });
+
+    _bluetoothController.setCalibrationUpdateHandler([&](calibration_update_t calibrationUpdate) {
+      _calibrate = true;
+      _calibrationAxis = calibrationUpdate.axis;
+      _calibrationValue = calibrationUpdate.calibrationValue;
+    });
+
+    _bluetoothController.setDebugDataUpdateHandler([&](debug_recording_update_t debugDataUpdate) {
+      _sendDebugData = debugDataUpdate.sendDebugData;
+      _recordDebugData = debugDataUpdate.recordDebugData;
+    });
+
     // Setup BLE Server
-    BLEDevice::init(DEVICE_NAME);
-    BLEDevice::setMTU(180);
-    BLEServer *server = BLEDevice::createServer();
-    server->setCallbacks(new MyServerCallbacks());
-
-    BLEService *service = server->createService(BLEUUID(std::string(SERVICE_UUID)), 30, 0);
-
-    controlCharacteristic = service->createCharacteristic(CONTROL_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
-    controlCharacteristic->setCallbacks(new MessageCallbacks());
-    controlCharacteristic->addDescriptor(new BLE2902());
-
-    telemetryCharacteristic = service->createCharacteristic(TELEM_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
-    telemetryCharacteristic->setCallbacks(new MessageCallbacks());
-    telemetryCharacteristic->addDescriptor(new BLE2902());
-    telemetryCharacteristic->setWriteNoResponseProperty(true);
-
-    armCharacteristic = service->createCharacteristic(ARM_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
-    armCharacteristic->setCallbacks(new MessageCallbacks());
-    armCharacteristic->addDescriptor(new BLE2902());
-
-    resetCharacteristic = service->createCharacteristic(RESET_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
-    resetCharacteristic->setCallbacks(new MessageCallbacks());
-    resetCharacteristic->addDescriptor(new BLE2902());
-
-    motorDebugCharacteristic = service->createCharacteristic(MOTOR_DEBUG_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
-    motorDebugCharacteristic->setCallbacks(new MessageCallbacks());
-    motorDebugCharacteristic->addDescriptor(new BLE2902());
-
-    calibrationCharacteristic = service->createCharacteristic(CALIBRATION_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
-    calibrationCharacteristic->setCallbacks(new MessageCallbacks());
-    calibrationCharacteristic->addDescriptor(new BLE2902());
-
-    debugCharacteristic = service->createCharacteristic(DEBUG_CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
-    debugCharacteristic->setCallbacks(new MessageCallbacks());
-    debugCharacteristic->addDescriptor(new BLE2902());
-
-    service->start();
-
-    // Set the MTU size
-    esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
-    if (status != ESP_OK) {
-        LOG_ERROR("set local MTU failed, error code = %x", status);
-    }
-
-    // Register device info service, that contains the device's UUID, manufacturer and name.
-    service = server->createService(DEVINFO_UUID);
-    BLECharacteristic *characteristic = service->createCharacteristic(DEVINFO_MANUFACTURER_UUID, BLECharacteristic::PROPERTY_READ);
-    characteristic->setValue(DEVICE_MANUFACTURER);
-    characteristic = service->createCharacteristic(DEVINFO_NAME_UUID, BLECharacteristic::PROPERTY_READ);
-    characteristic->setValue(DEVICE_NAME);
-    characteristic = service->createCharacteristic(DEVINFO_SERIAL_UUID, BLECharacteristic::PROPERTY_READ);
-    String chipId = String((uint32_t)(ESP.getEfuseMac() >> 24), HEX);
-    characteristic->setValue(chipId.c_str());
-    service->start();
-  
-
-    // Advertise services
-    BLEAdvertising *advertisement = server->getAdvertising();
-    BLEAdvertisementData adv;
-    adv.setName(DEVICE_NAME);
-    adv.setCompleteServices(BLEUUID(SERVICE_UUID));
-    advertisement->setAdvertisementData(adv);
-    advertisement->start();
-
-    LOG_INFO("BLE setup complete");
+    _bluetoothController.beginBluetooth();
+    
     LOG_INFO("Configuring magnetometer");
 
     while (!_compass.begin()) {
@@ -598,30 +357,9 @@ void setup() {
 }
 
 void uploadDebugData() {
-  LOG_INFO("Begin debug data upload");
-  int currentByteIndex = 0;
-  const int packetSize = 160;
   uint8_t *data = helper->data;
   uint64_t dataSize = helper->totalDataSize();
-  String firstInfo = String("debug:") + String((int)dataSize);
-  debugCharacteristic->setValue(firstInfo.c_str());
-  debugCharacteristic->notify();
-  delay(100);
-  while (currentByteIndex < dataSize) {
-    if (currentByteIndex + packetSize < dataSize) {
-      debugCharacteristic->setValue(&data[currentByteIndex], packetSize);
-    } else {
-      debugCharacteristic->setValue(&data[currentByteIndex], dataSize - currentByteIndex);
-    }
-    debugCharacteristic->notify();
-    delay(30);
-    currentByteIndex += packetSize;
-    _didRead = false;
-  }
-
-  debugCharacteristic->setValue("==TERMINATE==");
-  debugCharacteristic->notify();
-  LOG_INFO("End debug data upload");
+  _bluetoothController.uploadDebugData(data, dataSize);
 }
 
 float batteryPercent(float batteryVoltage) {
@@ -637,13 +375,13 @@ float batteryLevel() {
 }
 
 void updateClientTelemetryIfNeeded(float batVoltage) {
-  if (!deviceConnected || millis() - lastTelemetryUpdateTimeMillis < TELEM_UPDATE_INTERVAL_MILLIS) {
+  if (!_bluetoothController.isConnected || millis() - lastTelemetryUpdateTimeMillis < TELEM_UPDATE_INTERVAL_MILLIS) {
     return;
   }
   
   lastTelemetryUpdateTimeMillis = millis();
 
-  String packet = String(armed);
+  String packet = String(_armed);
   packet += TELEM_DELIMITER;
 
   for (int i = 0; i < 4; i++) {
@@ -669,13 +407,11 @@ void updateClientTelemetryIfNeeded(float batVoltage) {
     packet += String(_euler.angle.roll);
   }
 
-
-  telemetryCharacteristic->setValue(packet.c_str());
-  telemetryCharacteristic->notify();
+  _bluetoothController.sendTelemetryUpdate(packet);
 }
 
 void updateMotors(motor_outputs_t outputs) {
-  if (!completedFirstArm) {
+  if (!_completedFirstArm) {
     return;
   }
   for (int i = 0; i < NUM_MOTORS; i++) {
@@ -699,29 +435,29 @@ void loop() {
   TIMERG0.wdtfeed.val=1;
   TIMERG0.wdtwprotect.val=0;
   unsigned long timestamp = micros();
-  if (interruptLock) {
+  if (_bluetoothController.isProcessingBluetoothTransaction) {
     return;
   }
 
-  if (armed != previousArmStatus) {
+  if (_armed != previousArmStatus) {
     LOG_INFO("Updating arm LED");
     updateArmStatus();
     LOG_INFO("Updated arm LED");
-    previousArmStatus = armed;
+    previousArmStatus = _armed;
     LOG_INFO("Updated previous arm status");
   }
 
-  if (sendDebugData) {
+  if (_sendDebugData) {
     LOG_INFO("Beginning debug data transmission");
-    sendDebugData = false;
+    _sendDebugData = false;
     uploadDebugData();
     LOG_INFO("Completed debug data transmission");
     return;
   }
 
-  if (resetFlag) {
+  if (_resetFlag) {
     LOG_INFO("Resetting");
-    resetFlag = false;
+    _resetFlag = false;
     initController();
   }
 
@@ -798,7 +534,7 @@ void loop() {
       if (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f) {
         // The drone has entered into an unacceptable orientation - this kills the motors
         enteredEmergencyMode = true;
-        armed = false;
+        _armed = false;
         updateArmStatus();
         LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.angle.pitch, _euler.angle.roll);
       }
@@ -811,31 +547,31 @@ void loop() {
     }
 
 
-    if (motorDebugEnabled) {
+    if (_motorDebugEnabled) {
         motor_outputs_t motors = {
-          motorDebugValues[0],
-          motorDebugValues[1],
-          motorDebugValues[2],
-          motorDebugValues[3]
+          _motorDebugValues[0],
+          _motorDebugValues[1],
+          _motorDebugValues[2],
+          _motorDebugValues[3]
         };
         updateMotors(motors);
         return;
     }
 
     static bool beganRun = false;
-    if (!beganRun && throttleValue < 20.0f) {
+    if (!beganRun && _throttleValue < 20.0f) {
       return;
     } else if (!beganRun) {
       beganRun = true;
     }
 
-    motor_outputs_t outputs = controller->calculateOutputs(_imuValues, controllerValues, micros(), recordDebugData);
+    motor_outputs_t outputs = controller->calculateOutputs(_imuValues, controllerValues, micros(), _recordDebugData);
 
     samples++;
     if (millis() - lastPrint > 1000) {
       lastPrint = millis();
       LOG_INFO("%i samples per second", samples);
-      LOG_INFO("Throttle = %f, motors %f, %f, %f, %f", throttleValue, outputs[0], outputs[1], outputs[2], outputs[3]);
+      LOG_INFO("Throttle = %f, motors %f, %f, %f, %f", _throttleValue, outputs[0], outputs[1], outputs[2], outputs[3]);
       samples = 0;
     }
 
@@ -844,13 +580,13 @@ void loop() {
   //   static bool savedCSVHeader = false;
   //   if (!savedCSVHeader) {
   //     savedCSVHeader = true;
-  //     DIAGNOSTICS_SAVE("armed, voltage, time, yaw, pitch, roll, throttle, mot1, mot2, mot3, mot4, memory usage (bytes)");
+  //     DIAGNOSTICS_SAVE("_armed, voltage, time, yaw, pitch, roll, throttle, mot1, mot2, mot3, mot4, memory usage (bytes)");
   //   }
 
   //   // Save a diagnostics entry to the CSV file on the SD card
-  //   DIAGNOSTICS_SAVE("%d, %.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %lu", armed, batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3], xPortGetFreeHeapSize());
+  //   DIAGNOSTICS_SAVE("%d, %.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %lu", _armed, batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, _throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3], xPortGetFreeHeapSize());
 
-    if (throttleValue < 20) {
+    if (_throttleValue < 20) {
       motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
       updateMotors(motors);
     } else {
@@ -864,7 +600,7 @@ void loop() {
     setMotorOutputs = true;
 
     static unsigned long lastRecordMillis = millis();
-    if (recordDebugData && millis() - lastRecordMillis >= 5) {
+    if (_recordDebugData && millis() - lastRecordMillis >= 5) {
         helper->saveValues(millis());
         lastRecordMillis = millis();
     }
