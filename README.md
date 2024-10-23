@@ -12,7 +12,7 @@ This repo is based on the ESP32 architecture to implement a custom Bluetooth con
 - MCP73871T Battery Mgmt + Load Sharing
 - Breakout Board with USB-C via Small Ribbon Cable
 
-![alt text](assets/header_img.png)
+![alt text](assets/header_img.jpg)
 
 ### To Build & Flash
 - Run `idf.py build` to check if the project builds
