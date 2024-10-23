@@ -1,12 +1,11 @@
 idf_component_register(
-    SRCS "BLEController.cpp" "main.cpp" "IMU.cpp" "led_controller.cpp"
+    SRCS "ElectronicSpeedController.cpp" "BLEController.cpp" "main.cpp" "IMU.cpp" "led_controller.cpp"
     INCLUDE_DIRS ""
     REQUIRES arduino
     REQUIRES MicroQuad
     REQUIRES bt
     REQUIRES Fusion
     REQUIRES icm42688P
-    REQUIRES ESP32Servo
     REQUIRES qmc5883l
 )
 

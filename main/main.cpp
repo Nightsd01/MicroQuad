@@ -8,8 +8,6 @@
 #include <Wire.h>
 #include <string>
 
-#include <ESP32Servo.h>
-
 // Magnetometer
 #include <DFRobot_QMC5883.h>
 
@@ -24,25 +22,23 @@
 #include "soc/timer_group_reg.h"
 #include "IMU.h"
 #include "BLEController.h"
+#include "ElectronicSpeedController.h"
 
 #include <esp_partition.h>
 #include "led_controller.h"
 #include <Fusion.h>
 
+static std::vector<ElectronicSpeedController> _speedControllers;
+
 // static bool _enableEmergencyMode = false;
 
 // LED Setup
-// micro whoop
 #define LED_DATA_PIN GPIO_NUM_38
-
-// mini quad
-// #define LED_DATA_PIN GPIO_NUM_14
 
 LEDController ledController(LED_DATA_PIN);
 
 #define NUM_MOTORS 4
 const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
-Servo motors[NUM_MOTORS];
 
 #define TELEM_DELIMITER ","
 #define TELEM_UPDATE_INTERVAL_MILLIS 100
@@ -118,14 +114,22 @@ static void updateArmStatus(void) {
   ledController.showRGB(_armed ? 255 : 0, _armed ? 0 : 255, 0);
   if (_armed && !_completedFirstArm) {
     LOG_INFO("Setting up motor outputs");
-    completedFirstArm = true;
-    
     for (int i = 0; i < NUM_MOTORS; i++) {
-      motors[i].attach(motorPins[i], 1000, 2000);
-      motors[i].writeMicroseconds(1000);
+      esp_err_t err = NULL;
+      ElectronicSpeedController controller = ElectronicSpeedController(
+        motorPins[i] /* pin */,
+        i /* channel */, 
+        &err /* error */
+      );
+      if (err != ESP_OK) {
+        LOG_ERROR("Failed to initialize motor %i", i);
+        break;
+      }
+      _speedControllers.push_back(controller);
     }
   }
 
+  _completedFirstArm = _speedControllers.size() == NUM_MOTORS;
 }
 
 QuadcopterController *controller;
@@ -245,11 +249,6 @@ void setup() {
     const unsigned long initializationTime = millis();
     Serial.begin(115200);
     LOG_INFO("BEGAN APP");
-  
-    ESP32PWM::allocateTimer(0);
-    ESP32PWM::allocateTimer(1);
-    ESP32PWM::allocateTimer(2);
-    ESP32PWM::allocateTimer(3);
 
     helper = new DebugHelper();
 
@@ -415,10 +414,10 @@ void updateMotors(motor_outputs_t outputs) {
     return;
   }
   for (int i = 0; i < NUM_MOTORS; i++) {
-    if (!armed) {
-      motors[i].writeMicroseconds(1000);
+    if (!_armed) {
+      _speedControllers[i].setMicrosecondsPulses(1000);
     } else {
-      motors[i].writeMicroseconds(outputs[i]);
+      _speedControllers[i].setMicrosecondsPulses(outputs[i]);
     }
   }
 }
@@ -471,7 +470,7 @@ void loop() {
   updateClientTelemetryIfNeeded(batteryVoltage);
   helper->voltage = batteryVoltage;
 
-  if (!startMonitoringPid && throttleValue > 20.0f) {
+  if (!startMonitoringPid && _throttleValue > 20.0f) {
     startMonitoringPid = true;
     startedMonitoringTimestamp = timestamp;
   }
@@ -513,12 +512,12 @@ void loop() {
 
     controller_values_t controllerValues = {
       .leftStickInput = {
-        .x = yawValue,
-        .y = throttleValue
+        .x = _yawValue,
+        .y = _throttleValue
       },
       .rightStickInput = {
-        .x = rollValue,
-        .y = pitchValue
+        .x = _rollValue,
+        .y = _pitchValue
       }
     };
 
