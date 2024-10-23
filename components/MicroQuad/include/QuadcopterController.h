@@ -10,6 +10,12 @@
 
 #define THROTTLE_MIN 1000.0f
 #define THROTTLE_MAX 2000.0f
+#define MAX_YAW_RATE_DEG_PER_SEC 50.0f
+#define MAX_PITCH_ROLL_ANGLE_DEGREES 40.0f
+
+// Defines the range of the controller inputs starting from 0.0f
+#define INPUT_MAX_CONTROLLER_INPUT 255.0f
+#define NUM_MOTORS 4
 
 typedef double imu_values_t[3];
 

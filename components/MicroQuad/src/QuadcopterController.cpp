@@ -9,7 +9,7 @@
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
-
+#define DEG_TO_RAD(x) (x * (M_PI / 180.0))
 /*
 
     3       1
@@ -36,8 +36,11 @@ QuadcopterController::QuadcopterController(
 
 static unsigned long lastUpdateMillis = 0;
 
-static float _initialYaw = 0.0f;
-
+// TODO: {bradhesse} Convert whole codebase purely to use radians and not degrees
+// It is really poor practice to use one unit of measurement (degrees) in some parts 
+// of the codebase and another (radians) in other parts, this should be consistent throughout
+// the codebase to avoid unit errors. However for debugging I understand degrees more intuitively, 
+// so I will leave this for now
 motor_outputs_t QuadcopterController::calculateOutputs(
     imu_output_t imuValues,
     controller_values_t controllerValues,
@@ -47,22 +50,35 @@ motor_outputs_t QuadcopterController::calculateOutputs(
 {
     const double throttle = (double)controllerValues.leftStickInput.y; // 0.0 to 255.0
 
-    if (_initialYaw == 0.0f) {
-        _initialYaw = imuValues.accelOutput[0];
+    // Gives us a value between -(INPUT_MAX_CONTROLLER_INPUT/2) and (INPUT_MAX_CONTROLLER_INPUT/2)
+    const double desiredYawDegreesPerSecChange = controllerValues.leftStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
+    double desiredYawDegrees = imuValues.accelOutput[0] + desiredYawDegreesPerSecChange;
+    if (desiredYawDegrees > 360.0f) {
+        desiredYawDegrees -= 360.0f;
+    } else if (desiredYawDegrees < 0.0f) {
+        desiredYawDegrees += 360.0f;
     }
 
+    const double desiredPitchDelta = (controllerValues.rightStickInput.y - (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) / (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
+    const double desiredRollDelta = (controllerValues.rightStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) / (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
+    const double desiredPitchAngleDegrees = MAX_PITCH_ROLL_ANGLE_DEGREES * desiredPitchDelta;
+    const double desiredRollAngleDegrees = MAX_PITCH_ROLL_ANGLE_DEGREES * desiredRollDelta;
+    
+    // Desired yaw/pitch/roll angles in degrees
+    const double desiredAnglesDegrees[3] = {desiredYawDegrees, desiredPitchAngleDegrees, desiredRollAngleDegrees};
+    
     // x, y, and z
     // for the accelerometer, at rest, Z = 1 because of gravity vector
     float angleControllerOutputs[3];
     float rateControllerOutputs[3];
+    const double timeSeconds = (double)timeMicros / 1000000.0f;
     for (int i = 0; i < 3; i++) {
         // Calculate the angle controller result, which is the desired yaw/pitch/roll rate
         // We then feed this into the rate controller to get the desired motor output
-        // TODO: For now, use initialYaw for desired yaw and 0.0f for pitch and roll
-        angleControllerOutputs[i] = _angleControllers[i]->computeOutput(imuValues.accelOutput[i], i == 0 ? _initialYaw : 0.0f);
+        angleControllerOutputs[i] = _angleControllers[i]->computeOutput(DEG_TO_RAD(imuValues.accelOutput[i]), DEG_TO_RAD(desiredAnglesDegrees[i]), timeSeconds);
 
-        // Calculate the rate controller result, which is the desired motor output
-        rateControllerOutputs[i] = _rateControllers[i]->computeOutput(imuValues.gyroOutput[i], angleControllerOutputs[i]);
+        // Calculate the rate controller result
+        rateControllerOutputs[i] = _rateControllers[i]->computeOutput(DEG_TO_RAD(imuValues.gyroOutput[i]), DEG_TO_RAD(angleControllerOutputs[i]), timeSeconds);
     }
     
     // Axes 1
@@ -72,6 +88,14 @@ motor_outputs_t QuadcopterController::calculateOutputs(
         throttle - rateControllerOutputs[1] - rateControllerOutputs[2] + angleControllerOutputs[0],
         throttle - rateControllerOutputs[1] + rateControllerOutputs[2] - angleControllerOutputs[0]
     };
+
+    for (int i = 0; i < NUM_MOTORS; i++) {
+        // Clamp to 0 to 255
+        motors[i] = MIN(MAX(motors[i], 0), 255);
+
+        // Scale to between THROTTLE_MAX and THROTTLE_MIN
+        motors[i] = (motors[i] / 255.0) * (THROTTLE_MAX - THROTTLE_MIN) + THROTTLE_MIN;
+    }
 
     _previousUpdateMicros = timeMicros;
 

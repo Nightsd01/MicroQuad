@@ -26,15 +26,15 @@ class PIDController
             DebugHelper *helper
         );
 
-        float computeOutput(float current, float set);
+        double computeOutput(double current, double set, double timeSeconds);
 
     private:
         DebugHelper *_helper;
         gains_t _gains;
-        float _error;
-        float _previousError;
-        float _integral;
-        float _derivative;
+        double _previousError;
+        double _integral;
+        double _previousTimeSeconds;
+        bool _firstRun;
 };
 
 #endif

@@ -13,18 +13,21 @@ PIDController::PIDController(
 {
   _gains = gains;
   _helper = helper;
+  _firstRun = true;
 }
 
-float PIDController::computeOutput(float current, float set)
+double PIDController::computeOutput(double current, double set, double timeSeconds)
 {
-  _error = current - set;
+  const double deltaTimeSeconds = _firstRun ? 0.00001f : timeSeconds - _previousTimeSeconds;
+  _firstRun = false;
+  const double error = set - current;
 
-  _integral += _error;
+  _integral += error * deltaTimeSeconds;
   _integral = MIN(_integral, INTEGRAL_MAX);
   _integral = MAX(_integral, -INTEGRAL_MAX);
 
-  _derivative = _error - _previousError;
-  _previousError = _error;
+  const double derivative = (error - _previousError) / deltaTimeSeconds;
+  _previousError = error;
 
-  return (_gains.kP * _error) + (_gains.kI * _integral) + (_gains.kD * _derivative);
+  return (_gains.kP * error) + (_gains.kI * _integral) + (_gains.kD * derivative);
 }

@@ -30,14 +30,11 @@
 
 static std::vector<ElectronicSpeedController> _speedControllers;
 
-// static bool _enableEmergencyMode = false;
-
 // LED Setup
 #define LED_DATA_PIN GPIO_NUM_38
 
 LEDController ledController(LED_DATA_PIN);
 
-#define NUM_MOTORS 4
 const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
 
 #define TELEM_DELIMITER ","
@@ -63,11 +60,6 @@ const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GP
 
 BLEController _bluetoothController;
 
-float _yawValue = 0;
-float _throttleValue = 0;
-float _pitchValue = 127.50f;
-float _rollValue = 127.50f;
-
 bool _armed = false;
 bool previousArmStatus = false;
 
@@ -90,7 +82,7 @@ static bool _completedFirstArm = false;
 
 // When the quadcopter enters into unacceptable orientation for more than 2 measurements, 
 // the drone will cut power to the motors for safety and must be rebooted
-static bool enteredEmergencyMode = false;
+static bool _enteredEmergencyMode = false;
 
 DFRobot_QMC5883 _compass(&Wire, /*I2C addr*/QMC5883_ADDRESS);
 
@@ -140,41 +132,52 @@ static void initController()
   delete controller;
   controller = new QuadcopterController({
     .angleGains = {
-      {
-        .kP = 3.5f,
-        .kI = 0.02f,
+      { // yaw
+        .kP = 3.0f,
+        .kI = 0.005f,
         .kD = 0.0f
       },
-      {
-        .kP = 3.5f,
-        .kI = 0.02f,
-        .kD = 0.25f
+      { // pitch
+        .kP = 4.0f,
+        .kI = 0.01f,
+        .kD = 0.0f
       },
-      {
-        .kP = 3.5f,
-        .kI = 0.02f,
-        .kD = 0.25f
+      { // roll
+        .kP = 4.0f,
+        .kI = 0.01f,
+        .kD = 0.0f
       }
     },
     .rateGains = {
-      {
-        .kP = 0.1f,
-        .kI = 0.01f,
-        .kD = 0.0f
+      { // yaw
+        .kP = 0.7f,
+        .kI = 0.005f,
+        .kD = 0.0001f
       },
-      {
-        .kP = 0.1f,
+      { // pitch
+        .kP = 0.9f,
         .kI = 0.01f,
-        .kD = 0.004f
+        .kD = 0.0001f
       },
-      {
-        .kP = 0.1f,
+      { // roll
+        .kP = 0.9f,
         .kI = 0.01f,
-        .kD = 0.004f
+        .kD = 0.0001f
       }
     }
   }, helper, micros());
 }
+
+static controller_values_t _controllerValues = {
+  .leftStickInput = {
+    .x = INPUT_MAX_CONTROLLER_INPUT / 2.0, 
+    .y = 0.0f
+  },
+  .rightStickInput = {
+    .x = INPUT_MAX_CONTROLLER_INPUT / 2.0,
+    .y = INPUT_MAX_CONTROLLER_INPUT / 2.0
+  }
+};
 
 static FusionEuler _euler;
 static uint64_t _previousMicros = 0;
@@ -238,7 +241,31 @@ static void _receivedIMUUpdate(imu_update_t update)
   // Log to console 10x per second
   if (millis() - _previousLogMillis > 100) {
     const FusionVector earth = FusionAhrsGetEarthAcceleration(&_fusion);
-    printf("%ld, %f, %f, %f, %f, %d, %d, %d, %f, %f, %f, %f, %f, %f, %i, %i, %i, %f\n", millis(), deltaTimeSeconds, _euler.angle.yaw, _euler.angle.pitch, _euler.angle.roll, update.accel_raw_x, update.accel_raw_y, update.accel_raw_z, update.accel_x, update.accel_y, update.accel_z, update.gyro_x, update.gyro_y, update.gyro_z, (int)update.gyro_raw_x, (int)update.gyro_raw_y, (int)update.gyro_raw_z, _magValues.HeadingDegress);
+    LOG_INFO(
+      "%ld, %f, %f, %f, %f, %d, %d, %d, %f, %f, %f, %f, %f, %f, %i, %i, %i, %f, %f, %f, %f, %f\n", 
+      millis(), 
+      deltaTimeSeconds, 
+      _euler.angle.yaw, 
+      _euler.angle.pitch, 
+      _euler.angle.roll, 
+      update.accel_raw_x, 
+      update.accel_raw_y, 
+      update.accel_raw_z, 
+      update.accel_x, 
+      update.accel_y, 
+      update.accel_z, 
+      update.gyro_x, 
+      update.gyro_y, 
+      update.gyro_z, 
+      (int)update.gyro_raw_x, 
+      (int)update.gyro_raw_y, 
+      (int)update.gyro_raw_z, 
+      _magValues.HeadingDegress, 
+      _controllerValues.leftStickInput.x,
+      _controllerValues.leftStickInput.y, 
+      _controllerValues.rightStickInput.x, 
+      _controllerValues.rightStickInput.y
+    );
     _previousLogMillis = millis();
   }
 }
@@ -263,10 +290,16 @@ void setup() {
     LOG_INFO("Initializing bluetooth connection");
 
     _bluetoothController.setControlsUpdateHandler([&](controls_update_t update) {
-      _yawValue = update.yaw;
-      _throttleValue = update.throttle;
-      _pitchValue = update.pitch;
-      _rollValue = update.roll;
+      _controllerValues = {
+        .leftStickInput = {
+          .x = update.yaw,
+          .y = update.throttle
+        },
+        .rightStickInput = {
+          .x = update.pitch,
+          .y = update.roll
+        }
+      };
     });
 
     _bluetoothController.setArmStatusUpdateHandler([&](bool armStatus) {
@@ -470,7 +503,7 @@ void loop() {
   updateClientTelemetryIfNeeded(batteryVoltage);
   helper->voltage = batteryVoltage;
 
-  if (!startMonitoringPid && _throttleValue > 20.0f) {
+  if (!startMonitoringPid && _controllerValues.leftStickInput.y > 20.0f) {
     startMonitoringPid = true;
     startedMonitoringTimestamp = timestamp;
   }
@@ -510,17 +543,6 @@ void loop() {
     return;
   }
 
-    controller_values_t controllerValues = {
-      .leftStickInput = {
-        .x = _yawValue,
-        .y = _throttleValue
-      },
-      .rightStickInput = {
-        .x = _rollValue,
-        .y = _pitchValue
-      }
-    };
-
     // imu_output_t positionValues = {
     //   .yaw = ypr[0] * (180.0f / (M_PI * 2.0)) + 90.0f,
     //   .pitch = ypr[1] * (180.0f / (M_PI * 2.0)),
@@ -532,14 +554,14 @@ void loop() {
       // Check if we need to enter into emergency mode
       if (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f) {
         // The drone has entered into an unacceptable orientation - this kills the motors
-        enteredEmergencyMode = true;
+        _enteredEmergencyMode = true;
         _armed = false;
         updateArmStatus();
         LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.angle.pitch, _euler.angle.roll);
       }
     #endif
 
-    if (enteredEmergencyMode) {
+    if (_enteredEmergencyMode) {
       motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
       updateMotors(motors);
       return;
@@ -558,19 +580,19 @@ void loop() {
     }
 
     static bool beganRun = false;
-    if (!beganRun && _throttleValue < 20.0f) {
+    if (!beganRun && _controllerValues.leftStickInput.y < 20.0f) {
       return;
     } else if (!beganRun) {
       beganRun = true;
     }
 
-    motor_outputs_t outputs = controller->calculateOutputs(_imuValues, controllerValues, micros(), _recordDebugData);
+    motor_outputs_t outputs = controller->calculateOutputs(_imuValues, _controllerValues, micros(), _recordDebugData);
 
     samples++;
     if (millis() - lastPrint > 1000) {
       lastPrint = millis();
       LOG_INFO("%i samples per second", samples);
-      LOG_INFO("Throttle = %f, motors %f, %f, %f, %f", _throttleValue, outputs[0], outputs[1], outputs[2], outputs[3]);
+      LOG_INFO("Throttle = %f, motors %f, %f, %f, %f", _controllerValues.leftStickInput.y, outputs[0], outputs[1], outputs[2], outputs[3]);
       samples = 0;
     }
 
@@ -585,7 +607,7 @@ void loop() {
   //   // Save a diagnostics entry to the CSV file on the SD card
   //   DIAGNOSTICS_SAVE("%d, %.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %lu", _armed, batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, _throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3], xPortGetFreeHeapSize());
 
-    if (_throttleValue < 20) {
+    if (_controllerValues.leftStickInput.y < 20) {
       motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
       updateMotors(motors);
     } else {
