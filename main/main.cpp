@@ -2,7 +2,6 @@
 
 #include <QuadcopterController.h>
 #include <DebugHelper.h>
-#include <ParameterProvider.h>
 #include <RegisteredParameters.h>
 
 #include <Wire.h>
