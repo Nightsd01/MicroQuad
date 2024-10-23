@@ -25,13 +25,16 @@ LEDController::LEDController(int dataPin)
     _lowEndPulseCycles = (uint32_t)((0.85f * cyclesPerMicrosecond) / 10);
 }
 
-void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
-{
-    const uint32_t pin = _dataPin;
-    const uint32_t highStartPulseCycles = _highStartPulseCycles;
-    const uint32_t highEndPulseCycles = _highEndPulseCycles;
-    const uint32_t lowStartPulseCycles = _lowStartPulseCycles;
-    const uint32_t lowEndPulseCycles = _lowEndPulseCycles;
+static inline __attribute__((always_inline))
+void IRAM_ATTR _writeColor(
+    uint8_t red, 
+    uint8_t green, 
+    uint8_t blue, 
+    uint32_t highStartPulseCycles, 
+    uint32_t highEndPulseCycles, 
+    uint32_t lowStartPulseCycles, 
+    uint32_t lowEndPulseCycles, uint8_t pin
+) {
     const uint8_t bytes[3] = {green, red, blue};
     portDISABLE_INTERRUPTS();
     for (int i = 0; i < 3; i++) {
@@ -51,4 +54,23 @@ void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
     }
     GPIO.out1_w1tc.val = ((uint32_t)1 << pin);
     portENABLE_INTERRUPTS();
+}
+
+void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
+{
+    const uint32_t pin = _dataPin;
+    const uint32_t highStartPulseCycles = _highStartPulseCycles;
+    const uint32_t highEndPulseCycles = _highEndPulseCycles;
+    const uint32_t lowStartPulseCycles = _lowStartPulseCycles;
+    const uint32_t lowEndPulseCycles = _lowEndPulseCycles;
+    _writeColor(
+        red, 
+        green, 
+        blue,
+        highStartPulseCycles, 
+        highEndPulseCycles, 
+        lowStartPulseCycles, 
+        lowEndPulseCycles, 
+        pin
+    );
 }
