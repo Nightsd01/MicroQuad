@@ -1,6 +1,8 @@
 # MicroQuad
-## An ESP32 based micro-quadcopter project [Note: Not Flying Yet!]
+## An ESP32 based micro-quadcopter project [Under Development]
 This repo is based on the ESP32 architecture to implement a custom Bluetooth controlled 'smart' quadcopter, with a custom PCB design, using the BetaFPV 65S frame + brushless motors, it is in the early stages. 
+
+Ultimately, this project will be broken up into components that will make it easier for open-source developers to build their own quadcopter designs. It will enable sensor fusion for common IMU chips (like the MPU6000, MPU6050, ICM62XX, as well as magnetometers and GPS units) as well as magnetometers and other sensors to allow for easy customization.
 
 ### Features
 - ESP32-S3 SoC
@@ -19,7 +21,7 @@ This repo is based on the ESP32 architecture to implement a custom Bluetooth con
 - Run `idf.py flash` to flash to a connected ESP32
 
 ### To Debug in VS Code 
-- Launch OpenOCD either through VS code (currently not working for me) or via the command `idf.py openocd`
+- Launch OpenOCD using the command `idf.py openocd`
 - In VS Code's debug menu click 'Start Debugging' with the [Eclipse CDT Remote](https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/DEBUGGING.md) target
 
 ### Notes on Hacks
