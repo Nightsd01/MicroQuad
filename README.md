@@ -31,6 +31,7 @@ Ultimately, this project will be broken up into components that will make it eas
 
 ### TODO List
 - [ ] Add iOS controller codebase
+- [ ] Add PCB schematic + gerber files
 - [ ] Update firmware to utilize radians everywhere in the codebase instead of using degrees
 - [ ] Clean up the DebugHelper, there is a lot of now-unncessesary code in there
 - [ ] Break up the codebase in general, for example the core stability logic should be extracted to a different component from the Logger
