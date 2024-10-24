@@ -30,6 +30,7 @@ Ultimately, this project will be broken up into components that will make it eas
 - Also in `settings.json` we are hard coding the device serial port which is even hackier
 
 ### TODO List
+- [ ] Add iOS controller codebase
 - [ ] Update firmware to utilize radians everywhere in the codebase instead of using degrees
 - [ ] Clean up the DebugHelper, there is a lot of now-unncessesary code in there
 - [ ] Break up the codebase in general, for example the core stability logic should be extracted to a different component from the Logger
