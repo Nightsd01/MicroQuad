@@ -2,7 +2,6 @@
 
 #include <QuadcopterController.h>
 #include <DebugHelper.h>
-#include <RegisteredParameters.h>
 
 #include <Wire.h>
 #include <string>
@@ -22,6 +21,7 @@
 #include "IMU.h"
 #include "BLEController.h"
 #include "ESP32Servo.h"
+#include "AsyncController.h"
 
 #include <esp_partition.h>
 #include "led_controller.h"
@@ -100,6 +100,13 @@ static volatile bool _calibrate = false;
 static volatile CalibrationAxis _calibrationAxis = CalibrationAxis::x;
 static volatile int _calibrationValue = 0;
 
+// When we start recording debug data, we want the LED to flash blue
+// for RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS. This lets us align
+// any video recordings with the debug data that we're recording
+#define RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS 200
+static uint64_t _startedRecordingDebugDataTimeMillis = 0;
+static bool _recordDebugDataLEDStateChanged = false;
+
 
 static void updateArmStatus(void) {
   ledController.showRGB(_armed ? 255 : 0, _armed ? 0 : 255, 0);
@@ -123,36 +130,36 @@ static void initController()
   controller = new QuadcopterController({
     .angleGains = {
       { // yaw
-        .kP = 3.0f,
-        .kI = 0.005f,
+        .kP = 9.0f,
+        .kI = 0.01f,
         .kD = 0.0f
       },
       { // pitch
-        .kP = 4.0f,
-        .kI = 0.01f,
+        .kP = 8.0f,
+        .kI = 0.05f,
         .kD = 0.0f
       },
       { // roll
-        .kP = 4.0f,
-        .kI = 0.01f,
+        .kP = 8.0f,
+        .kI = 0.05f,
         .kD = 0.0f
       }
     },
     .rateGains = {
       { // yaw
-        .kP = 0.7f,
-        .kI = 0.005f,
-        .kD = 0.0001f
+        .kP = 3.1f,
+        .kI = 0.01f,
+        .kD = 0.0005f
       },
       { // pitch
-        .kP = 0.9f,
-        .kI = 0.01f,
-        .kD = 0.0001f
+        .kP = 2.7f,
+        .kI = 0.07f,
+        .kD = 0.0008f
       },
       { // roll
-        .kP = 0.9f,
-        .kI = 0.01f,
-        .kD = 0.0001f
+        .kP = 2.7f,
+        .kI = 0.07f,
+        .kD = 0.0008f
       }
     }
   }, helper, micros());
@@ -229,35 +236,35 @@ static void _receivedIMUUpdate(imu_update_t update)
   helper->gyroRaw[2] = gyroscope.axis.z;
 
   // Log to console 10x per second
-  if (millis() - _previousLogMillis > 100) {
-    const FusionVector earth = FusionAhrsGetEarthAcceleration(&_fusion);
-    LOG_INFO(
-      "%ld, %f, %f, %f, %f, %d, %d, %d, %f, %f, %f, %f, %f, %f, %i, %i, %i, %f, %f, %f, %f, %f\n", 
-      millis(), 
-      deltaTimeSeconds, 
-      _euler.angle.yaw, 
-      _euler.angle.pitch, 
-      _euler.angle.roll, 
-      update.accel_raw_x, 
-      update.accel_raw_y, 
-      update.accel_raw_z, 
-      update.accel_x, 
-      update.accel_y, 
-      update.accel_z, 
-      update.gyro_x, 
-      update.gyro_y, 
-      update.gyro_z, 
-      (int)update.gyro_raw_x, 
-      (int)update.gyro_raw_y, 
-      (int)update.gyro_raw_z, 
-      _magValues.HeadingDegress, 
-      _controllerValues.leftStickInput.x,
-      _controllerValues.leftStickInput.y, 
-      _controllerValues.rightStickInput.x, 
-      _controllerValues.rightStickInput.y
-    );
-    _previousLogMillis = millis();
-  }
+  // if (millis() - _previousLogMillis > 100) {
+  //   const FusionVector earth = FusionAhrsGetEarthAcceleration(&_fusion);
+  //   LOG_INFO(
+  //     "%ld, %f, %f, %f, %f, %d, %d, %d, %f, %f, %f, %f, %f, %f, %i, %i, %i, %f, %f, %f, %f, %f\n", 
+  //     millis(), 
+  //     deltaTimeSeconds, 
+  //     _euler.angle.yaw, 
+  //     _euler.angle.pitch, 
+  //     _euler.angle.roll, 
+  //     update.accel_raw_x, 
+  //     update.accel_raw_y, 
+  //     update.accel_raw_z, 
+  //     update.accel_x, 
+  //     update.accel_y, 
+  //     update.accel_z, 
+  //     update.gyro_x, 
+  //     update.gyro_y, 
+  //     update.gyro_z, 
+  //     (int)update.gyro_raw_x, 
+  //     (int)update.gyro_raw_y, 
+  //     (int)update.gyro_raw_z, 
+  //     _magValues.HeadingDegress, 
+  //     _controllerValues.leftStickInput.x,
+  //     _controllerValues.leftStickInput.y, 
+  //     _controllerValues.rightStickInput.x, 
+  //     _controllerValues.rightStickInput.y
+  //   );
+  //   _previousLogMillis = millis();
+  // }
 }
 
 // Initial setup
@@ -319,8 +326,12 @@ void setup() {
     });
 
     _bluetoothController.setDebugDataUpdateHandler([&](debug_recording_update_t debugDataUpdate) {
+      AsyncController::main.execute([debugDataUpdate]() {
+        LOG_INFO("Received debug data update: sendDebugData = %d, recordDebugData = %d", debugDataUpdate.sendDebugData, debugDataUpdate.recordDebugData);
+      });
       _sendDebugData = debugDataUpdate.sendDebugData;
       _recordDebugData = debugDataUpdate.recordDebugData;
+      _startedRecordingDebugDataTimeMillis = millis();
     });
 
     // Setup BLE Server
@@ -454,13 +465,12 @@ unsigned long startedMonitoringTimestamp = 0;
 static int samples = 0;
 static int lastPrint = 0;
 
-#define NUM_SAMPLES_PER_AVG 40
-
 void loop() {
   TIMERG0.wdtwprotect.val=0x50D83AA1;
   TIMERG0.wdtfeed.val=1;
   TIMERG0.wdtwprotect.val=0;
-  unsigned long timestamp = micros();
+  uint64_t timestamp = micros();
+  uint64_t timestampMillis = millis();
   if (_bluetoothController.isProcessingBluetoothTransaction) {
     return;
   }
@@ -487,10 +497,10 @@ void loop() {
     initController();
   }
 
-  if (millis() - _lastMagnetometerRead > MAG_UPDATE_RATE_MILLIS) {
+  if (timestampMillis - _lastMagnetometerRead > MAG_UPDATE_RATE_MILLIS) {
     _magValues = _compass.readRaw();
     _compass.getHeadingDegrees();
-    _lastMagnetometerRead = millis();
+    _lastMagnetometerRead = timestampMillis;
   }
   
   const float batteryVoltage = batteryLevel();
@@ -527,97 +537,90 @@ void loop() {
     return;
   }
   _receivedImuUpdate = false;
-  
-  //   // need to flip pitch & roll
-  //   const float rollVal = ypr[2];
-  //   ypr[2] = ypr[1] * -1; // need to flip roll
-  //   ypr[1] = rollVal;
 
   if (!startMonitoringPid) {
     return;
   }
 
-    // imu_output_t positionValues = {
-    //   .yaw = ypr[0] * (180.0f / (M_PI * 2.0)) + 90.0f,
-    //   .pitch = ypr[1] * (180.0f / (M_PI * 2.0)),
-    //   .roll = ypr[2] * (180.0f / (M_PI * 2.0))
-    // };
+  #ifdef ENABLE_EMERGENCY_MODE 
+    // Check if we need to enter into emergency mode
+    if (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f) {
+      // The drone has entered into an unacceptable orientation - this kills the motors
+      _enteredEmergencyMode = true;
+      _armed = false;
+      updateArmStatus();
+      LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.angle.pitch, _euler.angle.roll);
+    }
+  #endif
 
-  //   // TODO: Replace with parameter provider check instead of a compiler flag
-    #ifdef ENABLE_EMERGENCY_MODE 
-      // Check if we need to enter into emergency mode
-      if (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f) {
-        // The drone has entered into an unacceptable orientation - this kills the motors
-        _enteredEmergencyMode = true;
-        _armed = false;
-        updateArmStatus();
-        LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.angle.pitch, _euler.angle.roll);
-      }
-    #endif
+  if (_enteredEmergencyMode) {
+    motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
+    updateMotors(motors);
+    return;
+  }
 
-    if (_enteredEmergencyMode) {
-      motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
+  if (_motorDebugEnabled) {
+      motor_outputs_t motors = {
+        _motorDebugValues[0],
+        _motorDebugValues[1],
+        _motorDebugValues[2],
+        _motorDebugValues[3]
+      };
       updateMotors(motors);
       return;
+  }
+
+  static bool beganRun = false;
+  if (!beganRun && _controllerValues.leftStickInput.y < 20.0f) {
+    return;
+  } else if (!beganRun) {
+    beganRun = true;
+  }
+
+  motor_outputs_t outputs = controller->calculateOutputs(_imuValues, _controllerValues, micros(), _recordDebugData);
+
+  samples++;
+  if (timestampMillis - lastPrint > 1000) {
+    lastPrint = timestampMillis;
+    LOG_INFO("%i samples per second", samples);
+    LOG_INFO("Throttle = %f, motors %f, %f, %f, %f", _controllerValues.leftStickInput.y, outputs[0], outputs[1], outputs[2], outputs[3]);
+    samples = 0;
+  }
+
+  previousMotorOutputs = outputs;
+
+  if (_controllerValues.leftStickInput.y < 20) {
+    motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
+    updateMotors(motors);
+  } else {
+    // Update motors only at 300hz
+    static unsigned long lastMotorUpdateMillis = 0;
+    if (timestampMillis - lastMotorUpdateMillis >= 3) {
+      lastMotorUpdateMillis = timestampMillis;
+      updateMotors(outputs);
     }
+  }
+  setMotorOutputs = true;
 
+  static unsigned long lastRecordMillis = timestampMillis;
+  if (_recordDebugData && timestampMillis - lastRecordMillis >= 5) {
+      helper->saveValues(timestampMillis);
+      lastRecordMillis = timestampMillis;
+  }
 
-    if (_motorDebugEnabled) {
-        motor_outputs_t motors = {
-          _motorDebugValues[0],
-          _motorDebugValues[1],
-          _motorDebugValues[2],
-          _motorDebugValues[3]
-        };
-        updateMotors(motors);
-        return;
-    }
-
-    static bool beganRun = false;
-    if (!beganRun && _controllerValues.leftStickInput.y < 20.0f) {
-      return;
-    } else if (!beganRun) {
-      beganRun = true;
-    }
-
-    motor_outputs_t outputs = controller->calculateOutputs(_imuValues, _controllerValues, micros(), _recordDebugData);
-
-    samples++;
-    if (millis() - lastPrint > 1000) {
-      lastPrint = millis();
-      LOG_INFO("%i samples per second", samples);
-      LOG_INFO("Throttle = %f, motors %f, %f, %f, %f", _controllerValues.leftStickInput.y, outputs[0], outputs[1], outputs[2], outputs[3]);
-      samples = 0;
-    }
-
-    previousMotorOutputs = outputs;
-
-  //   static bool savedCSVHeader = false;
-  //   if (!savedCSVHeader) {
-  //     savedCSVHeader = true;
-  //     DIAGNOSTICS_SAVE("_armed, voltage, time, yaw, pitch, roll, throttle, mot1, mot2, mot3, mot4, memory usage (bytes)");
-  //   }
-
-  //   // Save a diagnostics entry to the CSV file on the SD card
-  //   DIAGNOSTICS_SAVE("%d, %.03f, %lu, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f, %lu", _armed, batteryVoltage, millis(), positionValues.yaw, positionValues.pitch, positionValues.roll, _throttleValue, outputs.values[0], outputs.values[1], outputs.values[2], outputs.values[3], xPortGetFreeHeapSize());
-
-    if (_controllerValues.leftStickInput.y < 20) {
-      motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
-      updateMotors(motors);
-    } else {
-      // Update motors only at 300hz
-      static unsigned long lastMotorUpdateMillis = 0;
-      if (millis() - lastMotorUpdateMillis >= 3) {
-        lastMotorUpdateMillis = millis();
-        updateMotors(outputs);
-      }
-    }
-    setMotorOutputs = true;
-
-    static unsigned long lastRecordMillis = millis();
-    if (_recordDebugData && millis() - lastRecordMillis >= 5) {
-        helper->saveValues(millis());
-        lastRecordMillis = millis();
-    }
-  // }
+  if (_recordDebugData 
+      && !_recordDebugDataLEDStateChanged
+      && timestampMillis - _startedRecordingDebugDataTimeMillis < RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS) {
+    // Switch LED to emit blue light
+    _recordDebugDataLEDStateChanged = true;
+    ledController.showRGB(0, 0, 254);
+    LOG_INFO("Flashing LED blue");
+  } else if (_recordDebugData 
+             && _recordDebugDataLEDStateChanged 
+             && timestampMillis - _startedRecordingDebugDataTimeMillis > RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS) {
+    // Switch LED back to emit red light
+    ledController.showRGB(254, 0, 0);
+    _recordDebugDataLEDStateChanged = false;
+    LOG_INFO("Switched LED back to red");
+  }
 }
