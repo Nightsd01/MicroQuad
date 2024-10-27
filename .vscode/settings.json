@@ -17,6 +17,14 @@
         "-c",
         "esp appimage_offset 0x8000"
     ],
+    "[cpp]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools",
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true
+    },
+    "editor.formatOnSave": true,
+    "C_Cpp.clang_format_style": "file",
+    "C_Cpp.clang_format_fallbackStyle": "Google",
     "files.associations": {
         "array": "cpp",
         "deque": "cpp",

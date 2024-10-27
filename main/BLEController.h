@@ -1,14 +1,15 @@
 #ifndef BLECONTROLLER_H
 #define BLECONTROLLER_H
 
-#include <functional>
-#include <vector>
-#include <string>
 #include <Arduino.h>
 
-#include "BLEServer.h"
-#include "BLEDevice.h"
+#include <functional>
+#include <string>
+#include <vector>
+
 #include "BLECharacteristic.h"
+#include "BLEDevice.h"
+#include "BLEServer.h"
 #include "IMU.h"
 
 // Bluetooth constants
@@ -29,35 +30,31 @@
 #define DEVICE_MANUFACTURER "BradHesse"
 #define DEVICE_NAME "MicroQuad"
 
-struct controls_update_t
-{
+struct controls_update_t {
   float throttle;
   float yaw;
   float pitch;
   float roll;
 };
 
-struct motor_debug_update_t
-{
+struct motor_debug_update_t {
   int motorNum;
   float motorWriteValue;
 };
 
-struct calibration_update_t
-{
+struct calibration_update_t {
   CalibrationAxis axis;
   int calibrationValue;
 };
 
-struct debug_recording_update_t
-{
+struct debug_recording_update_t {
   bool recordDebugData;
   bool sendDebugData;
 };
 
-class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbacks
-{
-public:
+class BLEController : public BLEServerCallbacks,
+                      public BLECharacteristicCallbacks {
+ public:
   BLEController();
   void beginBluetooth(void);
   bool isConnected;
@@ -66,23 +63,30 @@ public:
   void sendTelemetryUpdate(String packet);
 
   // update handlers
-  void setControlsUpdateHandler(std::function<void(controls_update_t)> controlsUpdateHandler);
-  void setArmStatusUpdateHandler(std::function<void(bool)> armStatusUpdateHandler);
+  void setControlsUpdateHandler(
+      std::function<void(controls_update_t)> controlsUpdateHandler);
+  void setArmStatusUpdateHandler(
+      std::function<void(bool)> armStatusUpdateHandler);
   void setResetStatusUpdateHandler(std::function<void(void)> resetHandler);
-  void setMotorDebugEnabledUpdateHandler(std::function<void(bool)> motorDebugEnabledUpdateHandler);
-  void setMotorDebugUpdateHandler(std::function<void(motor_debug_update_t)> motorDebugUpdateHandler);
-  void setCalibrationUpdateHandler(std::function<void(calibration_update_t)> calibrationUpdateHandler);
-  void setDebugDataUpdateHandler(std::function<void(debug_recording_update_t)> debugDataUpdateHandler);
+  void setMotorDebugEnabledUpdateHandler(
+      std::function<void(bool)> motorDebugEnabledUpdateHandler);
+  void setMotorDebugUpdateHandler(
+      std::function<void(motor_debug_update_t)> motorDebugUpdateHandler);
+  void setCalibrationUpdateHandler(
+      std::function<void(calibration_update_t)> calibrationUpdateHandler);
+  void setDebugDataUpdateHandler(
+      std::function<void(debug_recording_update_t)> debugDataUpdateHandler);
 
   // Override methods from BLEServerCallbacks
   void onConnect(BLEServer *pServer) override;
   void onDisconnect(BLEServer *pServer) override;
-  void onMtuChanged(BLEServer *pServer, esp_ble_gatts_cb_param_t *param) override;
+  void onMtuChanged(BLEServer *pServer,
+                    esp_ble_gatts_cb_param_t *param) override;
 
   // Override methods from BLECharacteristicCallbacks
   void onWrite(BLECharacteristic *pCharacteristic) override;
 
-private:
+ private:
   BLEServer *_server;
   BLEService *_service;
   BLECharacteristic *_controlCharacteristic;

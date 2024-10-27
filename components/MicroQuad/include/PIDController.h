@@ -8,36 +8,27 @@
 #define ERROR_LEN 11
 #define INTEGRAL_MAX 10.0f
 
-enum PIDAxis
-{
-    yaw,
-    pitch,
-    roll
-};
+enum PIDAxis { yaw, pitch, roll };
 
-typedef struct gains_t
-{
-    double kP; // Kp
-    double kI; // Ki
-    double kD; // Kd
+typedef struct gains_t {
+  double kP;  // Kp
+  double kI;  // Ki
+  double kD;  // Kd
 } gains_t;
 
-class PIDController
-{
-public:
-    PIDController(
-        gains_t gains,
-        DebugHelper *helper);
+class PIDController {
+ public:
+  PIDController(gains_t gains, DebugHelper *helper);
 
-    double computeOutput(double current, double set, double timeSeconds);
+  double computeOutput(double current, double set, double timeSeconds);
 
-private:
-    DebugHelper *_helper;
-    gains_t _gains;
-    double _previousError;
-    double _integral;
-    double _previousTimeSeconds;
-    bool _firstRun;
+ private:
+  DebugHelper *_helper;
+  gains_t _gains;
+  double _previousError;
+  double _integral;
+  double _previousTimeSeconds;
+  bool _firstRun;
 };
 
 #endif

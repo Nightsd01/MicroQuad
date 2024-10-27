@@ -1,15 +1,14 @@
 #ifndef DEBUGHELPER_H
 #define DEBUGHELPER_H
 
-#include <vector>
 #include <string>
+#include <vector>
 
 #define DEBUG_PACKET_SIZE 124
 #define INITIAL_DATA_SIZE 1024 * 96
 
-class DebugHelper
-{
-public:
+class DebugHelper {
+ public:
   DebugHelper();
   float ypr[3];
   float accelRaw[3];
@@ -31,7 +30,7 @@ public:
   int64_t totalDataSize(void);
   uint8_t *data;
 
-private:
+ private:
   uint64_t _currentSamples;
   int64_t _currentByteIndex;
   int64_t _currentDataSize;
