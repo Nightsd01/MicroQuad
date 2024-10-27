@@ -21,13 +21,13 @@
 #include "soc/timer_group_reg.h"
 #include "IMU.h"
 #include "BLEController.h"
-#include "ElectronicSpeedController.h"
+#include "ESP32Servo.h"
 
 #include <esp_partition.h>
 #include "led_controller.h"
 #include <Fusion.h>
 
-static std::vector<ElectronicSpeedController> _speedControllers;
+static Servo _speedControllers[NUM_MOTORS];
 
 // LED Setup
 #define LED_DATA_PIN GPIO_NUM_38
@@ -106,21 +106,12 @@ static void updateArmStatus(void) {
   if (_armed && !_completedFirstArm) {
     LOG_INFO("Setting up motor outputs");
     for (int i = 0; i < NUM_MOTORS; i++) {
-      esp_err_t err = NULL;
-      ElectronicSpeedController controller = ElectronicSpeedController(
-        motorPins[i] /* pin */,
-        i /* channel */, 
-        &err /* error */
-      );
-      if (err != ESP_OK) {
-        LOG_ERROR("Failed to initialize motor %i", i);
-        break;
-      }
-      _speedControllers.push_back(controller);
+      LOG_INFO("Attaching motor %i to pin %i", i, motorPins[i]);
+      _speedControllers[i].attach(motorPins[i], 1000, 2000);
+      _speedControllers[i].write(92);
     }
+    _completedFirstArm = true;
   }
-
-  _completedFirstArm = _speedControllers.size() == NUM_MOTORS;
 }
 
 QuadcopterController *controller;
@@ -271,6 +262,10 @@ static void _receivedIMUUpdate(imu_update_t update)
 
 // Initial setup
 void setup() {
+    ESP32PWM::allocateTimer(0);
+    ESP32PWM::allocateTimer(1);
+    ESP32PWM::allocateTimer(2);
+    ESP32PWM::allocateTimer(3);
     esp_partition_type_t type;
     const unsigned long initializationTime = millis();
     Serial.begin(115200);
@@ -447,9 +442,9 @@ void updateMotors(motor_outputs_t outputs) {
   }
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!_armed) {
-      _speedControllers[i].setMicrosecondsPulses(1000);
+      _speedControllers[i].writeMicroseconds(1000);
     } else {
-      _speedControllers[i].setMicrosecondsPulses(outputs[i]);
+      _speedControllers[i].writeMicroseconds(outputs[i]);
     }
   }
 }
