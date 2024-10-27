@@ -12,9 +12,9 @@
 #define DEG_TO_RAD(x) (x * (M_PI / 180.0))
 /*
 
-    3       1
-
     2       4
+
+    3       1
 
 */
 
@@ -51,13 +51,8 @@ motor_outputs_t QuadcopterController::calculateOutputs(
     const double throttle = (double)controllerValues.leftStickInput.y; // 0.0 to 255.0
 
     // Gives us a value between -(INPUT_MAX_CONTROLLER_INPUT/2) and (INPUT_MAX_CONTROLLER_INPUT/2)
-    const double desiredYawDegreesPerSecChange = controllerValues.leftStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
-    double desiredYawDegrees = imuValues.accelOutput[0] + desiredYawDegreesPerSecChange;
-    if (desiredYawDegrees > 360.0f) {
-        desiredYawDegrees -= 360.0f;
-    } else if (desiredYawDegrees < 0.0f) {
-        desiredYawDegrees += 360.0f;
-    }
+    const double desiredYawDegreesDelta = controllerValues.leftStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
+    const double desiredYawDegrees = imuValues.accelOutput[0] + desiredYawDegreesDelta;
 
     const double desiredPitchDelta = (controllerValues.rightStickInput.y - (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) / (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
     const double desiredRollDelta = (controllerValues.rightStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) / (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
@@ -78,15 +73,15 @@ motor_outputs_t QuadcopterController::calculateOutputs(
         angleControllerOutputs[i] = _angleControllers[i]->computeOutput(DEG_TO_RAD(imuValues.accelOutput[i]), DEG_TO_RAD(desiredAnglesDegrees[i]), timeSeconds);
 
         // Calculate the rate controller result
-        rateControllerOutputs[i] = _rateControllers[i]->computeOutput(DEG_TO_RAD(imuValues.gyroOutput[i]), DEG_TO_RAD(angleControllerOutputs[i]), timeSeconds);
+        rateControllerOutputs[i] = _rateControllers[i]->computeOutput(DEG_TO_RAD(imuValues.gyroOutput[i]), angleControllerOutputs[i], timeSeconds);
     }
     
     // Axes 1
     motor_outputs_t motors = {
-        throttle + rateControllerOutputs[1] + rateControllerOutputs[2] + angleControllerOutputs[0],
-        throttle + rateControllerOutputs[1] - rateControllerOutputs[2] - angleControllerOutputs[0],
-        throttle - rateControllerOutputs[1] - rateControllerOutputs[2] + angleControllerOutputs[0],
-        throttle - rateControllerOutputs[1] + rateControllerOutputs[2] - angleControllerOutputs[0]
+        throttle - rateControllerOutputs[1] + rateControllerOutputs[2] - rateControllerOutputs[0],
+        throttle + rateControllerOutputs[1] - rateControllerOutputs[2] - rateControllerOutputs[0],
+        throttle - rateControllerOutputs[1] - rateControllerOutputs[2] + rateControllerOutputs[0],
+        throttle + rateControllerOutputs[1] + rateControllerOutputs[2] + rateControllerOutputs[0]
     };
 
     for (int i = 0; i < NUM_MOTORS; i++) {
