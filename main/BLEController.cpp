@@ -8,6 +8,7 @@
 
 #include <Logger.h>
 #include <DebugHelper.h>
+#include <AsyncController.h>
 
 BLEController::BLEController() 
 {
@@ -105,13 +106,13 @@ void BLEController::beginBluetooth(void)
   advertisement->setAdvertisementData(adv);
   advertisement->start();
 
-  LOG_INFO("BLE setup complete");
+  LOG_INFO_ASYNC_ON_MAIN("BLE setup complete");
 
   _service->start();
 }
 void BLEController::onConnect(BLEServer *server)
 {
-  LOG_INFO("Connected");
+  LOG_INFO_ASYNC_ON_MAIN("Connected");
   isConnected = true;
   // Set the MTU size
   esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
@@ -122,7 +123,7 @@ void BLEController::onConnect(BLEServer *server)
 
 void BLEController::onDisconnect(BLEServer *server)
 {
-  LOG_INFO("Disconnected");
+  LOG_INFO_ASYNC_ON_MAIN("Disconnected");
   isConnected = false;
   // Set the MTU size
   esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
@@ -137,7 +138,7 @@ void BLEController::onDisconnect(BLEServer *server)
 
 void BLEController::onMtuChanged(BLEServer* pServer, esp_ble_gatts_cb_param_t* param)
 {
-  LOG_INFO("MTU changed to: %i", param->mtu);
+  LOG_INFO_ASYNC_ON_MAIN("MTU changed to: %i", param->mtu);
 }
 
 void BLEController::onWrite(BLECharacteristic *characteristic)
@@ -180,7 +181,7 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
       _armStatusUpdateHandler(armed);
     }
   } else if (characteristic->getUUID().equals(_resetCharacteristic->getUUID())) {
-    // LOG_INFO("SET RESET FLAG");
+    LOG_INFO_ASYNC_ON_MAIN("SET RESET FLAG");
     if (_resetStatusUpdateHandler) {
       _resetStatusUpdateHandler();
     }
@@ -188,12 +189,12 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
     std::string value = characteristic->getValue();
     std::vector<std::string> components = _split(value, ":");
     if (components.size() == 0) {
-      // LOG_ERROR("ERROR: Incorrect motor debug packet (1)");
+      LOG_ERROR_ASYNC_ON_MAIN("ERROR: Incorrect motor debug packet (1)");
       return;
     }
     if (components[0] == "motordebug_enabled") {
       if (components.size() == 1) {
-        // LOG_ERROR("ERROR: Incorrect motor debug packet (2)");
+        LOG_ERROR_ASYNC_ON_MAIN("ERROR: Incorrect motor debug packet (2)");
         return;
       }
       std::string value = components[1];
@@ -201,16 +202,16 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
       if (_motorDebugEnabledUpdateHandler) {
         _motorDebugEnabledUpdateHandler(motorDebugEnabled);
       }
-      // LOG_INFO("Changing motor debug status to %s", motorDebugEnabled ? "enabled" : "disabled");
+      LOG_INFO_ASYNC_ON_MAIN("Changing motor debug status to %s", motorDebugEnabled ? "enabled" : "disabled");
     } else if (components[0] == "motordebug_value") {
       if (components.size() < 3) {
-        // LOG_ERROR("ERROR: Incorrect motor debug packet (3)");
+        LOG_ERROR_ASYNC_ON_MAIN("ERROR: Incorrect motor debug packet (3)");
         return;
       }
       int motorNumber = atoi(components[1].c_str()) - 1;
       int motorValue = atoi(components[2].c_str());
       double motorWriteValue = ((((double)motorValue) / 255.0f) * 1000.0f) + 1000.0f;
-      // LOG_INFO("Updating motor %i to %f", motorNumber, motorWriteValue);
+      LOG_INFO_ASYNC_ON_MAIN("Updating motor %i to %f", motorNumber, motorWriteValue);
       if (_motorDebugUpdateHandler) {
         const motor_debug_update_t motorDebugUpdate = {
           .motorNum = motorNumber,
@@ -221,7 +222,7 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
         }
       }
     } else {
-      // LOG_ERROR("ERROR: Incorrect motor debug packet (4)");
+      LOG_ERROR_ASYNC_ON_MAIN("ERROR: Incorrect motor debug packet (4)");
       return;
     }
   } else if (characteristic->getUUID().equals(_calibrationCharacteristic->getUUID())) {
@@ -251,15 +252,20 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
       _calibrationUpdateHandler(calibrationUpdate);
     }
   } else if (characteristic->getUUID().equals(_debugCharacteristic->getUUID())) {
-    debug_recording_update_t debugDataUpdate;
-    if (characteristic->getValue() == "request") {
-      // LOG_INFO("Recording debug data transmission");
+    std::string val = characteristic->getValue();
+    LOG_INFO_ASYNC_ON_MAIN("Received debug command: %s", val.c_str());
+    debug_recording_update_t debugDataUpdate = {
+      .recordDebugData = false,
+      .sendDebugData = false
+    };
+    if (val == "request") {
+      LOG_INFO_ASYNC_ON_MAIN("Recording debug data transmission");
       debugDataUpdate.sendDebugData = true;
-    } else if (characteristic->getValue() == "record:1") {
-      // LOG_INFO("Recording debug data start");
+    } else if (val == "record:1") {
+      LOG_INFO_ASYNC_ON_MAIN("Recording debug data start");
       debugDataUpdate.recordDebugData = true;
-    } else if (characteristic->getValue() == "record:0") {
-      // LOG_INFO("Recording debug data stop");
+    } else if (val == "record:0") {
+      LOG_INFO_ASYNC_ON_MAIN("Recording debug data stop");
       debugDataUpdate.recordDebugData = false;
     }
     if (_debugDataUpdateHandler) {
@@ -272,7 +278,7 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
 
 void BLEController::uploadDebugData(uint8_t *data, size_t length)
 {
-  LOG_INFO("Begin debug data upload");
+  LOG_INFO_ASYNC_ON_MAIN("Begin debug data upload");
   int currentByteIndex = 0;
   const int packetSize = 160;
   String firstInfo = String("debug:") + String((int)length);
@@ -292,7 +298,7 @@ void BLEController::uploadDebugData(uint8_t *data, size_t length)
 
   _debugCharacteristic->setValue("==TERMINATE==");
   _debugCharacteristic->notify();
-  LOG_INFO("End debug data upload");
+  LOG_INFO_ASYNC_ON_MAIN("End debug data upload");
 }
 
 void BLEController::sendTelemetryUpdate(String packet)
