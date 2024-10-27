@@ -57,49 +57,49 @@ struct debug_recording_update_t
 
 class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbacks
 {
-  public:
-    BLEController();
-    void beginBluetooth(void);
-    bool isConnected;
-    volatile bool isProcessingBluetoothTransaction;
-    void uploadDebugData(uint8_t *data, size_t length);
-    void sendTelemetryUpdate(String packet);
+public:
+  BLEController();
+  void beginBluetooth(void);
+  bool isConnected;
+  volatile bool isProcessingBluetoothTransaction;
+  void uploadDebugData(uint8_t *data, size_t length);
+  void sendTelemetryUpdate(String packet);
 
-    // update handlers
-    void setControlsUpdateHandler(std::function<void(controls_update_t)> controlsUpdateHandler);
-    void setArmStatusUpdateHandler(std::function<void(bool)> armStatusUpdateHandler);
-    void setResetStatusUpdateHandler(std::function<void(void)> resetHandler);
-    void setMotorDebugEnabledUpdateHandler(std::function<void(bool)> motorDebugEnabledUpdateHandler);
-    void setMotorDebugUpdateHandler(std::function<void(motor_debug_update_t)> motorDebugUpdateHandler);
-    void setCalibrationUpdateHandler(std::function<void(calibration_update_t)> calibrationUpdateHandler);
-    void setDebugDataUpdateHandler(std::function<void(debug_recording_update_t)> debugDataUpdateHandler);
-    
-    // Override methods from BLEServerCallbacks
-    void onConnect(BLEServer* pServer) override;
-    void onDisconnect(BLEServer* pServer) override;
-    void onMtuChanged(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) override;
+  // update handlers
+  void setControlsUpdateHandler(std::function<void(controls_update_t)> controlsUpdateHandler);
+  void setArmStatusUpdateHandler(std::function<void(bool)> armStatusUpdateHandler);
+  void setResetStatusUpdateHandler(std::function<void(void)> resetHandler);
+  void setMotorDebugEnabledUpdateHandler(std::function<void(bool)> motorDebugEnabledUpdateHandler);
+  void setMotorDebugUpdateHandler(std::function<void(motor_debug_update_t)> motorDebugUpdateHandler);
+  void setCalibrationUpdateHandler(std::function<void(calibration_update_t)> calibrationUpdateHandler);
+  void setDebugDataUpdateHandler(std::function<void(debug_recording_update_t)> debugDataUpdateHandler);
 
-    // Override methods from BLECharacteristicCallbacks
-    void onWrite(BLECharacteristic* pCharacteristic) override;
+  // Override methods from BLEServerCallbacks
+  void onConnect(BLEServer *pServer) override;
+  void onDisconnect(BLEServer *pServer) override;
+  void onMtuChanged(BLEServer *pServer, esp_ble_gatts_cb_param_t *param) override;
 
-  private:
-    BLEServer *_server;
-    BLEService *_service;
-    BLECharacteristic *_controlCharacteristic;
-    BLECharacteristic *_telemetryCharacteristic;
-    BLECharacteristic *_armCharacteristic;
-    BLECharacteristic *_resetCharacteristic;
-    BLECharacteristic *_motorDebugCharacteristic;
-    BLECharacteristic *_calibrationCharacteristic;
-    BLECharacteristic *_debugCharacteristic;
+  // Override methods from BLECharacteristicCallbacks
+  void onWrite(BLECharacteristic *pCharacteristic) override;
 
-    std::function<void(controls_update_t)> _controlsUpdateHandler;
-    std::function<void(bool)> _armStatusUpdateHandler;
-    std::function<void(void)> _resetStatusUpdateHandler;
-    std::function<void(bool)> _motorDebugEnabledUpdateHandler;
-    std::function<void(motor_debug_update_t)> _motorDebugUpdateHandler;
-    std::function<void(calibration_update_t)> _calibrationUpdateHandler;
-    std::function<void(debug_recording_update_t)> _debugDataUpdateHandler;
+private:
+  BLEServer *_server;
+  BLEService *_service;
+  BLECharacteristic *_controlCharacteristic;
+  BLECharacteristic *_telemetryCharacteristic;
+  BLECharacteristic *_armCharacteristic;
+  BLECharacteristic *_resetCharacteristic;
+  BLECharacteristic *_motorDebugCharacteristic;
+  BLECharacteristic *_calibrationCharacteristic;
+  BLECharacteristic *_debugCharacteristic;
+
+  std::function<void(controls_update_t)> _controlsUpdateHandler;
+  std::function<void(bool)> _armStatusUpdateHandler;
+  std::function<void(void)> _resetStatusUpdateHandler;
+  std::function<void(bool)> _motorDebugEnabledUpdateHandler;
+  std::function<void(motor_debug_update_t)> _motorDebugUpdateHandler;
+  std::function<void(calibration_update_t)> _calibrationUpdateHandler;
+  std::function<void(debug_recording_update_t)> _debugDataUpdateHandler;
 };
 
 #endif

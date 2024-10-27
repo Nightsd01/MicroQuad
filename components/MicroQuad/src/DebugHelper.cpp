@@ -12,15 +12,16 @@
 #include "Arduino.h"
 #include "Logger.h"
 
-template< typename... Args >
-std::string string_sprintf( const char* format, Args... args ) {
-  int length = std::snprintf( nullptr, 0, format, args... );
-  assert( length >= 0 );
+template <typename... Args>
+std::string string_sprintf(const char *format, Args... args)
+{
+  int length = std::snprintf(nullptr, 0, format, args...);
+  assert(length >= 0);
 
-  char* buf = new char[length + 1];
-  std::snprintf( buf, length + 1, format, args... );
+  char *buf = new char[length + 1];
+  std::snprintf(buf, length + 1, format, args...);
 
-  std::string str( buf );
+  std::string str(buf);
   delete[] buf;
   return str;
 }
@@ -32,17 +33,18 @@ unsigned long lastTime = 0;
 DebugHelper::DebugHelper()
 {
   data = (uint8_t *)malloc(INITIAL_DATA_SIZE); // reserve 16Kb
-  if (data == NULL) {
-
+  if (data == NULL)
+  {
   }
   _currentDataSize = INITIAL_DATA_SIZE;
   _currentByteIndex = 0;
   _currentSamples = 0;
-
 }
 
-void DebugHelper::printValues(unsigned long timestamp) {
-  if (millis() - lastTime > 100) {
+void DebugHelper::printValues(unsigned long timestamp)
+{
+  if (millis() - lastTime > 100)
+  {
     lastTime = millis();
     // printf(
     //   "%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %ld\n",
@@ -67,10 +69,15 @@ void DebugHelper::printValues(unsigned long timestamp) {
 
 static unsigned long lastPrintMillis = 0;
 static int samples = 0;
-void DebugHelper::saveValues(unsigned long timestamp) {
-  while (reallocating) {}
+void DebugHelper::saveValues(unsigned long timestamp)
+{
+  while (reallocating)
+  {
+  }
   _growHeapIfNeeded();
-  while (reallocating) {}
+  while (reallocating)
+  {
+  }
   float ts = (float)timestamp;
   memcpy(&data[_currentByteIndex], &ypr, sizeof(float) * 3);
   // memcpy(&data[_currentByteIndex + (3 * sizeof(float))], &gyroYpr, sizeof(float) * 3);
@@ -88,22 +95,28 @@ void DebugHelper::saveValues(unsigned long timestamp) {
   _currentByteIndex += DEBUG_PACKET_SIZE;
   _currentSamples++;
   samples++;
-  if (millis() - lastPrintMillis > 200) {
+  if (millis() - lastPrintMillis > 200)
+  {
     LOG_INFO("Recording at %ihz", samples * 5);
     samples = 0;
     lastPrintMillis = millis();
-  } 
+  }
 }
 
-void DebugHelper::_growHeapIfNeeded(void) {
-  if (_currentByteIndex + DEBUG_PACKET_SIZE >= _currentDataSize) {
+void DebugHelper::_growHeapIfNeeded(void)
+{
+  if (_currentByteIndex + DEBUG_PACKET_SIZE >= _currentDataSize)
+  {
     reallocating = true;
     Serial.println("Growing buffer with " + String((int)_currentSamples) + " and " + String((int)_currentByteIndex) + " from " + String((int)_currentDataSize) + " to " + String((int)(_currentDataSize + (1024 * 4))));
     uint64_t newDataSize = _currentDataSize + (1024 * 4);
     uint8_t *newData = (uint8_t *)realloc(data, newDataSize);
-    if (newData == NULL) {
+    if (newData == NULL)
+    {
       Serial.println("Failed to grow data heap size");
-    } else {
+    }
+    else
+    {
       Serial.println("Successfully grew data heap size");
       data = newData;
       _currentDataSize += 1024 * 4;

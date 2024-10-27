@@ -10,7 +10,7 @@ static void handleInterrupt(void)
 
 /**
  * We need to account for the full scale range when using the gyroscope values
- * For example if we select GYRO_1000DPS, we need to divide the gyro readings by 
+ * For example if we select GYRO_1000DPS, we need to divide the gyro readings by
  * the corresponding sensitivity of 32.8 to get the "degrees per second" reading.
     ±250 dps: 131 LSB/dps
     ±500 dps: 65.5 LSB/dps
@@ -27,7 +27,7 @@ static void handleInterrupt(void)
 /**
  * These calibration values were determined by sitting the device on a flat surface
  * and averaging the gyroscope x, y, and z readings for a full minute
-*/
+ */
 #define GYRO_OFFSET_X -36.87218045
 #define GYRO_OFFSET_Y 16.21804511
 #define GYRO_OFFSET_Z 15.26691729
@@ -50,7 +50,8 @@ IMU::IMU(uint8_t csPin, uint8_t misoPin, uint8_t mosiPin, uint8_t sclkPin, uint8
     const float fsrVals[4] = {2.0f, 4.0f, 8.0f, 16.0f};
     _accelScale = fsrVals[(int)(ACCEL_FSR)] / 32768.0f;
 
-    if (_imu->begin() < 0) {
+    if (_imu->begin() < 0)
+    {
         LOG_ERROR("Failed to initialize ICM42688P IMU");
         return;
     }
@@ -67,7 +68,8 @@ IMU::IMU(uint8_t csPin, uint8_t misoPin, uint8_t mosiPin, uint8_t sclkPin, uint8
 
 void IMU::loopHandler(void)
 {
-    if (_gotInterrupt) {
+    if (_gotInterrupt)
+    {
         _imu->getAGT();
         _imu->getRawAGT();
         imu_update_t update;
@@ -96,14 +98,15 @@ void IMU::loopHandler(void)
 void IMU::calibrate(CalibrationAxis axis, int val)
 {
     _calibrated = true;
-    switch (axis) {
-      case CalibrationAxis::x: 
+    switch (axis)
+    {
+    case CalibrationAxis::x:
         _offsets.gyro_x = (float)val;
         break;
-      case CalibrationAxis::y: 
+    case CalibrationAxis::y:
         _offsets.gyro_y = (float)val;
         break;
-      case CalibrationAxis::z: 
+    case CalibrationAxis::z:
         _offsets.gyro_z = (float)val;
         break;
     }

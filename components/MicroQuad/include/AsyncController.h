@@ -3,20 +3,20 @@
 
 #include <functional>
 
-class AsyncController {
-  public:
-    // Static member variables
-    static AsyncController main;
-    static AsyncController background;
-    void execute(std::function<void()> task);
+class AsyncController
+{
+public:
+  // Static member variables
+  static AsyncController main;
+  static AsyncController background;
+  void execute(std::function<void()> task);
 
-  private:
-    AsyncController(
-      bool core, 
-      const char *taskLabel
-    );
-    bool _core;
-    const char *_taskLabel;
+private:
+  AsyncController(
+      bool core,
+      const char *taskLabel);
+  bool _core;
+  const char *_taskLabel;
 };
 
-#endif 
+#endif

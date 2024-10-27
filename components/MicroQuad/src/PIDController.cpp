@@ -8,8 +8,7 @@
 
 PIDController::PIDController(
     gains_t gains,
-    DebugHelper *helper
-)
+    DebugHelper *helper)
 {
   _gains = gains;
   _helper = helper;
