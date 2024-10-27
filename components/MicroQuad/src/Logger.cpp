@@ -6,6 +6,8 @@
 
 const char *TAG = "MicroQuad";
 
+enum LogLevel { none, error, warn, info, debug, verbose, console };
+
 static void _log(char *statement, LogLevel level, unsigned long ts) 
 {
     switch (level) {
@@ -53,50 +55,40 @@ void _logImpl(LogLevel level, const char *format, va_list args)
     free(buffer);
 }
 
+// technically it's not a good practice to depend on the caller's enclosing scope for
+// variables like `format` but for the sake of simplicity it's worth it for avoiding repetition
+// especially since this is just used internally
+#define __LOG(level) va_list args; \
+    va_start(args, format); \
+    _logImpl(level, format, args); \
+    va_end(args);
+
 void LOG_ERROR(const char *format, ...)
 {
-    va_list args;
-    va_start(args, format);
-    _logImpl(LogLevel::error, format, args);
-    va_end(args);
+    __LOG(LogLevel::error);
 }
 
 void LOG_WARN(const char *format, ...)
 {
-    va_list args;
-    va_start(args, format);
-    _logImpl(LogLevel::warn, format, args);
-    va_end(args);
+    __LOG(LogLevel::warn);
 }
 
 void LOG_INFO(const char *format, ...)
 {
-    va_list args;
-    va_start(args, format);
-    _logImpl(LogLevel::info, format, args);
-    va_end(args);
+    __LOG(LogLevel::info);
 }
 
 void LOG_DEBUG(const char *format, ...)
 {
-    va_list args;
-    va_start(args, format);
-    _logImpl(LogLevel::debug, format, args);
-    va_end(args);
+    __LOG(LogLevel::debug);
 }
 
 void LOG_VERBOSE(const char *format, ...)
 {
-    va_list args;
-    va_start(args, format);
-    _logImpl(LogLevel::verbose, format, args);
-    va_end(args);
+    __LOG(LogLevel::verbose);
 }
 
 void LOG_CONSOLE(const char *format, ...)
 {
-    va_list args;
-    va_start(args, format);
-    _logImpl(LogLevel::console, format, args);
-    va_end(args);
+    __LOG(LogLevel::console);
 }
