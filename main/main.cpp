@@ -248,9 +248,8 @@ static void _receivedIMUUpdate(imu_update_t update)
   if (millis() - _previousLogMillis > 100) {
     const FusionVector earth = FusionAhrsGetEarthAcceleration(&_fusion);
     LOG_INFO(
-        "%ld, %.2f, %.2f, %.2f, %.2f, %d, %d, %d, %.2f, %.2f, %.2f, %.2f, "
-        "%.2f, %.2f, %i, %i, %i, %.2f, %.2f, "
-        "%.2f, %.2f, %.2f",
+        "%ld, %.2f, %.2f, %.2f, %.2f, %d, %d, %d, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %i, %i, %i, %.2f, %.2f, %.2f, "
+        "%.2f, %.2f",
         millis(),
         deltaTimeSeconds,
         _euler.angle.yaw,
@@ -328,9 +327,7 @@ void setup()
   _bluetoothController.setDebugDataUpdateHandler([&](debug_recording_update_t debugDataUpdate) {
     AsyncController::main.execute([debugDataUpdate]() {
       LOG_INFO(
-          "Received debug data update: sendDebugData = %d, "
-          "recordDebugData "
-          "= %d",
+          "Received debug data update: sendDebugData = %d, recordDebugData = %d",
           debugDataUpdate.sendDebugData,
           debugDataUpdate.recordDebugData);
     });

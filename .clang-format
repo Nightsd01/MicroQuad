@@ -9,6 +9,8 @@ BinPackArguments: false
 BinPackParameters: false
 
 AlignArrayOfStructures: Left
+PenaltyBreakString: 10000000  # Extremely high penalty to prevent string breaks
+PenaltyExcessCharacter: 1000  # High penalty for exceeding column limit
 
 # Ensure every argument is on a new line if one has to be wrapped.
 AllowAllArgumentsOnNextLine: false
@@ -17,6 +19,7 @@ PenaltyBreakBeforeFirstCallParameter: 0
 PenaltyBreakFirstLessLess: 500
 MaxEmptyLinesToKeep: 1
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
+AlignTrailingComments: true
 
 IndentWidth: 2
 BraceWrapping:

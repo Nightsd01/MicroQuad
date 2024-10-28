@@ -31,8 +31,7 @@ void DebugDataManager::_growHeapIfNeeded(void)
   if (_head + DEBUG_PACKET_SIZE >= currentSize) {
     _reallocating = true;
     LOG_INFO(
-        "Growing debug buffer with %i current samples, current head = %i, from "
-        "size %i to %i",
+        "Growing debug buffer with %i current samples, current head = %i, from size %i to %i",
         (int)numSamples,
         (int)_head,
         (int)currentSize,
