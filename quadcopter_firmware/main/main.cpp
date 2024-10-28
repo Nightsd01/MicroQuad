@@ -92,7 +92,6 @@ static sVector_t _magValues;
 static IMU *imu = NULL;
 static imu_output_t _imuValues;
 static FusionAhrs _fusion;
-static FusionOffset _offset;
 
 static volatile bool _calibrate = false;
 static volatile CalibrationAxis _calibrationAxis = CalibrationAxis::x;
@@ -178,8 +177,8 @@ static bool _gotFirstIMUUpdate = false;
 
 static float _previousFilteredAccelValues[3] = {0.0f, 0.0f, 1.0f};
 static float _previousFilteredGyroValues[3] = {0.0f, 0.0f, 0.0f};
-static const float _accelerometerLowPassAlpha = 0.01f; // lower alpha = more smoothing but more lag
-static const float _gyroscopeLowPassAlpha = 0.2f;      // lower alpha = more smoothing but more lag
+static const float _accelerometerLowPassAlpha = 0.01f;  // lower alpha = more smoothing but more lag
+static const float _gyroscopeLowPassAlpha = 0.2f;       // lower alpha = more smoothing but more lag
 static void _receivedIMUUpdate(imu_update_t update)
 {
   const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
@@ -188,7 +187,7 @@ static void _receivedIMUUpdate(imu_update_t update)
   FusionVector gyroscope = {
       update.gyro_x,
       update.gyro_y,
-      update.gyro_z}; // replace this with actual gyroscope data in degrees/s
+      update.gyro_z};  // replace this with actual gyroscope data in degrees/s
   FusionVector accelerometer = {update.accel_x, update.accel_y, update.accel_z};
 
   accelerometer.axis.x = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[0]) +
@@ -246,7 +245,6 @@ static void _receivedIMUUpdate(imu_update_t update)
 
   // Log to console 10x per second
   if (millis() - _previousLogMillis > 100) {
-    const FusionVector earth = FusionAhrsGetEarthAcceleration(&_fusion);
     LOG_INFO(
         "%ld, %.2f, %.2f, %.2f, %.2f, %d, %d, %d, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %i, %i, %i, %.2f, %.2f, %.2f, "
         "%.2f, %.2f",
@@ -283,7 +281,6 @@ void setup()
   ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2);
   ESP32PWM::allocateTimer(3);
-  esp_partition_type_t type;
   const unsigned long initializationTime = millis();
   Serial.begin(115200);
   LOG_INFO("BEGAN APP");
@@ -296,8 +293,7 @@ void setup()
   Wire.begin(18, 17);
 
   // Wait for serial to become available
-  while (!Serial)
-    ;
+  while (!Serial);
 
   LOG_INFO("Initializing bluetooth connection");
 
@@ -531,19 +527,17 @@ void loop()
   if (_calibrate) {
     _calibrate = false;
     imu->calibrate(_calibrationAxis, _calibrationValue);
-    char *axisStr = "";
     switch (_calibrationAxis) {
-    case CalibrationAxis::x:
-      axisStr = "x";
-      break;
-    case CalibrationAxis::y:
-      axisStr = "y";
-      break;
-    case CalibrationAxis::z:
-      axisStr = "z";
-      break;
+      case CalibrationAxis::x:
+        LOG_INFO("Calibrating x axis to %i", axisStr, _calibrationValue);
+        break;
+      case CalibrationAxis::y:
+        LOG_INFO("Calibrating y axis to %i", axisStr, _calibrationValue);
+        break;
+      case CalibrationAxis::z:
+        LOG_INFO("Calibrating z axis to %i", axisStr, _calibrationValue);
+        break;
     }
-    LOG_INFO("Calibrating %s axis to %i", axisStr, _calibrationValue);
   }
 
   if (!_receivedImuUpdate || _lastMagnetometerRead == 0) {

@@ -1,4 +1,4 @@
-BasedOnStyle: LLVM
+BasedOnStyle: Google
 Language: Cpp
 BreakBeforeBraces: Custom
 ColumnLimit: 120
@@ -19,7 +19,6 @@ PenaltyBreakBeforeFirstCallParameter: 0
 PenaltyBreakFirstLessLess: 500
 MaxEmptyLinesToKeep: 1
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
-AlignTrailingComments: true
 
 IndentWidth: 2
 BraceWrapping:
