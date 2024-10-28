@@ -1,0 +1,68 @@
+# Xcode
+##
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+!default.pbxuser
+!default.mode1v3
+!default.mode2v3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.xcworkspace
+!default.xcworkspace
+project.xcworkspace
+IDEWorkspaceChecks.plist
+xcshareddata/
+
+# Derived data and build products
+##
+DerivedData/
+build/
+*.build/
+build-script-checksum.txt
+
+# Swift Package Manager
+##
+.build/
+Packages/
+Package.pins
+Package.resolved
+.swift-dependencies
+
+# Various settings
+##
+*.moved-aside
+*.pyc
+*syncinfo.plist
+*.DS_Store
+
+# CocoaPods
+##
+Pods/
+Podfile.lock
+
+# Carthage
+##
+Carthage/
+Carthage/Build
+
+# Fastlane
+##
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+fastlane/.env
+
+# Other files and state
+##
+*.swp
+*~.nib
+*.swo
+
+# Playgrounds
+##
+timeline.xctimeline
+playground.xcworkspace
