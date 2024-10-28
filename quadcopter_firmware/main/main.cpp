@@ -529,13 +529,13 @@ void loop()
     imu->calibrate(_calibrationAxis, _calibrationValue);
     switch (_calibrationAxis) {
       case CalibrationAxis::x:
-        LOG_INFO("Calibrating x axis to %i", axisStr, _calibrationValue);
+        LOG_INFO("Calibrating x axis to %i", _calibrationValue);
         break;
       case CalibrationAxis::y:
-        LOG_INFO("Calibrating y axis to %i", axisStr, _calibrationValue);
+        LOG_INFO("Calibrating y axis to %i", _calibrationValue);
         break;
       case CalibrationAxis::z:
-        LOG_INFO("Calibrating z axis to %i", axisStr, _calibrationValue);
+        LOG_INFO("Calibrating z axis to %i", _calibrationValue);
         break;
     }
   }
