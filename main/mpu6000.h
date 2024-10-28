@@ -12,9 +12,11 @@
 #include <SPI.h>
 #include <stdint.h>
 
-class Mpu6x00 {
- public:
-  typedef enum {
+class Mpu6x00
+{
+public:
+  typedef enum
+  {
 
     GYRO_250DPS,
     GYRO_500DPS,
@@ -23,7 +25,8 @@ class Mpu6x00 {
 
   } gyroFsr_e;
 
-  typedef enum {
+  typedef enum
+  {
 
     ACCEL_2G,
     ACCEL_4G,
@@ -35,7 +38,8 @@ class Mpu6x00 {
   /**
    * Returns true on success, false on failure.
    */
-  bool begin(bool setupAuxDevice) {
+  bool begin(bool setupAuxDevice)
+  {
     pinMode(m_csPin, OUTPUT);
 
     writeRegister(REG_PWR_MGMT_1, BIT_RESET);
@@ -86,9 +90,9 @@ class Mpu6x00 {
     delayMicroseconds(1);
     writeRegister(REG_I2C_SLV0_REG, EXT_SENS_CTRL1_ADDR);
     delayMicroseconds(1);
-    writeRegister(REG_I2C_SLV0_DO, BIT_QMC5883L_CTRL_MODE_CONTINUOUS |
-                                       BIT_QMC5883L_CTRL_RATE_200HZ |
-                                       BIT_QMC5883L_CTRL_SCALE_8G);
+    writeRegister(
+        REG_I2C_SLV0_DO,
+        BIT_QMC5883L_CTRL_MODE_CONTINUOUS | BIT_QMC5883L_CTRL_RATE_200HZ | BIT_QMC5883L_CTRL_SCALE_8G);
     delayMicroseconds(1);
     writeRegister(REG_I2C_SLV0_CTRL, 0x80 | 0x01);
     delayMicroseconds(1);
@@ -110,27 +114,30 @@ class Mpu6x00 {
     return true;
   }
 
-  void readSensor(void) {
+  void readSensor(void)
+  {
     readRegisters(REG_ACCEL_XOUT_H, m_buffer, 14, SPI_FULL_CLK_HZ);
     if (_magnetometer) {
-      readRegisters(REG_EXT_SENS_DATA_BEGIN, ext_sensor_buffer,
-                    EXT_SENS_DATA_LEN, SPI_FULL_CLK_HZ);
+      readRegisters(REG_EXT_SENS_DATA_BEGIN, ext_sensor_buffer, EXT_SENS_DATA_LEN, SPI_FULL_CLK_HZ);
     }
   }
 
-  void getGyro(float &gx, float &gy, float &gz) {
+  void getGyro(float &gx, float &gy, float &gz)
+  {
     gx = getRawValue(9) * m_gyroScale;
     gy = getRawValue(11) * m_gyroScale;
     gz = getRawValue(13) * m_gyroScale;
   }
 
-  void getAccel(float &ax, float &ay, float &az) {
+  void getAccel(float &ax, float &ay, float &az)
+  {
     ax = getRawValue(1) * m_accelScale;
     ay = getRawValue(3) * m_accelScale;
     az = getRawValue(5) * m_accelScale;
   }
 
-  void getMag(float &mx, float &my, float &mz) {
+  void getMag(float &mx, float &my, float &mz)
+  {
     mx = getExtSensX();
     my = getExtSensY();
     mz = getExtSensZ();
@@ -160,40 +167,38 @@ class Mpu6x00 {
 
   int16_t getRawGyroZ(void) { return getRawValue(13); }
 
-  int16_t getExtSensX(void) {
-    return (uint16_t)((ext_sensor_buffer[0] << 8) | ext_sensor_buffer[1]);
-  }
+  int16_t getExtSensX(void) { return (uint16_t)((ext_sensor_buffer[0] << 8) | ext_sensor_buffer[1]); }
 
-  int16_t getExtSensY(void) {
-    return (uint16_t)((ext_sensor_buffer[2] << 8) | ext_sensor_buffer[3]);
-  }
+  int16_t getExtSensY(void) { return (uint16_t)((ext_sensor_buffer[2] << 8) | ext_sensor_buffer[3]); }
 
-  int16_t getExtSensZ(void) {
-    return (uint16_t)((ext_sensor_buffer[4] << 8) | ext_sensor_buffer[5]);
-  }
+  int16_t getExtSensZ(void) { return (uint16_t)((ext_sensor_buffer[4] << 8) | ext_sensor_buffer[5]); }
 
-  void setGyroOffsetX(int16_t x) {
+  void setGyroOffsetX(int16_t x)
+  {
     writeRegister(REG_XG_OFFS_USRH, (uint8_t)((x >> 8) & 0xFF));
     delayMicroseconds(1);
     writeRegister(REG_XG_OFFS_USRL, (uint8_t)(x & 0xFF));
     delayMicroseconds(1);
   }
 
-  void setGyroOffsetY(int16_t y) {
+  void setGyroOffsetY(int16_t y)
+  {
     writeRegister(REG_YG_OFFS_USRH, (uint8_t)((y >> 8) & 0xFF));
     delayMicroseconds(1);
     writeRegister(REG_YG_OFFS_USRL, (uint8_t)(y & 0xFF));
     delayMicroseconds(1);
   }
 
-  void setGyroOffsetZ(int16_t z) {
+  void setGyroOffsetZ(int16_t z)
+  {
     writeRegister(REG_ZG_OFFS_USRH, (uint8_t)((z >> 8) & 0xFF));
     delayMicroseconds(1);
     writeRegister(REG_ZG_OFFS_USRL, (uint8_t)(z & 0xFF));
     delayMicroseconds(1);
   }
 
-  void setGyroOffsets(int16_t x, int16_t y, int16_t z) {
+  void setGyroOffsets(int16_t x, int16_t y, int16_t z)
+  {
     // Write X
     setGyroOffsetX(x);
     // Write Y
@@ -202,18 +207,19 @@ class Mpu6x00 {
     setGyroOffsetZ(z);
   }
 
- protected:
-  Mpu6x00(const uint8_t deviceId, SPIClass &spi, const uint8_t csPin,
-          const gyroFsr_e gyroFsr, const accelFsr_e accelFsr) {
+protected:
+  Mpu6x00(
+      const uint8_t deviceId, SPIClass &spi, const uint8_t csPin, const gyroFsr_e gyroFsr, const accelFsr_e accelFsr)
+  {
     init(deviceId, &spi, csPin, gyroFsr, accelFsr);
   }
 
-  Mpu6x00(const uint8_t deviceId, const uint8_t csPin, const gyroFsr_e gyroFsr,
-          const accelFsr_e accelFsr = ACCEL_16G) {
+  Mpu6x00(const uint8_t deviceId, const uint8_t csPin, const gyroFsr_e gyroFsr, const accelFsr_e accelFsr = ACCEL_16G)
+  {
     init(deviceId, &SPI, csPin, gyroFsr, accelFsr);
   }
 
- private:
+private:
   bool _magnetometer;
 
   // Configuration bits
@@ -277,8 +283,9 @@ class Mpu6x00 {
   uint8_t m_buffer[15];
   uint8_t ext_sensor_buffer[24];
 
-  void init(const uint8_t deviceId, SPIClass *spi, const uint8_t csPin,
-            const gyroFsr_e gyroFsr, const accelFsr_e accelFsr) {
+  void
+  init(const uint8_t deviceId, SPIClass *spi, const uint8_t csPin, const gyroFsr_e gyroFsr, const accelFsr_e accelFsr)
+  {
     m_deviceId = deviceId;
     m_spi = spi;
     m_csPin = csPin;
@@ -287,13 +294,14 @@ class Mpu6x00 {
     m_accelFsr = accelFsr;
 
     // float gscale[] = {250., 500., 1000., 2000.};
-    m_gyroScale = 1.0;  // gscale[gyroFsr] / 32768.;
+    m_gyroScale = 1.0; // gscale[gyroFsr] / 32768.;
 
     float ascale[] = {2., 4., 8., 16.};
     m_accelScale = ascale[accelFsr] / 32768.;
   }
 
-  void writeRegister(const uint8_t reg, const uint8_t val) {
+  void writeRegister(const uint8_t reg, const uint8_t val)
+  {
     m_spi->beginTransaction(SPISettings(SPI_INIT_CLK_HZ, MSBFIRST, SPI_MODE3));
 
     digitalWrite(m_csPin, LOW);
@@ -304,8 +312,8 @@ class Mpu6x00 {
     m_spi->endTransaction();
   }
 
-  void readRegisters(const uint8_t addr, uint8_t *buffer, const uint8_t count,
-                     const uint32_t spiClkHz) {
+  void readRegisters(const uint8_t addr, uint8_t *buffer, const uint8_t count, const uint32_t spiClkHz)
+  {
     m_spi->beginTransaction(SPISettings(spiClkHz, MSBFIRST, SPI_MODE3));
 
     digitalWrite(m_csPin, LOW);
@@ -318,48 +326,49 @@ class Mpu6x00 {
     m_spi->endTransaction();
   }
 
-  uint8_t whoAmI(void) {
+  uint8_t whoAmI(void)
+  {
     uint8_t buf[2] = {};
     readRegisters(REG_WHO_AM_I, buf, 1, SPI_INIT_CLK_HZ);
     return buf[1];
   }
 
-  int16_t getRawValue(const uint8_t offset) {
-    return (((int16_t)m_buffer[offset]) << 8) | m_buffer[offset + 1];
-  }
+  int16_t getRawValue(const uint8_t offset) { return (((int16_t)m_buffer[offset]) << 8) | m_buffer[offset + 1]; }
 
-  float getAccelValue(const uint8_t k) {
-    return getFloatValue(k, m_accelScale);
-  }
+  float getAccelValue(const uint8_t k) { return getFloatValue(k, m_accelScale); }
 
   float getGyroValue(const uint8_t k) { return getFloatValue(k, m_gyroScale); }
 
-  float getFloatValue(const uint8_t k, const float scale) {
-    return getRawValue(k) * scale;
+  float getFloatValue(const uint8_t k, const float scale) { return getRawValue(k) * scale; }
+
+}; // class Mpu6x00
+
+class Mpu6000 : public Mpu6x00
+{
+public:
+  Mpu6000(
+      SPIClass &spi, const uint8_t csPin, const gyroFsr_e gyroFsr = GYRO_500DPS, const accelFsr_e accelFsr = ACCEL_16G)
+      : Mpu6x00(0x68, spi, csPin, gyroFsr, accelFsr)
+  {
   }
 
-};  // class Mpu6x00
-
-class Mpu6000 : public Mpu6x00 {
- public:
-  Mpu6000(SPIClass &spi, const uint8_t csPin,
-          const gyroFsr_e gyroFsr = GYRO_500DPS,
-          const accelFsr_e accelFsr = ACCEL_16G)
-      : Mpu6x00(0x68, spi, csPin, gyroFsr, accelFsr) {}
-
-  Mpu6000(const uint8_t csPin, const gyroFsr_e gyroFsr = GYRO_500DPS,
-          const accelFsr_e accelFsr = ACCEL_16G)
-      : Mpu6x00(0x68, SPI, csPin, gyroFsr, accelFsr) {}
+  Mpu6000(const uint8_t csPin, const gyroFsr_e gyroFsr = GYRO_500DPS, const accelFsr_e accelFsr = ACCEL_16G)
+      : Mpu6x00(0x68, SPI, csPin, gyroFsr, accelFsr)
+  {
+  }
 };
 
-class Mpu6500 : public Mpu6x00 {
- public:
-  Mpu6500(SPIClass &spi, const uint8_t csPin,
-          const gyroFsr_e gyroFsr = GYRO_500DPS,
-          const accelFsr_e accelFsr = ACCEL_16G)
-      : Mpu6x00(0x70, spi, csPin, gyroFsr, accelFsr) {}
+class Mpu6500 : public Mpu6x00
+{
+public:
+  Mpu6500(
+      SPIClass &spi, const uint8_t csPin, const gyroFsr_e gyroFsr = GYRO_500DPS, const accelFsr_e accelFsr = ACCEL_16G)
+      : Mpu6x00(0x70, spi, csPin, gyroFsr, accelFsr)
+  {
+  }
 
-  Mpu6500(const uint8_t csPin, const gyroFsr_e gyroFsr = GYRO_500DPS,
-          const accelFsr_e accelFsr = ACCEL_16G)
-      : Mpu6x00(0x70, SPI, csPin, gyroFsr, accelFsr) {}
+  Mpu6500(const uint8_t csPin, const gyroFsr_e gyroFsr = GYRO_500DPS, const accelFsr_e accelFsr = ACCEL_16G)
+      : Mpu6x00(0x70, SPI, csPin, gyroFsr, accelFsr)
+  {
+  }
 };

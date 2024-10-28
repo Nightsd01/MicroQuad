@@ -1,0 +1,37 @@
+BasedOnStyle: LLVM
+Language: Cpp
+BreakBeforeBraces: Custom
+ColumnLimit: 120
+UseTab: Never
+
+# General Formatting
+BinPackArguments: false
+BinPackParameters: false
+
+AlignArrayOfStructures: Left
+
+# Ensure every argument is on a new line if one has to be wrapped.
+AllowAllArgumentsOnNextLine: false
+AlignAfterOpenBracket: AlwaysBreak
+PenaltyBreakBeforeFirstCallParameter: 0
+PenaltyBreakFirstLessLess: 500
+MaxEmptyLinesToKeep: 1
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+
+IndentWidth: 2
+BraceWrapping:
+  AfterFunction: true
+  AfterClass: true
+  AfterControlStatement: false
+  AfterEnum: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+
+# More aggressive breaking
+BreakConstructorInitializersBeforeComma: false
+BreakConstructorInitializers: BeforeColon

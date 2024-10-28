@@ -3,14 +3,15 @@
 
 #include <functional>
 
-class AsyncController {
- public:
+class AsyncController
+{
+public:
   // Static member variables
   static AsyncController main;
   static AsyncController background;
   void execute(std::function<void()> task);
 
- private:
+private:
   AsyncController(bool core, const char *taskLabel);
   bool _core;
   const char *_taskLabel;

@@ -20,16 +20,14 @@
 */
 
 // Public functions
-QuadcopterController::QuadcopterController(quadcopter_config_t config,
-                                           DebugHelper *debugHelper,
-                                           unsigned long timeMicros) {
+QuadcopterController::QuadcopterController(
+    quadcopter_config_t config, DebugHelper *debugHelper, unsigned long timeMicros)
+{
   _debugHelper = debugHelper;
   _config = config;
   for (int i = 0; i < 3; i++) {
-    _angleControllers[i] =
-        std::make_unique<PIDController>(config.angleGains[i], debugHelper);
-    _rateControllers[i] =
-        std::make_unique<PIDController>(config.rateGains[i], debugHelper);
+    _angleControllers[i] = std::make_unique<PIDController>(config.angleGains[i], debugHelper);
+    _rateControllers[i] = std::make_unique<PIDController>(config.rateGains[i], debugHelper);
   }
 }
 
@@ -42,32 +40,24 @@ static unsigned long lastUpdateMillis = 0;
 // for debugging I understand degrees more intuitively, so I will leave this for
 // now
 motor_outputs_t QuadcopterController::calculateOutputs(
-    imu_output_t imuValues, controller_values_t controllerValues,
-    unsigned long timeMicros, bool recordData) {
-  const double throttle =
-      (double)controllerValues.leftStickInput.y;  // 0.0 to 255.0
+    imu_output_t imuValues, controller_values_t controllerValues, unsigned long timeMicros, bool recordData)
+{
+  const double throttle = (double)controllerValues.leftStickInput.y; // 0.0 to 255.0
 
   // Gives us a value between -(INPUT_MAX_CONTROLLER_INPUT/2) and
   // (INPUT_MAX_CONTROLLER_INPUT/2)
-  const double desiredYawDegreesDelta =
-      controllerValues.leftStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
-  const double desiredYawDegrees =
-      imuValues.accelOutput[0] + desiredYawDegreesDelta;
+  const double desiredYawDegreesDelta = controllerValues.leftStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
+  const double desiredYawDegrees = imuValues.accelOutput[0] + desiredYawDegreesDelta;
 
-  const double desiredPitchDelta = (controllerValues.rightStickInput.y -
-                                    (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) /
-                                   (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
-  const double desiredRollDelta = (controllerValues.rightStickInput.x -
-                                   (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) /
-                                  (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
-  const double desiredPitchAngleDegrees =
-      MAX_PITCH_ROLL_ANGLE_DEGREES * desiredPitchDelta;
-  const double desiredRollAngleDegrees =
-      MAX_PITCH_ROLL_ANGLE_DEGREES * desiredRollDelta;
+  const double desiredPitchDelta =
+      (controllerValues.rightStickInput.y - (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) / (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
+  const double desiredRollDelta =
+      (controllerValues.rightStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) / (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
+  const double desiredPitchAngleDegrees = MAX_PITCH_ROLL_ANGLE_DEGREES * desiredPitchDelta;
+  const double desiredRollAngleDegrees = MAX_PITCH_ROLL_ANGLE_DEGREES * desiredRollDelta;
 
   // Desired yaw/pitch/roll angles in degrees
-  const double desiredAnglesDegrees[3] = {
-      desiredYawDegrees, desiredPitchAngleDegrees, desiredRollAngleDegrees};
+  const double desiredAnglesDegrees[3] = {desiredYawDegrees, desiredPitchAngleDegrees, desiredRollAngleDegrees};
 
   // x, y, and z
   // for the accelerometer, at rest, Z = 1 because of gravity vector
@@ -80,32 +70,27 @@ motor_outputs_t QuadcopterController::calculateOutputs(
     // desired motor output
     angleControllerOutputs[i] = _angleControllers[i]->computeOutput(
         DEG_TO_RAD(imuValues.accelOutput[i]),
-        DEG_TO_RAD(desiredAnglesDegrees[i]), timeSeconds);
+        DEG_TO_RAD(desiredAnglesDegrees[i]),
+        timeSeconds);
 
     // Calculate the rate controller result
-    rateControllerOutputs[i] = _rateControllers[i]->computeOutput(
-        DEG_TO_RAD(imuValues.gyroOutput[i]), angleControllerOutputs[i],
-        timeSeconds);
+    rateControllerOutputs[i] =
+        _rateControllers[i]->computeOutput(DEG_TO_RAD(imuValues.gyroOutput[i]), angleControllerOutputs[i], timeSeconds);
   }
 
   // Axes 1
   motor_outputs_t motors = {
-      throttle - rateControllerOutputs[1] + rateControllerOutputs[2] -
-          rateControllerOutputs[0],
-      throttle + rateControllerOutputs[1] - rateControllerOutputs[2] -
-          rateControllerOutputs[0],
-      throttle - rateControllerOutputs[1] - rateControllerOutputs[2] +
-          rateControllerOutputs[0],
-      throttle + rateControllerOutputs[1] + rateControllerOutputs[2] +
-          rateControllerOutputs[0]};
+      throttle - rateControllerOutputs[1] + rateControllerOutputs[2] - rateControllerOutputs[0],
+      throttle + rateControllerOutputs[1] - rateControllerOutputs[2] - rateControllerOutputs[0],
+      throttle - rateControllerOutputs[1] - rateControllerOutputs[2] + rateControllerOutputs[0],
+      throttle + rateControllerOutputs[1] + rateControllerOutputs[2] + rateControllerOutputs[0]};
 
   for (int i = 0; i < NUM_MOTORS; i++) {
     // Clamp to 0 to 255
     motors[i] = MIN(MAX(motors[i], 0), 255);
 
     // Scale to between THROTTLE_MAX and THROTTLE_MIN
-    motors[i] =
-        (motors[i] / 255.0) * (THROTTLE_MAX - THROTTLE_MIN) + THROTTLE_MIN;
+    motors[i] = (motors[i] / 255.0) * (THROTTLE_MAX - THROTTLE_MIN) + THROTTLE_MIN;
   }
 
   _previousUpdateMicros = timeMicros;
@@ -115,20 +100,20 @@ motor_outputs_t QuadcopterController::calculateOutputs(
   }
 
   if (recordData) {
-    _debugHelper->updates[0] = 0.0f;  // TODO
-    _debugHelper->updates[1] = 0.0f;  // TODO
-    _debugHelper->updates[2] = 0.0f;  // TODO
+    _debugHelper->angleOutputs[0] = angleControllerOutputs[0];
+    _debugHelper->angleOutputs[1] = angleControllerOutputs[1];
+    _debugHelper->angleOutputs[2] = angleControllerOutputs[2];
+    _debugHelper->rateOutputs[0] = rateControllerOutputs[0];
+    _debugHelper->rateOutputs[1] = rateControllerOutputs[1];
+    _debugHelper->rateOutputs[2] = rateControllerOutputs[2];
     _debugHelper->motorValues[0] = motors[0];
     _debugHelper->motorValues[1] = motors[1];
     _debugHelper->motorValues[2] = motors[2];
     _debugHelper->motorValues[3] = motors[3];
-    _debugHelper->ypr[0] = 0.0f;  // TODO
-    _debugHelper->ypr[1] = 0.0f;  // TODO
-    _debugHelper->ypr[2] = 0.0f;  // TODO
     _debugHelper->throttle = throttle;
-    _debugHelper->desiredValues[0] = 0.0f;  // TODO
-    _debugHelper->desiredValues[1] = 0.0f;  // TODO
-    _debugHelper->desiredValues[2] = 0.0f;  // TODO
+    _debugHelper->desiredValues[0] = desiredAnglesDegrees[0];
+    _debugHelper->desiredValues[1] = desiredAnglesDegrees[1];
+    _debugHelper->desiredValues[2] = desiredAnglesDegrees[2];
   }
 
   return motors;

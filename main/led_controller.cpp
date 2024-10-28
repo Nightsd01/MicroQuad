@@ -7,7 +7,8 @@
 #include "hal/dedic_gpio_cpu_ll.h"
 #include "soc/gpio_struct.h"
 
-LEDController::LEDController(int dataPin) {
+LEDController::LEDController(int dataPin)
+{
   _dataPin = dataPin;
   esp_rom_gpio_pad_select_gpio((gpio_num_t)dataPin);
   gpio_set_direction((gpio_num_t)dataPin, GPIO_MODE_OUTPUT);
@@ -25,9 +26,15 @@ LEDController::LEDController(int dataPin) {
 }
 
 static inline __attribute__((always_inline)) void IRAM_ATTR _writeColor(
-    uint8_t red, uint8_t green, uint8_t blue, uint32_t highStartPulseCycles,
-    uint32_t highEndPulseCycles, uint32_t lowStartPulseCycles,
-    uint32_t lowEndPulseCycles, uint8_t pin) {
+    uint8_t red,
+    uint8_t green,
+    uint8_t blue,
+    uint32_t highStartPulseCycles,
+    uint32_t highEndPulseCycles,
+    uint32_t lowStartPulseCycles,
+    uint32_t lowEndPulseCycles,
+    uint8_t pin)
+{
   const uint8_t bytes[3] = {green, red, blue};
   portDISABLE_INTERRUPTS();
   for (int i = 0; i < 3; i++) {
@@ -49,12 +56,12 @@ static inline __attribute__((always_inline)) void IRAM_ATTR _writeColor(
   portENABLE_INTERRUPTS();
 }
 
-void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue) {
+void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
+{
   const uint32_t pin = _dataPin;
   const uint32_t highStartPulseCycles = _highStartPulseCycles;
   const uint32_t highEndPulseCycles = _highEndPulseCycles;
   const uint32_t lowStartPulseCycles = _lowStartPulseCycles;
   const uint32_t lowEndPulseCycles = _lowEndPulseCycles;
-  _writeColor(red, green, blue, highStartPulseCycles, highEndPulseCycles,
-              lowStartPulseCycles, lowEndPulseCycles, pin);
+  _writeColor(red, green, blue, highStartPulseCycles, highEndPulseCycles, lowStartPulseCycles, lowEndPulseCycles, pin);
 }

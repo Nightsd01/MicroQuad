@@ -2,7 +2,7 @@
 
 #include <Logger.h>
 
-static bool _gotInterrupt;
+static volatile bool _gotInterrupt;
 static void handleInterrupt(void) { _gotInterrupt = true; }
 
 /**
@@ -31,9 +31,15 @@ static void handleInterrupt(void) { _gotInterrupt = true; }
 #define ACCEL_OFFSET_Y -3.597744361
 #define ACCEL_OFFSET_Z 65.79
 
-IMU::IMU(uint8_t csPin, uint8_t misoPin, uint8_t mosiPin, uint8_t sclkPin,
-         uint8_t interruptPin, std::function<void(imu_update_t)> updateHandler,
-         bool *success) {
+IMU::IMU(
+    uint8_t csPin,
+    uint8_t misoPin,
+    uint8_t mosiPin,
+    uint8_t sclkPin,
+    uint8_t interruptPin,
+    std::function<void(imu_update_t)> updateHandler,
+    bool *success)
+{
   pinMode(csPin, OUTPUT);
   digitalWrite(csPin, HIGH);
   _spi.begin(sclkPin, misoPin, mosiPin, csPin);
@@ -61,7 +67,8 @@ IMU::IMU(uint8_t csPin, uint8_t misoPin, uint8_t mosiPin, uint8_t sclkPin,
   _imu->enableDataReadyInterrupt();
 }
 
-void IMU::loopHandler(void) {
+void IMU::loopHandler(void)
+{
   if (_gotInterrupt) {
     _imu->getAGT();
     _imu->getRawAGT();
@@ -88,17 +95,18 @@ void IMU::loopHandler(void) {
   }
 }
 
-void IMU::calibrate(CalibrationAxis axis, int val) {
+void IMU::calibrate(CalibrationAxis axis, int val)
+{
   _calibrated = true;
   switch (axis) {
-    case CalibrationAxis::x:
-      _offsets.gyro_x = (float)val;
-      break;
-    case CalibrationAxis::y:
-      _offsets.gyro_y = (float)val;
-      break;
-    case CalibrationAxis::z:
-      _offsets.gyro_z = (float)val;
-      break;
+  case CalibrationAxis::x:
+    _offsets.gyro_x = (float)val;
+    break;
+  case CalibrationAxis::y:
+    _offsets.gyro_y = (float)val;
+    break;
+  case CalibrationAxis::z:
+    _offsets.gyro_z = (float)val;
+    break;
   }
 }

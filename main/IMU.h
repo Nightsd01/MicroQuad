@@ -7,7 +7,8 @@
 
 #include "ICM42688.h"
 
-struct imu_update_t {
+struct imu_update_t
+{
   float accel_x, accel_y, accel_z;
   float gyro_x, gyro_y, gyro_z;
   float mag_x, mag_y, mag_z;
@@ -15,17 +16,27 @@ struct imu_update_t {
   int16_t accel_raw_x, accel_raw_y, accel_raw_z;
 };
 
-enum CalibrationAxis { x, y, z };
+enum CalibrationAxis
+{
+  x,
+  y,
+  z
+};
 
-class IMU {
- public:
-  IMU(uint8_t csPin, uint8_t misoPin, uint8_t mosiPin, uint8_t sclkPin,
-      uint8_t interruptPin, std::function<void(imu_update_t)> updateHandler,
+class IMU
+{
+public:
+  IMU(uint8_t csPin,
+      uint8_t misoPin,
+      uint8_t mosiPin,
+      uint8_t sclkPin,
+      uint8_t interruptPin,
+      std::function<void(imu_update_t)> updateHandler,
       bool *success);
   void loopHandler(void);
   void calibrate(CalibrationAxis axis, int val);
 
- private:
+private:
   SPIClass _spi;
   ICM42688 *_imu;
   std::function<void(imu_update_t)> _updateHandler;

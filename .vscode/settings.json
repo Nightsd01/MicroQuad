@@ -18,13 +18,13 @@
         "esp appimage_offset 0x8000"
     ],
     "[cpp]": {
-        "editor.defaultFormatter": "ms-vscode.cpptools",
         "editor.tabSize": 2,
-        "editor.insertSpaces": true
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false,
+        "editor.defaultFormatter": "xaver.clang-format",
     },
     "editor.formatOnSave": true,
-    "C_Cpp.clang_format_style": "file",
-    "C_Cpp.clang_format_fallbackStyle": "Google",
+    "C_Cpp.formatting": "disabled",
     "files.associations": {
         "array": "cpp",
         "deque": "cpp",
@@ -144,7 +144,8 @@
         "__verbose_abort": "cpp",
         "execution": "cpp",
         "ios": "cpp",
-        "locale": "cpp"
+        "locale": "cpp",
+        "cassert": "cpp"
     },
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
