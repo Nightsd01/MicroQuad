@@ -421,7 +421,7 @@ float batteryPercent(float batteryVoltage)
 
 float batteryLevel()
 {
-  const const int val = analogRead(BATTERY_SENSE_PIN);
+  const int val = analogRead(BATTERY_SENSE_PIN);
   return BATTERY_SCALE * (float)val;
 }
 
