@@ -22,7 +22,7 @@ void DebugDataManager::addDouble(double *vals, uint64_t size)
   _growHeapIfNeeded();
   while (_reallocating) {
   }
-  memcpy(&data[_head + (size * sizeof(double))], vals, sizeof(double) * size);
+  memcpy(&data[_head], vals, sizeof(double) * size);
   _head += size * sizeof(double);
 }
 

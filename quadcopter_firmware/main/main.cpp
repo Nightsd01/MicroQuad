@@ -401,7 +401,7 @@ void uploadDebugData()
 {
   DebugDataManager manager = helper->dataManager;
   uint8_t *data = manager.data;
-  uint64_t dataSize = manager.currentSize;
+  uint64_t dataSize = manager.numSamples * DEBUG_PACKET_SIZE;
   _bluetoothController.uploadDebugData(data, dataSize);
 }
 

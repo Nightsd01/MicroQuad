@@ -262,7 +262,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     let byteCount = data.count / 8
     for i in 0..<byteCount {
       let value = data.withUnsafeBytes { buffer in
-        return buffer.load(fromByteOffset: i * 4, as: Float32.self)
+        return buffer.load(fromByteOffset: i * 8, as: Double.self)
       }
       if (i == (valuesPerPacket - 1) || (i + 1) % valuesPerPacket == 0) && i > 0 {
         result += String(format: "%.2f", value) + "\n"
