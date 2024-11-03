@@ -24,7 +24,6 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   @State fileprivate var rightStickValues = PreviousControlValues(x : 127.5, y : 127.5)
   @State private var recordingDebugData = false
   @State private var showingDebugMenu = false
-  @State private var showingCalibrationView = false
   @State private var calibrating = false
 
   @State private var motor1 = 0.0
@@ -123,21 +122,8 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
           changeMotorDebugState(editing: showingPopover)
         })
         Spacer()
-//        if (calibrating && !controller.calibrated) {
-//          HStack {
-//            Text("Calibrating")
-//            ProgressView().progressViewStyle(CircularProgressViewStyle())
-//          }
-//        } else if (controller.calibrated) {
-//          Text("Calibrated").foregroundColor(.green)
-//        } else {
-//        }
         Button("Calibrate") {
-          showingCalibrationView = true
-        }.popover(isPresented: $showingCalibrationView) {
-          CalibrationView(controller: controller) {
-            showingCalibrationView = false
-          }
+          controller.calibrate()
         }
         Spacer()
         Button(recordingDebugData ? "Stop Recording" : "Start Recording") {
@@ -157,6 +143,24 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
       .frame(maxWidth: .infinity, maxHeight: 44, alignment: .center)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    .alert("Calibration Complete", isPresented: .constant(controller.connected && controller.calibrated && controller.calibrationValues != nil)) {
+      Button("OK") {
+        controller.calibrated = false
+        controller.calibrationValues = nil
+      }
+        } message: {
+          if (controller.calibrationValues == nil) {
+            Text("")
+          } else {
+            Text(
+              "Gyro Bias: \(controller.calibrationValues!.gyroBiasX), \(controller.calibrationValues!.gyroBiasY), \(controller.calibrationValues!.gyroBiasZ)"
+              + "\nAccel Bias: \(controller.calibrationValues!.accelBiasX), \(controller.calibrationValues!.accelBiasY), \(controller.calibrationValues!.accelBiasZ)"
+              + "\nAccel Scale Factor: \(controller.calibrationValues!.accelScaleX), \(controller.calibrationValues!.accelScaleY), \(controller.calibrationValues!.accelScaleZ)"
+              + "\nGyro Offsets: \(controller.calibrationValues!.gyroOffsetX), \(controller.calibrationValues!.gyroOffsetY), \(controller.calibrationValues!.gyroOffsetZ)"
+              + "\nnAccel Offsets: \(controller.calibrationValues!.accelOffsetX), \(controller.calibrationValues!.accelOffsetY), \(controller.calibrationValues!.accelOffsetZ)"
+            )
+          }
+        }
   }
 
   private func changeMotorDebugState(editing: Bool) {

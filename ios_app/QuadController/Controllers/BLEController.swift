@@ -8,12 +8,6 @@
 import Foundation
 import CoreBluetooth
 
-enum CalibrationAxis : String {
-  case x = "x"
-  case y = "y"
-  case z = "z"
-}
-
 protocol BLEControllerDelegate {
   func didConnect()
   func didDisconnect()
@@ -29,6 +23,8 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   static let calibrateCharacteristicUUID = "498e876e-0dd2-11ec-82a8-0242ac130003"
   static let debugInfoCharacteristicUUID = "f0a0afee-0983-4691-adc5-02ee803f5418"
   static let maxUpdateFrequencySeconds = 0.1
+  
+  static let terminationString = "==TERMINATE=="
   
   var manager : CBCentralManager!
   var device : CBPeripheral?
@@ -52,6 +48,8 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   @Published var transferProgress = 0.0
 
   @Published var calibrated = false
+  var calibrationData : Data?
+  @Published var calibrationValues : CalibrationValues?
   
   public var quadStatus = QuadStatus()
   @Published var bleStatus = "None"
@@ -95,9 +93,9 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     }
   }
 
-  func calibrate(axis : CalibrationAxis, value : Int) {
+  func calibrate() {
     if let characteristic = calibrationCharacteristic {
-      device?.writeValue("\(axis)=\(value)".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
+      device?.writeValue("calibrate".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
     }
   }
 
@@ -239,6 +237,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
         motorDebugCharacteristic = characteristic
       } else if characteristic.uuid.uuidString.lowercased() == BLEController.calibrateCharacteristicUUID.lowercased() {
         calibrationCharacteristic = characteristic
+        device?.setNotifyValue(true, for: characteristic)
       } else if characteristic.uuid.uuidString.lowercased() == BLEController.debugInfoCharacteristicUUID.lowercased() {
         debugInfoCharacteristic = characteristic
         device?.setNotifyValue(true, for: characteristic)
@@ -258,7 +257,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     // 8 bytes: throttle
     // 8 bytes: voltage
     var result = ""
-    let valuesPerPacket = 25
+    let valuesPerPacket = 28
     let byteCount = data.count / 8
     for i in 0..<byteCount {
       let value = data.withUnsafeBytes { buffer in
@@ -300,7 +299,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
       guard debugData != nil else {
         fatalError("debug data was not initialized")
       }
-      if String(data: data, encoding: .utf8) == "==TERMINATE==" {
+      if String(data: data, encoding: .utf8) == BLEController.terminationString {
         processDebugData(debugData!)
         receivingDebugData = false
         return
@@ -317,15 +316,25 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
       
     }
   }
+  
+  func finishedCalibration(calibrationData : Data) {
+    self.calibrationValues = CalibrationValues(calibrationData)
+    self.calibrated = true
+  }
 
+  // we unfortunately transmit 10 bytes at a time due to iOS BLE packet size limits....
   func calibrationUpdate(_ characteristic : CBCharacteristic) {
     guard let data = characteristic.value else {
       print("Got invalid calibration packet")
       return
     }
-    let str = String(data: data, encoding: .utf8)
-    if (str == "done") {
-      calibrated = true
+    
+    if let calibData = calibrationData, let str = String(data: data, encoding: .utf8), str == BLEController.terminationString {
+      finishedCalibration(calibrationData: calibData)
+    } else if calibrationData == nil {
+      calibrationData = data
+    } else {
+      calibrationData = calibrationData! + data
     }
   }
   
@@ -338,7 +347,8 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
       debugUpdate(characteristic)
       return
     } else if characteristic.uuid.uuidString.lowercased() == BLEController.calibrateCharacteristicUUID.lowercased() {
-
+      calibrationUpdate(characteristic)
+      return
     }
 
     guard characteristic.uuid.uuidString.lowercased() == BLEController.telemetryCharacteristicUUID.lowercased() else {
