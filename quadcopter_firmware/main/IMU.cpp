@@ -73,9 +73,9 @@ void IMU::loopHandler(void)
     _imu->getAGT();
     _imu->getRawAGT();
     imu_update_t update;
-    update.accel_raw_x = _imu->rawAccX() - ACCEL_OFFSET_X;
-    update.accel_raw_y = _imu->rawAccY() - ACCEL_OFFSET_Y;
-    update.accel_raw_z = _imu->rawAccZ() - ACCEL_OFFSET_Z;
+    update.accel_raw_x = _imu->rawAccX();
+    update.accel_raw_y = _imu->rawAccY();
+    update.accel_raw_z = _imu->rawAccZ();
     update.accel_x = _imu->accX();
     update.accel_y = _imu->accY();
     update.accel_z = _imu->accZ();
@@ -95,18 +95,51 @@ void IMU::loopHandler(void)
   }
 }
 
-void IMU::calibrate(CalibrationAxis axis, int val)
+calibration_data_t IMU::calibrate(void)
 {
-  _calibrated = true;
-  switch (axis) {
-  case CalibrationAxis::x:
-    _offsets.gyro_x = (float)val;
-    break;
-  case CalibrationAxis::y:
-    _offsets.gyro_y = (float)val;
-    break;
-  case CalibrationAxis::z:
-    _offsets.gyro_z = (float)val;
-    break;
+  if (_imu->calibrateGyro() != 1) {
+    LOG_ERROR("Failed gyro calibration");
+    return {.success = false};
   }
+  _imu->setAllOffsets();
+  if (_imu->calibrateAccel() != 1) {
+    LOG_ERROR("Failed accel calibration");
+    return {.success = false};
+  }
+  if (_imu->computeOffsets() != 1) {
+    LOG_ERROR("Failed to compute offsets");
+    return {.success = false};
+  }
+  std::array<int16_t, 3> gyroOffsets = _imu->getGyrOffsets();
+  std::array<int16_t, 3> accelOffsets = _imu->getAccOffsets();
+  LOG_INFO(
+      "Calibration complete. Gyro offsets: %f, %f, %f, "
+      "Accel bias values: %f, %f, %f, "
+      "accel scale factors: %f, %f, %f, "
+      "gyro offsets: %d, %d, %d, "
+      "accel offets: %d, %d, %d",
+      _imu->getGyroBiasX(),
+      _imu->getGyroBiasY(),
+      _imu->getGyroBiasZ(),
+      _imu->getAccelBiasX_mss(),
+      _imu->getAccelBiasY_mss(),
+      _imu->getAccelBiasZ_mss(),
+      _imu->getAccelScaleFactorX(),
+      _imu->getAccelScaleFactorY(),
+      _imu->getAccelScaleFactorZ(),
+      gyroOffsets[0],
+      gyroOffsets[1],
+      gyroOffsets[2],
+      accelOffsets[0],
+      accelOffsets[1],
+      accelOffsets[2]);
+
+  return {
+      .gyro_biases = {_imu->getGyroBiasX(),         _imu->getGyroBiasY(),         _imu->getGyroBiasZ()        },
+      .accel_biases = {_imu->getAccelBiasX_mss(),    _imu->getAccelBiasY_mss(),    _imu->getAccelBiasZ_mss()   },
+      .accel_scales = {_imu->getAccelScaleFactorX(), _imu->getAccelScaleFactorY(), _imu->getAccelScaleFactorZ()},
+      .gyro_offsets = {gyroOffsets[0],               gyroOffsets[1],               gyroOffsets[2]              },
+      .accel_offsets = {accelOffsets[0],              accelOffsets[1],              accelOffsets[2]             },
+      .success = true
+  };
 }

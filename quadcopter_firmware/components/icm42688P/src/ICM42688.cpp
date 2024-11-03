@@ -1,4 +1,5 @@
 #include "ICM42688.h"
+
 #include "registers.h"
 
 using namespace ICM42688reg;
@@ -6,34 +7,34 @@ using namespace ICM42688reg;
 /* ICM42688 object, input the I2C bus and address */
 ICM42688::ICM42688(TwoWire &bus, uint8_t address)
 {
-  _i2c = &bus;        // I2C bus
-  _address = address; // I2C address
-  _useSPI = false;    // set to use I2C
+  _i2c = &bus;         // I2C bus
+  _address = address;  // I2C address
+  _useSPI = false;     // set to use I2C
 }
 
 /* ICM42688 object, input the I2C bus and address using SDA, SCL pins */
 ICM42688::ICM42688(TwoWire &bus, uint8_t address, uint8_t sda_pin, uint8_t scl_pin)
 {
-  _i2c = &bus;        // I2C bus
-  _address = address; // I2C address
-  _useSPI = false;    // set to use I2C
-  _sda_pin = sda_pin; // set SDA to user defined pin
-  _scl_pin = scl_pin; // set SCL to user defined pin
+  _i2c = &bus;         // I2C bus
+  _address = address;  // I2C address
+  _useSPI = false;     // set to use I2C
+  _sda_pin = sda_pin;  // set SDA to user defined pin
+  _scl_pin = scl_pin;  // set SCL to user defined pin
 }
 
 /* ICM42688 object, input the SPI bus and chip select pin */
 ICM42688::ICM42688(SPIClass &bus, uint8_t csPin, uint32_t spi_hs_clock)
 {
-  _spi = &bus;    // SPI bus
-  _csPin = csPin; // chip select pin
-  _useSPI = true; // set to use SPI
+  _spi = &bus;     // SPI bus
+  _csPin = csPin;  // chip select pin
+  _useSPI = true;  // set to use SPI
   _spi_hs_clock = spi_hs_clock;
 }
 
 /* starts communication with the ICM42688 */
 int ICM42688::begin()
 {
-  if (_useSPI) { // using SPI for communication
+  if (_useSPI) {  // using SPI for communication
     // use low speed SPI for register setting
     _useSPIHS = false;
     // setting CS pin to output
@@ -42,7 +43,7 @@ int ICM42688::begin()
     digitalWrite(_csPin, HIGH);
     // begin SPI communication
     _spi->begin();
-  } else { // using I2C for communication
+  } else {  // using I2C for communication
     // starting the I2C bus
     _i2c->begin(_sda_pin, _scl_pin);
     // setting the I2C clock
@@ -289,7 +290,7 @@ int ICM42688::disableDataReadyInterrupt()
 
 /* reads the most current data from ICM42688 and stores in buffer */
 int ICM42688::getAGT()
-{ // modified to use getRawAGT()
+{  // modified to use getRawAGT()
   if (getRawAGT() < 0) {
     return -1;
   }
@@ -309,15 +310,15 @@ int ICM42688::getAGT()
 
 /* reads the most current data from ICM42688 and stores in buffer */
 int ICM42688::getRawAGT()
-{                   // Added to return raw data only
-  _useSPIHS = true; // use the high speed SPI for data readout
+{                    // Added to return raw data only
+  _useSPIHS = true;  // use the high speed SPI for data readout
   // grab the data from the ICM42688
   if (readRegisters(UB0_REG_TEMP_DATA1, 14, _buffer) < 0) {
     return -1;
   }
 
   // combine bytes into 16 bit values
-  int16_t rawMeas[7]; // temp, accel xyz, gyro xyz
+  int16_t rawMeas[7];  // temp, accel xyz, gyro xyz
   for (size_t i = 0; i < 7; i++) {
     rawMeas[i] = ((int16_t)_buffer[i * 2] << 8) | _buffer[i * 2 + 1];
   }
@@ -343,9 +344,10 @@ int ICM42688_FIFO::enableFifo(bool accel, bool gyro, bool temp)
 {
   _enFifoAccel = accel;
   _enFifoGyro = gyro;
-  _enFifoTemp = true; // all structures have 1-byte temp, didn't return error to maintain backwards compatibility
-  _enFifoTimestamp = accel && gyro; // can only read both accel and gyro in Structure 3 or 4, both have 2-byte timestamp
-  _enFifoHeader = accel || gyro;    // if neither sensor requested, FIFO will not send any more packets
+  _enFifoTemp = true;  // all structures have 1-byte temp, didn't return error to maintain backwards compatibility
+  _enFifoTimestamp =
+      accel && gyro;              // can only read both accel and gyro in Structure 3 or 4, both have 2-byte timestamp
+  _enFifoHeader = accel || gyro;  // if neither sensor requested, FIFO will not send any more packets
   _fifoFrameSize = _enFifoHeader * 1 + _enFifoAccel * 6 + _enFifoGyro * 6 + _enFifoTemp + _enFifoTimestamp * 2;
 
   // use low speed SPI for register setting
@@ -370,7 +372,7 @@ int ICM42688_FIFO::streamToFifo()
   High-resolution mode not yet supported */
 int ICM42688_FIFO::readFifo()
 {
-  _useSPIHS = true; // use the high speed SPI for data readout
+  _useSPIHS = true;  // use the high speed SPI for data readout
   // get the fifo size
   readRegisters(UB0_REG_FIFO_COUNTH, 2, _buffer);
   _fifoSize = (((uint16_t)(_buffer[0] & 0x0F)) << 8) + ((uint16_t)_buffer[1]);
@@ -625,16 +627,16 @@ int ICM42688::writeRegister(uint8_t subAddress, uint8_t data)
 {
   /* write data to device */
   if (_useSPI) {
-    _spi->beginTransaction(SPISettings(SPI_LS_CLOCK, MSBFIRST, SPI_MODE3)); // begin the transaction
-    digitalWrite(_csPin, LOW);                                              // select the ICM42688 chip
-    _spi->transfer(subAddress);                                             // write the register address
-    _spi->transfer(data);                                                   // write the data
-    digitalWrite(_csPin, HIGH);                                             // deselect the ICM42688 chip
-    _spi->endTransaction();                                                 // end the transaction
+    _spi->beginTransaction(SPISettings(SPI_LS_CLOCK, MSBFIRST, SPI_MODE3));  // begin the transaction
+    digitalWrite(_csPin, LOW);                                               // select the ICM42688 chip
+    _spi->transfer(subAddress);                                              // write the register address
+    _spi->transfer(data);                                                    // write the data
+    digitalWrite(_csPin, HIGH);                                              // deselect the ICM42688 chip
+    _spi->endTransaction();                                                  // end the transaction
   } else {
-    _i2c->beginTransmission(_address); // open the device
-    _i2c->write(subAddress);           // write the register address
-    _i2c->write(data);                 // write the data
+    _i2c->beginTransmission(_address);  // open the device
+    _i2c->write(subAddress);            // write the register address
+    _i2c->write(data);                  // write the data
     _i2c->endTransmission();
   }
 
@@ -660,19 +662,19 @@ int ICM42688::readRegisters(uint8_t subAddress, uint8_t count, uint8_t *dest)
     } else {
       _spi->beginTransaction(SPISettings(SPI_LS_CLOCK, MSBFIRST, SPI_MODE3));
     }
-    digitalWrite(_csPin, LOW);         // select the ICM42688 chip
-    _spi->transfer(subAddress | 0x80); // specify the starting register address
+    digitalWrite(_csPin, LOW);          // select the ICM42688 chip
+    _spi->transfer(subAddress | 0x80);  // specify the starting register address
     for (uint8_t i = 0; i < count; i++) {
-      dest[i] = _spi->transfer(0x00); // read the data
+      dest[i] = _spi->transfer(0x00);  // read the data
     }
-    digitalWrite(_csPin, HIGH); // deselect the ICM42688 chip
-    _spi->endTransaction();     // end the transaction
+    digitalWrite(_csPin, HIGH);  // deselect the ICM42688 chip
+    _spi->endTransaction();      // end the transaction
     return 1;
   } else {
-    _i2c->beginTransmission(_address); // open the device
-    _i2c->write(subAddress);           // specify the starting register address
+    _i2c->beginTransmission(_address);  // open the device
+    _i2c->write(subAddress);            // specify the starting register address
     _i2c->endTransmission(false);
-    _numBytes = _i2c->requestFrom(_address, count); // specify the number of bytes to receive
+    _numBytes = _i2c->requestFrom(_address, count);  // specify the number of bytes to receive
     if (_numBytes == count) {
       for (uint8_t i = 0; i < count; i++) {
         dest[i] = _i2c->read();
@@ -719,7 +721,7 @@ uint8_t ICM42688::whoAmI()
   return _buffer[0];
 }
 
-/* get Raw Bias (Offsets)*/ // Added to use Offsets rather than compensating through additional code
+/* get Raw Bias (Offsets)*/  // Added to use Offsets rather than compensating through additional code
 int ICM42688::computeOffsets()
 {
   const AccelFS current_Accelfssel = _accelFS;
@@ -727,38 +729,38 @@ int ICM42688::computeOffsets()
 
   // set the IMU at the correct resolution
   setAccelFS(ICM42688::AccelFS::gpm2);
-  setGyroFS(ICM42688::GyroFS::dps250); // check if this is the right one
+  setGyroFS(ICM42688::GyroFS::dps250);  // check if this is the right one
   int16_t FullScale_Acc = 2;
   int16_t FullScale_Gyr = 250;
 
   // reset the Offset_user
   setBank(4);
   if (writeRegister(UB4_REG_OFFSET_USER5, 0) < 0) {
-    return -2; // lower Ax byte
+    return -2;  // lower Ax byte
   }
   if (writeRegister(UB4_REG_OFFSET_USER6, 0) < 0) {
-    return -2; // lower Ay byte
+    return -2;  // lower Ay byte
   }
   if (writeRegister(UB4_REG_OFFSET_USER8, 0) < 0) {
-    return -2; // lower Az byte
+    return -2;  // lower Az byte
   }
   if (writeRegister(UB4_REG_OFFSET_USER2, 0) < 0) {
-    return -2; // lower Gy byte
+    return -2;  // lower Gy byte
   }
   if (writeRegister(UB4_REG_OFFSET_USER3, 0) < 0) {
-    return -2; // lower Gz byte
+    return -2;  // lower Gz byte
   }
   if (writeRegister(UB4_REG_OFFSET_USER0, 0) < 0) {
-    return -2; // lower Gx byte
+    return -2;  // lower Gx byte
   }
   if (writeRegister(UB4_REG_OFFSET_USER4, 0) < 0) {
-    return -2; // upper Ax and Gz bytes
+    return -2;  // upper Ax and Gz bytes
   }
   if (writeRegister(UB4_REG_OFFSET_USER7, 0) < 0) {
-    return -2; // upper Az and Ay bytes
+    return -2;  // upper Az and Ay bytes
   }
   if (writeRegister(UB4_REG_OFFSET_USER1, 0) < 0) {
-    return -2; // upper Gy and Gx bytes
+    return -2;  // upper Gy and Gx bytes
   }
   setBank(0);
   // reinitialize the _rawAccBias and _rawGyrBias
@@ -788,14 +790,15 @@ int ICM42688::computeOffsets()
 
   // compensate gravity and compute the _AccOffset and _GyrOffset
   for (size_t ii = 0; ii < 3; ii++) {
-    _AccOffset[ii] = (int16_t)(-(_rawAccBias[ii]) * (FullScale_Acc / 32768.0f * 2048)); //*2048));  // 0.5 mg resolution
+    _AccOffset[ii] =
+        (int16_t)(-(_rawAccBias[ii]) * (FullScale_Acc / 32768.0f * 2048));  //*2048));  // 0.5 mg resolution
     if (_rawAccBias[ii] * FullScale_Acc > 26'000) {
       _AccOffset[ii] = (int16_t)(-(_rawAccBias[ii] - 32'768 / FullScale_Acc) * (FullScale_Acc / 32768.0f * 2048));
-    } // 26000 ~80% of 32768
+    }  // 26000 ~80% of 32768
     if (_rawAccBias[ii] * FullScale_Acc < -26'000) {
       _AccOffset[ii] = (int16_t)(-(_rawAccBias[ii] + 32'768 / FullScale_Acc) * (FullScale_Acc / 32768.0f * 2048));
     }
-    _GyrOffset[ii] = (int16_t)((-_rawGyrBias[ii]) * (FullScale_Gyr / 32768.0f * 32)); // 1/32 dps resolution
+    _GyrOffset[ii] = (int16_t)((-_rawGyrBias[ii]) * (FullScale_Gyr / 32768.0f * 32));  // 1/32 dps resolution
   }
 
   // Serial.println("The new raw Bias are:");
@@ -856,47 +859,51 @@ int ICM42688::setAllOffsets()
     return -2;
   }
 
-  reg = _AccOffset[0] & 0x00FF; // lower Ax byte
+  reg = _AccOffset[0] & 0x00FF;  // lower Ax byte
   if (writeRegister(UB4_REG_OFFSET_USER5, reg) < 0) {
     return -2;
   }
-  reg = _AccOffset[1] & 0x00FF; // lower Ay byte
+  reg = _AccOffset[1] & 0x00FF;  // lower Ay byte
   if (writeRegister(UB4_REG_OFFSET_USER6, reg) < 0) {
     return -2;
   }
-  reg = _AccOffset[2] & 0x00FF; // lower Az byte
+  reg = _AccOffset[2] & 0x00FF;  // lower Az byte
   if (writeRegister(UB4_REG_OFFSET_USER8, reg) < 0) {
     return -2;
   }
 
-  reg = _GyrOffset[1] & 0x00FF; // lower Gy byte
+  reg = _GyrOffset[1] & 0x00FF;  // lower Gy byte
   if (writeRegister(UB4_REG_OFFSET_USER2, reg) < 0) {
     return -2;
   }
-  reg = _GyrOffset[2] & 0x00FF; // lower Gz byte
+  reg = _GyrOffset[2] & 0x00FF;  // lower Gz byte
   if (writeRegister(UB4_REG_OFFSET_USER3, reg) < 0) {
     return -2;
   }
-  reg = _GyrOffset[0] & 0x00FF; // lower Gx byte
+  reg = _GyrOffset[0] & 0x00FF;  // lower Gx byte
   if (writeRegister(UB4_REG_OFFSET_USER0, reg) < 0) {
     return -2;
   }
 
-  reg = (_AccOffset[0] & 0x0F00) >> 4 | (_GyrOffset[2] & 0x0F00) >> 8; // upper Ax and Gz bytes
+  reg = (_AccOffset[0] & 0x0F00) >> 4 | (_GyrOffset[2] & 0x0F00) >> 8;  // upper Ax and Gz bytes
   if (writeRegister(UB4_REG_OFFSET_USER4, reg) < 0) {
     return -2;
   }
-  reg = (_AccOffset[2] & 0x0F00) >> 4 | (_AccOffset[1] & 0x0F00) >> 8; // upper Az and Ay bytes
+  reg = (_AccOffset[2] & 0x0F00) >> 4 | (_AccOffset[1] & 0x0F00) >> 8;  // upper Az and Ay bytes
   if (writeRegister(UB4_REG_OFFSET_USER7, reg) < 0) {
     return -2;
   }
-  reg = (_GyrOffset[1] & 0x0F00) >> 4 | (_GyrOffset[0] & 0x0F00) >> 8; // upper Gy and Gx bytes
+  reg = (_GyrOffset[1] & 0x0F00) >> 4 | (_GyrOffset[0] & 0x0F00) >> 8;  // upper Gy and Gx bytes
   if (writeRegister(UB4_REG_OFFSET_USER1, reg) < 0) {
     return -2;
   }
   setBank(0);
   return 1;
 }
+
+std::array<int16_t, 3> ICM42688::getGyrOffsets() { return {_GyrOffset[0], _GyrOffset[1], _GyrOffset[2]}; }
+
+std::array<int16_t, 3> ICM42688::getAccOffsets() { return {_AccOffset[0], _AccOffset[1], _AccOffset[2]}; }
 
 /* Set Gyro and Accel Offsets individually*/
 int ICM42688::setAccXOffset(int16_t accXoffset)
@@ -1030,25 +1037,25 @@ int ICM42688::setGyroNotchFilter(float gyroNFfreq_x, float gyroNFfreq_y, float g
   // uint8_t nf_coswz_sel = 0;
   uint8_t gyro_nf_coswz_low[3] = {0};
   uint8_t buff = 0;
-  float Fdrv = 19'200 / (clkdiv * 10.0f);                               // in kHz  (19.2MHz = 19200 kHz)
-  const float fdesired[3] = {gyroNFfreq_x, gyroNFfreq_y, gyroNFfreq_z}; // in kHz - fesdeired between 1kz and 3 kHz
+  float Fdrv = 19'200 / (clkdiv * 10.0f);                                // in kHz  (19.2MHz = 19200 kHz)
+  const float fdesired[3] = {gyroNFfreq_x, gyroNFfreq_y, gyroNFfreq_z};  // in kHz - fesdeired between 1kz and 3 kHz
   // float coswz = 0;
   for (size_t ii = 0; ii < 3; ii++) {
     float coswz = cos(2 * PI * fdesired[ii] / Fdrv);
     if (coswz <= 0.875) {
       nf_coswz = (uint16_t)round(coswz * 256);
-      gyro_nf_coswz_low[ii] = (uint8_t)(nf_coswz & 0x00FF); // take lower part
-      buff = buff & (((nf_coswz & 0xFF00) >> 8) << ii);     // take upper part and concatenate in the buffer
+      gyro_nf_coswz_low[ii] = (uint8_t)(nf_coswz & 0x00FF);  // take lower part
+      buff = buff & (((nf_coswz & 0xFF00) >> 8) << ii);      // take upper part and concatenate in the buffer
     } else {
-      buff = buff & (1 << (3 + ii)); // nf_coswz_sel =  nf_coswz_sel & (1<<(3+ii));
+      buff = buff & (1 << (3 + ii));  // nf_coswz_sel =  nf_coswz_sel & (1<<(3+ii));
       if (coswz > 0.875) {
         nf_coswz = (uint16_t)round(8 * (1 - coswz) * 256);
-        gyro_nf_coswz_low[ii] = (uint8_t)(nf_coswz & 0x00FF); // take lower part
-        buff = buff & (((nf_coswz & 0xFF00) >> 8) << ii);     // take upper part and concatenate in the buffer
+        gyro_nf_coswz_low[ii] = (uint8_t)(nf_coswz & 0x00FF);  // take lower part
+        buff = buff & (((nf_coswz & 0xFF00) >> 8) << ii);      // take upper part and concatenate in the buffer
       } else if (coswz < -0.875) {
         nf_coswz = (uint16_t)round(-8 * (1 - coswz) * 256);
-        gyro_nf_coswz_low[ii] = (uint8_t)(nf_coswz & 0x00FF); // take lower part
-        buff = buff & (((nf_coswz & 0xFF00) >> 8) << ii);     // take upper part and concatenate in the buffer}
+        gyro_nf_coswz_low[ii] = (uint8_t)(nf_coswz & 0x00FF);  // take lower part
+        buff = buff & (((nf_coswz & 0xFF00) >> 8) << ii);      // take upper part and concatenate in the buffer}
       }
     }
   }
@@ -1078,26 +1085,26 @@ int ICM42688::testingFunction() { return 1; }
 
 /* Get Resolution FullScale */
 float ICM42688::getAccelRes()
-{ // read  ACCEL_CONFIG0 and get ACCEL_FS_SEL value
+{  // read  ACCEL_CONFIG0 and get ACCEL_FS_SEL value
   int currentAccFS = getAccelFS();
   float accRes;
   switch (currentAccFS) {
-  case ICM42688::AccelFS::gpm2:
-    accRes = 16.0f / (32768.0f);
-    break;
-  case ICM42688::AccelFS::gpm4:
-    accRes = 4.0f / (32768.0f);
-    break;
-  case ICM42688::AccelFS::gpm8:
-    accRes = 8.0f / (32768.0f);
-    break;
-  case ICM42688::AccelFS::gpm16:
-    accRes = 16.0f / (32768.0f);
-    break;
-  default:
-    assert(false && "Invalid currentAccFS case");
-    accRes = 0.0f;
-    break;
+    case ICM42688::AccelFS::gpm2:
+      accRes = 16.0f / (32768.0f);
+      break;
+    case ICM42688::AccelFS::gpm4:
+      accRes = 4.0f / (32768.0f);
+      break;
+    case ICM42688::AccelFS::gpm8:
+      accRes = 8.0f / (32768.0f);
+      break;
+    case ICM42688::AccelFS::gpm16:
+      accRes = 16.0f / (32768.0f);
+      break;
+    default:
+      assert(false && "Invalid currentAccFS case");
+      accRes = 0.0f;
+      break;
   }
   return accRes;
 }
@@ -1108,34 +1115,34 @@ float ICM42688::getGyroRes()
   int currentGyroFS = getGyroFS();
   float gyroRes = 0.0f;
   switch (currentGyroFS) {
-  case ICM42688::GyroFS::dps2000:
-    gyroRes = 2000.0f / 32768.0f;
-    break;
-  case ICM42688::GyroFS::dps1000:
-    gyroRes = 1000.0f / 32768.0f;
-    break;
-  case ICM42688::GyroFS::dps500:
-    gyroRes = 500.0f / 32768.0f;
-    break;
-  case ICM42688::GyroFS::dps250:
-    gyroRes = 250.0f / 32768.0f;
-    break;
-  case ICM42688::GyroFS::dps125:
-    gyroRes = 125.0f / 32768.0f;
-    break;
-  case ICM42688::GyroFS::dps62_5:
-    gyroRes = 62.5f / 32768.0f;
-    break;
-  case ICM42688::GyroFS::dps31_25:
-    gyroRes = 31.25f / 32768.0f;
-    break;
-  case ICM42688::GyroFS::dps15_625:
-    gyroRes = 15.625f / 32768.0f;
-    break;
-  default:
-    assert(false && "Invalid currentGyroFS case");
-    gyroRes = 0.0f;
-    break;
+    case ICM42688::GyroFS::dps2000:
+      gyroRes = 2000.0f / 32768.0f;
+      break;
+    case ICM42688::GyroFS::dps1000:
+      gyroRes = 1000.0f / 32768.0f;
+      break;
+    case ICM42688::GyroFS::dps500:
+      gyroRes = 500.0f / 32768.0f;
+      break;
+    case ICM42688::GyroFS::dps250:
+      gyroRes = 250.0f / 32768.0f;
+      break;
+    case ICM42688::GyroFS::dps125:
+      gyroRes = 125.0f / 32768.0f;
+      break;
+    case ICM42688::GyroFS::dps62_5:
+      gyroRes = 62.5f / 32768.0f;
+      break;
+    case ICM42688::GyroFS::dps31_25:
+      gyroRes = 31.25f / 32768.0f;
+      break;
+    case ICM42688::GyroFS::dps15_625:
+      gyroRes = 15.625f / 32768.0f;
+      break;
+    default:
+      assert(false && "Invalid currentGyroFS case");
+      gyroRes = 0.0f;
+      break;
   }
   return gyroRes;
 }

@@ -94,8 +94,6 @@ static imu_output_t _imuValues;
 static FusionAhrs _fusion;
 
 static volatile bool _calibrate = false;
-static volatile CalibrationAxis _calibrationAxis = CalibrationAxis::x;
-static volatile int _calibrationValue = 0;
 
 // When we start recording debug data, we want the LED to flash blue
 // for RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS. This lets us align
@@ -314,11 +312,7 @@ void setup()
     _motorDebugValues[motorDebugUpdate.motorNum] = motorDebugUpdate.motorWriteValue;
   });
 
-  _bluetoothController.setCalibrationUpdateHandler([&](calibration_update_t calibrationUpdate) {
-    _calibrate = true;
-    _calibrationAxis = calibrationUpdate.axis;
-    _calibrationValue = calibrationUpdate.calibrationValue;
-  });
+  _bluetoothController.setCalibrationUpdateHandler([&]() { _calibrate = true; });
 
   _bluetoothController.setDebugDataUpdateHandler([&](debug_recording_update_t debugDataUpdate) {
     AsyncController::main.execute([debugDataUpdate]() {
@@ -526,17 +520,12 @@ void loop()
 
   if (_calibrate) {
     _calibrate = false;
-    imu->calibrate(_calibrationAxis, _calibrationValue);
-    switch (_calibrationAxis) {
-      case CalibrationAxis::x:
-        LOG_INFO("Calibrating x axis to %i", _calibrationValue);
-        break;
-      case CalibrationAxis::y:
-        LOG_INFO("Calibrating y axis to %i", _calibrationValue);
-        break;
-      case CalibrationAxis::z:
-        LOG_INFO("Calibrating z axis to %i", _calibrationValue);
-        break;
+    calibration_data_t dat = imu->calibrate();
+    if (dat.success) {
+      LOG_INFO("Calibration successful");
+      _bluetoothController.sendCalibrationData(dat);
+    } else {
+      LOG_ERROR("Calibration failed");
     }
   }
 

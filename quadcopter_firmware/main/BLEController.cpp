@@ -10,6 +10,12 @@
 #include "BLE2902.h"
 #include "BLEUtils.h"
 
+#define MAX_CALIBRATION_PACKET_SIZE_BYTES 10
+#define TERMINATE_UPLOAD_STREAM_SIGNAL "==TERMINATE=="
+
+#define MIN(x, y) (x < y ? x : y)
+#define MAX(x, y) (x > y ? x : y)
+
 BLEController::BLEController()
 {
   isConnected = false;
@@ -87,6 +93,7 @@ void BLEController::beginBluetooth(void)
       BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
   _calibrationCharacteristic->setCallbacks(this);
   _calibrationCharacteristic->addDescriptor(new BLE2902());
+  _calibrationCharacteristic->setWriteNoResponseProperty(true);
 
   _debugCharacteristic = _service->createCharacteristic(
       DEBUG_CHARACTERISTIC_UUID,
@@ -240,27 +247,8 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
       return;
     }
   } else if (characteristic->getUUID().equals(_calibrationCharacteristic->getUUID())) {
-    std::string value = characteristic->getValue();
-    std::vector<std::string> components = _split(value, "=");
-    if (components.size() != 2) {
-      LOG_ERROR("Invalid calibration command");
-      return;
-    }
-    CalibrationAxis axis;
-    if (components[0] == "x") {
-      axis = CalibrationAxis::x;
-    } else if (components[0] == "y") {
-      axis = CalibrationAxis::y;
-    } else if (components[0] == "z") {
-      axis = CalibrationAxis::z;
-    } else {
-      LOG_ERROR("Invalid calibration axis");
-      return;
-    }
-    const int val = atoi(components[1].c_str());
     if (_calibrationUpdateHandler) {
-      const calibration_update_t calibrationUpdate = {.axis = axis, .calibrationValue = val};
-      _calibrationUpdateHandler(calibrationUpdate);
+      _calibrationUpdateHandler();
     }
   } else if (characteristic->getUUID().equals(_debugCharacteristic->getUUID())) {
     std::string val = characteristic->getValue();
@@ -304,15 +292,34 @@ void BLEController::uploadDebugData(uint8_t *data, size_t length)
     currentByteIndex += packetSize;
   }
 
-  _debugCharacteristic->setValue("==TERMINATE==");
+  _debugCharacteristic->setValue(TERMINATE_UPLOAD_STREAM_SIGNAL);
   _debugCharacteristic->notify();
-  LOG_INFO_ASYNC_ON_MAIN("End debug data upload");
+  LOG_INFO("End debug data upload");
 }
 
 void BLEController::sendTelemetryUpdate(String packet)
 {
   _telemetryCharacteristic->setValue(packet.c_str());
   _telemetryCharacteristic->notify();
+}
+
+void BLEController::sendCalibrationData(calibration_data_t calibrationData)
+{
+  uint8_t *data = (uint8_t *)&calibrationData;
+  const size_t size = sizeof(calibrationData);
+
+  // Send data chunks
+  for (size_t byteIndex = 0; byteIndex < size; byteIndex += MAX_CALIBRATION_PACKET_SIZE_BYTES) {
+    const size_t packetSize = MIN(MAX_CALIBRATION_PACKET_SIZE_BYTES, size - byteIndex);
+    _calibrationCharacteristic->setValue(&data[byteIndex], packetSize);
+    _calibrationCharacteristic->notify();
+    delay(30);
+  }
+
+  // Send termination signal
+  _calibrationCharacteristic->setValue(TERMINATE_UPLOAD_STREAM_SIGNAL);
+  _calibrationCharacteristic->notify();
+  delay(30);
 }
 
 // update handlers
@@ -341,7 +348,7 @@ void BLEController::setMotorDebugUpdateHandler(std::function<void(motor_debug_up
   _motorDebugUpdateHandler = motorDebugUpdateHandler;
 }
 
-void BLEController::setCalibrationUpdateHandler(std::function<void(calibration_update_t)> calibrationUpdateHandler)
+void BLEController::setCalibrationUpdateHandler(std::function<void()> calibrationUpdateHandler)
 {
   _calibrationUpdateHandler = calibrationUpdateHandler;
 }

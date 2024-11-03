@@ -16,16 +16,22 @@ struct imu_update_t
   int16_t accel_raw_x, accel_raw_y, accel_raw_z;
 };
 
-enum CalibrationAxis
+// NOTE: Keep this in sync with BLEController.swift's struct CalibrationData
+struct calibration_data_t
 {
-  x,
-  y,
-  z
+  float gyro_biases[3];
+  float accel_biases[3];
+  float accel_scales[3];
+  int16_t gyro_offsets[3];
+  int16_t accel_offsets[3];
+
+  // must be the last value/s - the client app doesn't care about data after this point
+  bool success;
 };
 
 class IMU
 {
-public:
+ public:
   IMU(uint8_t csPin,
       uint8_t misoPin,
       uint8_t mosiPin,
@@ -34,9 +40,9 @@ public:
       std::function<void(imu_update_t)> updateHandler,
       bool *success);
   void loopHandler(void);
-  void calibrate(CalibrationAxis axis, int val);
+  calibration_data_t calibrate(void);
 
-private:
+ private:
   SPIClass _spi;
   ICM42688 *_imu;
   std::function<void(imu_update_t)> _updateHandler;

@@ -44,12 +44,6 @@ struct motor_debug_update_t
   float motorWriteValue;
 };
 
-struct calibration_update_t
-{
-  CalibrationAxis axis;
-  int calibrationValue;
-};
-
 struct debug_recording_update_t
 {
   bool recordDebugData;
@@ -58,13 +52,14 @@ struct debug_recording_update_t
 
 class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbacks
 {
-public:
+ public:
   BLEController();
   void beginBluetooth(void);
   bool isConnected;
   volatile bool isProcessingBluetoothTransaction;
   void uploadDebugData(uint8_t *data, size_t length);
   void sendTelemetryUpdate(String packet);
+  void sendCalibrationData(calibration_data_t calibrationData);
 
   // update handlers
   void setControlsUpdateHandler(std::function<void(controls_update_t)> controlsUpdateHandler);
@@ -72,7 +67,7 @@ public:
   void setResetStatusUpdateHandler(std::function<void(void)> resetHandler);
   void setMotorDebugEnabledUpdateHandler(std::function<void(bool)> motorDebugEnabledUpdateHandler);
   void setMotorDebugUpdateHandler(std::function<void(motor_debug_update_t)> motorDebugUpdateHandler);
-  void setCalibrationUpdateHandler(std::function<void(calibration_update_t)> calibrationUpdateHandler);
+  void setCalibrationUpdateHandler(std::function<void()> calibrationUpdateHandler);
   void setDebugDataUpdateHandler(std::function<void(debug_recording_update_t)> debugDataUpdateHandler);
 
   // Override methods from BLEServerCallbacks
@@ -83,7 +78,7 @@ public:
   // Override methods from BLECharacteristicCallbacks
   void onWrite(BLECharacteristic *pCharacteristic) override;
 
-private:
+ private:
   BLEServer *_server;
   BLEService *_service;
   BLECharacteristic *_controlCharacteristic;
@@ -99,7 +94,7 @@ private:
   std::function<void(void)> _resetStatusUpdateHandler;
   std::function<void(bool)> _motorDebugEnabledUpdateHandler;
   std::function<void(motor_debug_update_t)> _motorDebugUpdateHandler;
-  std::function<void(calibration_update_t)> _calibrationUpdateHandler;
+  std::function<void()> _calibrationUpdateHandler;
   std::function<void(debug_recording_update_t)> _debugDataUpdateHandler;
 };
 

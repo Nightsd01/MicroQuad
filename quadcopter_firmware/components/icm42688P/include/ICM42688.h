@@ -1,13 +1,15 @@
 #ifndef ICM42688_H
 #define ICM42688_H
 
+#include <array>
+
 #include "Arduino.h"
-#include "SPI.h"  // SPI library
-#include "Wire.h" // I2C library
+#include "SPI.h"   // SPI library
+#include "Wire.h"  // I2C library
 
 class ICM42688
 {
-public:
+ public:
   enum GyroFS : uint8_t
   {
     dps2000 = 0x00,
@@ -30,20 +32,20 @@ public:
 
   enum ODR : uint8_t
   {
-    odr32k = 0x01, // LN mode only
-    odr16k = 0x02, // LN mode only
-    odr8k = 0x03,  // LN mode only
-    odr4k = 0x04,  // LN mode only
-    odr2k = 0x05,  // LN mode only
-    odr1k = 0x06,  // LN mode only
+    odr32k = 0x01,  // LN mode only
+    odr16k = 0x02,  // LN mode only
+    odr8k = 0x03,   // LN mode only
+    odr4k = 0x04,   // LN mode only
+    odr2k = 0x05,   // LN mode only
+    odr1k = 0x06,   // LN mode only
     odr200 = 0x07,
     odr100 = 0x08,
     odr50 = 0x09,
     odr25 = 0x0A,
     odr12_5 = 0x0B,
-    odr6a25 = 0x0C,   // LP mode only (accel only)
-    odr3a125 = 0x0D,  // LP mode only (accel only)
-    odr1a5625 = 0x0E, // LP mode only (accel only)
+    odr6a25 = 0x0C,    // LP mode only (accel only)
+    odr3a125 = 0x0D,   // LP mode only (accel only)
+    odr1a5625 = 0x0E,  // LP mode only (accel only)
     odr500 = 0x0F,
   };
 
@@ -241,17 +243,19 @@ public:
   int32_t rawBiasGyrZ() const { return _rawGyrBias[2]; }
 
   int computeOffsets();
-  int setAllOffsets();                   // Set all Offsets computed
-  int setGyrXOffset(int16_t gyrXoffset); // #TODO add the getOffset function
+  int setAllOffsets();                    // Set all Offsets computed
+  int setGyrXOffset(int16_t gyrXoffset);  // #TODO add the getOffset function
   int setGyrYOffset(int16_t gyrYoffset);
   int setGyrZOffset(int16_t gyrZoffset);
   int setAccXOffset(int16_t accXoffset);
   int setAccYOffset(int16_t accYoffset);
   int setAccZOffset(int16_t accZoffset);
+  std::array<int16_t, 3> getGyrOffsets();
+  std::array<int16_t, 3> getAccOffsets();
   float getAccelRes();
   float getGyroRes();
   int setUIFilterBlock(UIFiltOrd gyroUIFiltOrder, UIFiltOrd accelUIFiltOrder);
-  int setGyroNotchFilter(float gyroNFfreq_x, float gyroNFfreq_y, float gyroNFfreq_z, GyroNFBWsel gyro_nf_bw); //
+  int setGyroNotchFilter(float gyroNFfreq_x, float gyroNFfreq_y, float gyroNFfreq_z, GyroNFBWsel gyro_nf_bw);  //
   int selfTest();
   int testingFunction();
 
@@ -273,12 +277,12 @@ public:
   void setAccelCalY(float bias, float scaleFactor);
   void setAccelCalZ(float bias, float scaleFactor);
 
-protected:
+ protected:
   ///\brief I2C Communication
   uint8_t _address = 0;
   TwoWire *_i2c = {};
-  static constexpr uint32_t I2C_CLK = 400'000; // 400 kHz
-  size_t _numBytes = 0;                        // number of bytes received from I2C
+  static constexpr uint32_t I2C_CLK = 400'000;  // 400 kHz
+  size_t _numBytes = 0;                         // number of bytes received from I2C
 
   ///\brief SPI Communication
   SPIClass *_spi = {};
@@ -287,8 +291,8 @@ protected:
   uint8_t _csPin = 0;
   bool _useSPI = false;
   bool _useSPIHS = false;
-  static constexpr uint32_t SPI_LS_CLOCK = 1'000'000; // 1 MHz
-  uint32_t _spi_hs_clock = 8'000'000;                 // 8 MHz
+  static constexpr uint32_t SPI_LS_CLOCK = 1'000'000;  // 1 MHz
+  uint32_t _spi_hs_clock = 8'000'000;                  // 8 MHz
 
   // buffer for reading from sensor
   uint8_t _buffer[15] = {};
@@ -330,14 +334,14 @@ protected:
   float _gyrB[3] = {};
 
   ///\brief Constants
-  static constexpr uint8_t WHO_AM_I = 0x47;      ///< expected value in UB0_REG_WHO_AM_I reg
-  static constexpr int NUM_CALIB_SAMPLES = 1000; ///< for gyro/accel bias calib
+  static constexpr uint8_t WHO_AM_I = 0x47;       ///< expected value in UB0_REG_WHO_AM_I reg
+  static constexpr int NUM_CALIB_SAMPLES = 1000;  ///< for gyro/accel bias calib
 
   ///\brief Conversion formula to get temperature in Celsius (Sec 4.13)
   static constexpr float TEMP_DATA_REG_SCALE = 132.48f;
   static constexpr float TEMP_OFFSET = 25.0f;
 
-  uint8_t _bank = 0; ///< current user bank
+  uint8_t _bank = 0;  ///< current user bank
 
   const uint8_t FIFO_EN = 0x5F;
   const uint8_t FIFO_TEMP_EN = 0x04;
@@ -380,7 +384,7 @@ protected:
 
 class ICM42688_FIFO : public ICM42688
 {
-public:
+ public:
   using ICM42688::ICM42688;
   int enableFifo(bool accel, bool gyro, bool temp);
   int streamToFifo();
@@ -393,7 +397,7 @@ public:
   void getFifoGyroZ(size_t *size, float *data);
   void getFifoTemperature_C(size_t *size, float *data);
 
-protected:
+ protected:
   // fifo
   bool _enFifoAccel = false;
   bool _enFifoGyro = false;
@@ -414,4 +418,4 @@ protected:
   size_t _tSize = 0;
 };
 
-#endif // ICM42688_H
+#endif  // ICM42688_H
