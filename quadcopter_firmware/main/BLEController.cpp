@@ -102,7 +102,7 @@ void BLEController::beginBluetooth(void)
   _debugCharacteristic->addDescriptor(new BLE2902());
 
   // Set the MTU size
-  esp_err_t status = esp_ble_gatt_set_local_mtu(180); // Replace 500 with the MTU size you want
+  esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
   if (status != ESP_OK) {
     LOG_ERROR("set local MTU failed, error code = %x", status);
   }
@@ -137,7 +137,7 @@ void BLEController::onConnect(BLEServer *server)
   LOG_INFO_ASYNC_ON_MAIN("Connected");
   isConnected = true;
   // Set the MTU size
-  esp_err_t status = esp_ble_gatt_set_local_mtu(180); // Replace 500 with the MTU size you want
+  esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
   if (status != ESP_OK) {
     LOG_ERROR("set local MTU failed, error code = %x", status);
   }
@@ -148,7 +148,7 @@ void BLEController::onDisconnect(BLEServer *server)
   LOG_INFO_ASYNC_ON_MAIN("Disconnected");
   isConnected = false;
   // Set the MTU size
-  esp_err_t status = esp_ble_gatt_set_local_mtu(180); // Replace 500 with the MTU size you want
+  esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
   if (status != ESP_OK) {
     LOG_ERROR("set local MTU failed, error code = %x", status);
   }
@@ -274,7 +274,7 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
 
 void BLEController::uploadDebugData(uint8_t *data, size_t length)
 {
-  LOG_INFO_ASYNC_ON_MAIN("Begin debug data upload");
+  LOG_INFO("Begin debug data upload");
   int currentByteIndex = 0;
   const int packetSize = 160;
   String firstInfo = String("debug:") + String((int)length);

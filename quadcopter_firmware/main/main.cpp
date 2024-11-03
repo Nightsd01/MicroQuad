@@ -175,8 +175,8 @@ static bool _gotFirstIMUUpdate = false;
 
 static float _previousFilteredAccelValues[3] = {0.0f, 0.0f, 1.0f};
 static float _previousFilteredGyroValues[3] = {0.0f, 0.0f, 0.0f};
-static const float _accelerometerLowPassAlpha = 0.01f;  // lower alpha = more smoothing but more lag
-static const float _gyroscopeLowPassAlpha = 0.2f;       // lower alpha = more smoothing but more lag
+static const float _accelerometerLowPassAlpha = 0.1f;  // lower alpha = more smoothing but more lag
+static const float _gyroscopeLowPassAlpha = 0.5f;      // lower alpha = more smoothing but more lag
 static void _receivedIMUUpdate(imu_update_t update)
 {
   const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;

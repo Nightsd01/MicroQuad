@@ -42,7 +42,7 @@ static unsigned long lastUpdateMillis = 0;
 motor_outputs_t QuadcopterController::calculateOutputs(
     imu_output_t imuValues, controller_values_t controllerValues, unsigned long timeMicros, bool recordData)
 {
-  const double throttle = (double)controllerValues.leftStickInput.y; // 0.0 to 255.0
+  const double throttle = (double)controllerValues.leftStickInput.y;  // 0.0 to 255.0
 
   // Gives us a value between -(INPUT_MAX_CONTROLLER_INPUT/2) and
   // (INPUT_MAX_CONTROLLER_INPUT/2)
@@ -111,9 +111,6 @@ motor_outputs_t QuadcopterController::calculateOutputs(
     _debugHelper->motorValues[2] = motors[2];
     _debugHelper->motorValues[3] = motors[3];
     _debugHelper->throttle = throttle;
-    _debugHelper->desiredValues[0] = desiredAnglesDegrees[0];
-    _debugHelper->desiredValues[1] = desiredAnglesDegrees[1];
-    _debugHelper->desiredValues[2] = desiredAnglesDegrees[2];
   }
 
   return motors;

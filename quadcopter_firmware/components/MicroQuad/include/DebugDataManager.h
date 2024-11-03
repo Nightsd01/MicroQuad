@@ -8,14 +8,14 @@
 
 class DebugDataManager
 {
-public:
+ public:
   DebugDataManager();
   void addDouble(double *vals, uint64_t size);
   uint64_t numSamples;
   uint8_t *data;
   uint64_t currentSize;
 
-private:
+ private:
   uint64_t _head;
   volatile bool _reallocating;
   void _growHeapIfNeeded(void);

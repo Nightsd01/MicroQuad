@@ -8,7 +8,7 @@
 
 class DebugHelper
 {
-public:
+ public:
   double ypr[3];
   double accelRaw[3];
   double gyroRaw[3];
@@ -17,7 +17,6 @@ public:
   double angleOutputs[3];
   double rateOutputs[3];
   double motorValues[4];
-  double desiredValues[3];
   double throttle;
   double inputTimescale;
   double voltage;
