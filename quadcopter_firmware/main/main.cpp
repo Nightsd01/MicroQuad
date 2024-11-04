@@ -241,35 +241,32 @@ static void _receivedIMUUpdate(imu_update_t update)
   helper->ypr[1] = _euler.angle.pitch;
   helper->ypr[2] = _euler.angle.roll;
 
-  // Log to console 10x per second
-  if (millis() - _previousLogMillis > 100) {
-    LOG_INFO(
-        "%ld, %.2f, %.2f, %.2f, %.2f, %d, %d, %d, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %i, %i, %i, %.2f, %.2f, %.2f, "
-        "%.2f, %.2f",
-        millis(),
-        deltaTimeSeconds,
-        _euler.angle.yaw,
-        _euler.angle.pitch,
-        _euler.angle.roll,
-        update.accel_raw_x,
-        update.accel_raw_y,
-        update.accel_raw_z,
-        update.accel_x,
-        update.accel_y,
-        update.accel_z,
-        update.gyro_x,
-        update.gyro_y,
-        update.gyro_z,
-        (int)update.gyro_raw_x,
-        (int)update.gyro_raw_y,
-        (int)update.gyro_raw_z,
-        _magValues.HeadingDegress,
-        _controllerValues.leftStickInput.x,
-        _controllerValues.leftStickInput.y,
-        _controllerValues.rightStickInput.x,
-        _controllerValues.rightStickInput.y);
-    _previousLogMillis = millis();
-  }
+  LOG_INFO_PERIODIC_MILLIS(
+      100,  // log at most up to every 100 millis
+      "%ld, %.2f, %.2f, %.2f, %.2f, %d, %d, %d, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %i, %i, %i, %.2f, %.2f, %.2f, "
+      "%.2f, %.2f",
+      millis(),
+      deltaTimeSeconds,
+      _euler.angle.yaw,
+      _euler.angle.pitch,
+      _euler.angle.roll,
+      update.accel_raw_x,
+      update.accel_raw_y,
+      update.accel_raw_z,
+      update.accel_x,
+      update.accel_y,
+      update.accel_z,
+      update.gyro_x,
+      update.gyro_y,
+      update.gyro_z,
+      (int)update.gyro_raw_x,
+      (int)update.gyro_raw_y,
+      (int)update.gyro_raw_z,
+      _magValues.HeadingDegress,
+      _controllerValues.leftStickInput.x,
+      _controllerValues.leftStickInput.y,
+      _controllerValues.rightStickInput.x,
+      _controllerValues.rightStickInput.y);
 }
 
 // Initial setup
