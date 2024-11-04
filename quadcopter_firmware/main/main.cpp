@@ -315,7 +315,7 @@ void setup()
   _bluetoothController.setCalibrationUpdateHandler([&]() { _calibrate = true; });
 
   _bluetoothController.setDebugDataUpdateHandler([&](debug_recording_update_t debugDataUpdate) {
-    AsyncController::main.execute([debugDataUpdate]() {
+    AsyncController::main.executePossiblySync([debugDataUpdate]() {
       LOG_INFO(
           "Received debug data update: sendDebugData = %d, recordDebugData = %d",
           debugDataUpdate.sendDebugData,
