@@ -13,29 +13,14 @@ void LOG_DEBUG(const char *format, ...);
 void LOG_VERBOSE(const char *format, ...);
 void LOG_CONSOLE(const char *format, ...);
 
-#define CONCATENATE_DETAIL(x, y) x##y
-#define CONCATENATE(x, y) CONCATENATE_DETAIL(x, y)
-
-// Macro to generate a unique variable name
-#define UNIQUE_VAR_NAME(base) CONCATENATE(base, __COUNTER__)
-
-#define __LOG_PERIODIC_MILLIS_IMPL(level, period, varName, format, ...) \
-  do {                                                                  \
-    static uint64_t varName = 0;                                        \
-    if (millis() - varName > (period)) {                                \
-      varName = millis();                                               \
-      LOG_##level(format, ##__VA_ARGS__);                               \
-    }                                                                   \
-  } while (0)
-
-#define __LOG_PERIODIC_MILLIS(level, period, format, ...)                                               \
-  do {                                                                                                  \
-    __LOG_PERIODIC_MILLIS_IMPL(level, period, UNIQUE_VAR_NAME(previousLogTime), format, ##__VA_ARGS__); \
-  } while (0)
-
 #define __LOG(level, format, ...)                                                             \
   do {                                                                                        \
     AsyncController::main.executePossiblySync([=]() { LOG_##level(format, ##__VA_ARGS__); }); \
+  } while (0);
+
+#define __LOG_PERIODIC_MILLIS(level, periodMillis, format, ...)              \
+  do {                                                                       \
+    EXECUTE_PERIODIC(periodMillis, { LOG_##level(format, ##__VA_ARGS__); }); \
   } while (0)
 
 #define LOG_ERROR_ASYNC_ON_MAIN(format, ...) __LOG(ERROR, format, ##__VA_ARGS__)
