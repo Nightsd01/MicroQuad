@@ -19,6 +19,17 @@ public struct YawPitchRoll {
   let roll : Float32
 }
 
+public struct MemoryStatus {
+  // Represents how much space (in bytes) is currently free
+  let freeHeapByteCount : UInt32
+  
+  // Represents the current lowest/worst amount of heap space since boot
+  let minFreeHeapByteCount : UInt32
+  
+  // Represents the total allocated capacity of the heap
+  let totalHeapSizeByteCount : UInt32
+}
+
 public class QuadStatus : ObservableObject {
   @Published var rssi : Double?
   @Published var connected = false
@@ -31,10 +42,11 @@ public class QuadStatus : ObservableObject {
   @Published var accelFiltered : XYZ?
   @Published var gyroRaw : XYZ?
   @Published var gyroFiltered : XYZ?
+  @Published var memoryStatus : MemoryStatus?
   
-  private func parseFloatArray(withData data : Data, floatCount: Int) -> [Float32]?
+  private func parseNumericArray<T : Numeric>(withData data : Data, count: Int) -> [T]?
   {
-    let totalBytes = floatCount * MemoryLayout<Float32>.size
+    let totalBytes = count * MemoryLayout<T>.size
 
     // Ensure the data has enough bytes
     guard data.count >= totalBytes else {
@@ -42,24 +54,22 @@ public class QuadStatus : ObservableObject {
         return nil
     }
 
-    var floatArray: [Float32] = []
+    var numArray: [T] = []
     data.withUnsafeBytes { (pointer: UnsafeRawBufferPointer) in
       var offset = 0
-      for _ in 0..<floatCount {
-        // Load Float32 value from the current offset
-        let float = pointer.load(fromByteOffset: offset, as: Float32.self)
-        // Account for endianness if necessary
-        let correctedFloat = Float32(bitPattern: UInt32(littleEndian: float.bitPattern))
-        floatArray.append(correctedFloat)
-        offset += MemoryLayout<Float32>.size
+      for _ in 0..<count {
+        // Load T value from the current offset
+        let value = pointer.load(fromByteOffset: offset, as: T.self)
+        numArray.append(value)
+        offset += MemoryLayout<T>.size
       }
     }
-    return floatArray
+    return numArray
   }
   
   private func parseXYZ(withData data : Data, type : TelemetryEvent) -> XYZ?
   {
-    guard let values = parseFloatArray(withData: data, floatCount: 3) else {
+    guard let values : [Float32] = parseNumericArray(withData: data, count: 3) else {
       print("ERROR: Received invalid \(type) update")
       return nil
     }
@@ -68,7 +78,7 @@ public class QuadStatus : ObservableObject {
   
   private func parseYawPitchRoll(withData data : Data, type : TelemetryEvent) -> YawPitchRoll?
   {
-    guard let values = parseFloatArray(withData: data, floatCount: 3) else {
+    guard let values : [Float32] = parseNumericArray(withData: data, count: 3) else {
       print("ERROR: Received invalid \(type) update")
       return nil
     }
@@ -102,7 +112,7 @@ public class QuadStatus : ObservableObject {
         self.armed = byte == 1 ? true : false
         break
       case .BatteryVoltage:
-        guard let values = parseFloatArray(withData: payload, floatCount: 1) else {
+        guard let values : [Float32] = parseNumericArray(withData: payload, count: 1) else {
           print("ERROR: Received invalid \(type) update")
           return
         }
@@ -124,9 +134,14 @@ public class QuadStatus : ObservableObject {
         self.gyroFiltered = parseXYZ(withData: payload, type: type)
         break
       case .MemoryStats:
+        guard let values : [UInt32] = parseNumericArray(withData: payload, count: 3) else {
+          print("ERROR: Received invalid \(type) update")
+          return
+        }
+        self.memoryStatus = MemoryStatus(freeHeapByteCount: values[0], minFreeHeapByteCount: values[1], totalHeapSizeByteCount: values[2])
         break
       case .MotorValues:
-        guard let values = parseFloatArray(withData: payload, floatCount: 4) else {
+        guard let values : [Float32] = parseNumericArray(withData: payload, count: 4) else {
           print("ERROR: Received invalid \(type) update")
           return
         }

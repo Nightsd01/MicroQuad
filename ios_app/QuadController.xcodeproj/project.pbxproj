@@ -18,6 +18,7 @@
 		CA8BF34F25BD035D007B3440 /* BLEStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8BF34E25BD035D007B3440 /* BLEStatusView.swift */; };
 		CA8BF35225BD0419007B3440 /* QuadStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8BF35125BD0419007B3440 /* QuadStatus.swift */; };
 		CAC003742CD7078C0008FD5A /* CalibrationValues.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC003732CD7078C0008FD5A /* CalibrationValues.swift */; };
+		CAC0037A2CE1A20A0008FD5A /* MemoryStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC003792CE1A20A0008FD5A /* MemoryStatusView.swift */; };
 		CAC77FB42A8322FA00E8ABA7 /* DGCharts in Frameworks */ = {isa = PBXBuildFile; productRef = CAC77FB32A8322FA00E8ABA7 /* DGCharts */; };
 		CAF03F7C2544D7A500D04771 /* QuadControllerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF03F7B2544D7A500D04771 /* QuadControllerApp.swift */; };
 		CAF03F7E2544D7A500D04771 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF03F7D2544D7A500D04771 /* ContentView.swift */; };
@@ -51,6 +52,7 @@
 		CA8BF35125BD0419007B3440 /* QuadStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuadStatus.swift; sourceTree = "<group>"; };
 		CAC003732CD7078C0008FD5A /* CalibrationValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationValues.swift; sourceTree = "<group>"; };
 		CAC003762CE0483E0008FD5A /* QuadController-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "QuadController-Bridging-Header.h"; sourceTree = "<group>"; };
+		CAC003792CE1A20A0008FD5A /* MemoryStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStatusView.swift; sourceTree = "<group>"; };
 		CAF03F782544D7A500D04771 /* QuadController.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuadController.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CAF03F7B2544D7A500D04771 /* QuadControllerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuadControllerApp.swift; sourceTree = "<group>"; };
 		CAF03F7D2544D7A500D04771 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -86,6 +88,7 @@
 				CA62E3D02546172C008C511B /* ControllerView.swift */,
 				CA8BF34E25BD035D007B3440 /* BLEStatusView.swift */,
 				CA2C3D8025C61478007BAF1F /* MotorStatusView.swift */,
+				CAC003792CE1A20A0008FD5A /* MemoryStatusView.swift */,
 				CA2C3D8D25C78E15007BAF1F /* BatteryStatusView.swift */,
 				CA62A17126E5984400FFE119 /* DebuggerView.swift */,
 			);
@@ -239,6 +242,7 @@
 				CAC003742CD7078C0008FD5A /* CalibrationValues.swift in Sources */,
 				CAF03F7C2544D7A500D04771 /* QuadControllerApp.swift in Sources */,
 				CA2C3D8E25C78E15007BAF1F /* BatteryStatusView.swift in Sources */,
+				CAC0037A2CE1A20A0008FD5A /* MemoryStatusView.swift in Sources */,
 				CA62E3D12546172C008C511B /* ControllerView.swift in Sources */,
 				CA8BF34C25BCEE1F007B3440 /* StickUpdateParams.swift in Sources */,
 			);

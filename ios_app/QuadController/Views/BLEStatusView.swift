@@ -63,12 +63,19 @@ struct BLEStatusView: View {
         .onTapGesture {
           handleArmChange()
         }
+        MemoryStatusView(status: status)
+          .frame(height: 64)
       }
       Spacer()
-      if let yaw = status.euler?.yaw, let pitch = status.euler?.pitch, let roll = status.euler?.roll {
-        Text(String(format: "%.2f, %.2f, %.2f", yaw, pitch, roll))
-      } else {
-        Text("No IMU")
+      VStack{
+        if let euler = status.euler {
+          HStack {
+            Text("YPR: ").bold()
+            Text(String(format: "%.2f, %.2f, %.2f", euler.yaw, euler.pitch, euler.roll))
+          }
+        } else {
+          Text("No IMU").bold()
+        }
       }
       Spacer()
     }
