@@ -13,11 +13,10 @@
 
 #include "AsyncController.h"
 #include "BLEController.h"
-#include "ESP32Servo.h"
 #include "IMU.h"
 #include "Logger.h"
+#include "MotorController.h"
 #include "SPI.h"
-#include "driver/rmt.h"
 #include "TelemetryController.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -25,7 +24,7 @@
 #include "soc/timer_group_reg.h"
 #include "soc/timer_group_struct.h"
 
-static Servo _speedControllers[NUM_MOTORS];
+static std::vector<MotorController> _speedControllers;
 
 // LED Setup
 #define LED_DATA_PIN GPIO_NUM_38
@@ -115,8 +114,8 @@ static void updateArmStatus(void)
     LOG_INFO("Setting up motor outputs");
     for (int i = 0; i < NUM_MOTORS; i++) {
       LOG_INFO("Attaching motor %i to pin %i", i, motorPins[i]);
-      _speedControllers[i].attach(motorPins[i], 1000, 2000);
-      _speedControllers[i].write(92);
+      MotorController controller = MotorController(motorPins[i]);
+      _speedControllers.push_back(controller);
     }
     _completedFirstArm = true;
   }
@@ -225,7 +224,7 @@ static void _receivedIMUUpdate(imu_update_t update)
 
   _imuValues = {
       .gyroOutput = {gyroscope.axis.x, gyroscope.axis.y,   gyroscope.axis.z },
-      .accelOutput = {_euler.angle.yaw, _euler.angle.pitch, _euler.angle.roll}
+      .yawPitchRollDegrees = {_euler.angle.yaw, _euler.angle.pitch, _euler.angle.roll}
   };
 
   _receivedImuUpdate = true;
@@ -278,10 +277,6 @@ static void _receivedIMUUpdate(imu_update_t update)
 // Initial setup
 void setup()
 {
-  ESP32PWM::allocateTimer(0);
-  ESP32PWM::allocateTimer(1);
-  ESP32PWM::allocateTimer(2);
-  ESP32PWM::allocateTimer(3);
   const unsigned long initializationTime = millis();
   Serial.begin(115200);
   LOG_INFO("BEGAN APP");
@@ -379,7 +374,7 @@ void setup()
       SPI0_MOSI_PIN,
       SPI0_SCLK_PIN,
       IMU_INT_PIN,
-      [&](imu_update_t update) { _receivedIMUUpdate(update); },
+      [](imu_update_t update) { _receivedIMUUpdate(update); },
       &setupSuccess);
 
   if (!setupSuccess) {
@@ -460,9 +455,9 @@ void updateMotors(motor_outputs_t outputs)
   }
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!_armed) {
-      _speedControllers[i].writeMicroseconds(1000);
+      _speedControllers[i].setSpeed(MIN_THROTTLE_RANGE);
     } else {
-      _speedControllers[i].writeMicroseconds(outputs[i]);
+      _speedControllers[i].setSpeed(map(outputs[i], 1000, 2000, MIN_THROTTLE_RANGE, MAX_THROTTLE_RANGE));
     }
   }
 }
@@ -548,7 +543,7 @@ void loop()
 
 #ifdef ENABLE_EMERGENCY_MODE
   // Check if we need to enter into emergency mode
-  if (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f) {
+  if (!_enteredEmergencyMode && (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f)) {
     // The drone has entered into an unacceptable orientation - this kills
     // the motors
     _enteredEmergencyMode = true;

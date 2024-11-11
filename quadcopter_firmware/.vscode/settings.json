@@ -145,7 +145,10 @@
         "execution": "cpp",
         "ios": "cpp",
         "locale": "cpp",
-        "cassert": "cpp"
+        "cassert": "cpp",
+        "rmt_tx.h": "c",
+        "dshot_esc_encoder.h": "c",
+        "rmt_encoder.h": "c"
     },
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"
