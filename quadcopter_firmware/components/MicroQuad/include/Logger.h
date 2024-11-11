@@ -1,6 +1,36 @@
 #pragma once
 
 #include <AsyncController.h>
+#include <string.h>
+
+// This is where all the supported log levels are defined
+// Uses a macro to avoid duplication
+#define LOG_LEVELS(X) \
+  X(none)             \
+  X(error)            \
+  X(warn)             \
+  X(info)             \
+  X(debug)            \
+  X(verbose)          \
+  X(console)
+
+enum LogLevel
+{
+#define X(name) name,
+  LOG_LEVELS(X)
+#undef X
+      count
+};
+
+// String to enum conversion
+constexpr LogLevel stringToLogLevel(const char *str)
+{
+#define X(name) \
+  if (strcmp(str, #name) == 0) return LogLevel::name;
+  LOG_LEVELS(X)
+#undef X
+  return LogLevel::none;  // Default if no match
+}
 
 // TODO: Reduce duplication for each log level
 // Ideally we can get to a point where this file is only
