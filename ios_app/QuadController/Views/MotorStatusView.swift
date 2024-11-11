@@ -99,7 +99,7 @@ struct MotorThrottleView : UIViewRepresentable {
     let dataSet = (uiView.lineData?.dataSets.first) as! LineChartDataSet
     
     let motorValue = self.status.motorValues?[self.motorId - 1] ?? 1000.0
-    dataSet.append(ChartDataEntry(x: Date().timeIntervalSince(MotorThrottleView.initTime), y: motorValue))
+    dataSet.append(ChartDataEntry(x: Date().timeIntervalSince(MotorThrottleView.initTime), y: Double(motorValue)))
     
     if (dataSet.count > 50) {
       dataSet.removeEntry(index: 0)

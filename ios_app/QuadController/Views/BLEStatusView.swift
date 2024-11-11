@@ -65,7 +65,7 @@ struct BLEStatusView: View {
         }
       }
       Spacer()
-      if let yaw = status.yaw, let pitch = status.pitch, let roll = status.roll {
+      if let yaw = status.euler?.yaw, let pitch = status.euler?.pitch, let roll = status.euler?.roll {
         Text(String(format: "%.2f, %.2f, %.2f", yaw, pitch, roll))
       } else {
         Text("No IMU")

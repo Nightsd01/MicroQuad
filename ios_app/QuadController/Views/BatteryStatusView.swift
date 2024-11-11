@@ -19,7 +19,7 @@ struct BatteryStatusView : View {
     if (batPct.isNaN || batPct < 0.0) {
       return 0.0
     } else {
-      return batPct
+      return Double(batPct)
     }
   }
   

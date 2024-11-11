@@ -50,6 +50,7 @@
 		CA8BF34E25BD035D007B3440 /* BLEStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEStatusView.swift; sourceTree = "<group>"; };
 		CA8BF35125BD0419007B3440 /* QuadStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuadStatus.swift; sourceTree = "<group>"; };
 		CAC003732CD7078C0008FD5A /* CalibrationValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationValues.swift; sourceTree = "<group>"; };
+		CAC003762CE0483E0008FD5A /* QuadController-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "QuadController-Bridging-Header.h"; sourceTree = "<group>"; };
 		CAF03F782544D7A500D04771 /* QuadController.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuadController.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CAF03F7B2544D7A500D04771 /* QuadControllerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuadControllerApp.swift; sourceTree = "<group>"; };
 		CAF03F7D2544D7A500D04771 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -129,6 +130,7 @@
 		CAF03F7A2544D7A500D04771 /* QuadController */ = {
 			isa = PBXGroup;
 			children = (
+				CAC003762CE0483E0008FD5A /* QuadController-Bridging-Header.h */,
 				CAF03F7B2544D7A500D04771 /* QuadControllerApp.swift */,
 				CA524553255225BD00537AD4 /* Controllers */,
 				CA62E3DB25462F9F008C511B /* Models */,
@@ -184,6 +186,7 @@
 				TargetAttributes = {
 					CAF03F772544D7A500D04771 = {
 						CreatedOnToolsVersion = 12.0.1;
+						LastSwiftMigration = 1540;
 					};
 				};
 			};
@@ -365,6 +368,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"QuadController/Preview Content\"";
@@ -379,6 +383,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.bradhesse.QuadController;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_OBJC_BRIDGING_HEADER = "QuadController/QuadController-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -389,6 +395,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"QuadController/Preview Content\"";
@@ -403,6 +410,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.bradhesse.QuadController;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_OBJC_BRIDGING_HEADER = "QuadController/QuadController-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
