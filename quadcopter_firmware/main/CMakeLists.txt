@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "BLEController.cpp" "main.cpp" "IMU.cpp" "led_controller.cpp"
+    SRCS "TelemetryController.cpp" "BLEController.cpp" "main.cpp" "IMU.cpp" "led_controller.cpp"
     INCLUDE_DIRS ""
     REQUIRES arduino
     REQUIRES MicroQuad
@@ -8,6 +8,7 @@ idf_component_register(
     REQUIRES icm42688P
     REQUIRES qmc5883l
     REQUIRES ESP32Servo
+    REQUIRES DShot
 )
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DCONFIG_MPU_SPI")

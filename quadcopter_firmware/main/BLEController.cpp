@@ -51,7 +51,7 @@ static std::vector<std::string> _split(std::string to_split, std::string delimit
 void BLEController::beginBluetooth(void)
 {
   BLEDevice::init(DEVICE_NAME);
-  BLEDevice::setMTU(180);
+  BLEDevice::setMTU(150);
   _server = BLEDevice::createServer();
   _server->setCallbacks(this);
 
@@ -272,23 +272,96 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
   isProcessingBluetoothTransaction = false;
 }
 
+void BLEController::onStatus(BLECharacteristic *pCharacteristic, Status s, uint32_t code)
+{
+  switch (s) {
+    case BLECharacteristicCallbacks::Status::SUCCESS_INDICATE:
+      LOG_VERBOSE_ASYNC_ON_MAIN(
+          "received BLE status update = SUCCESS_INDICATE, code = %d, characteristic UUID = %s",
+          code,
+          pCharacteristic->getUUID().toString().c_str());
+      break;
+    case BLECharacteristicCallbacks::Status::SUCCESS_NOTIFY:
+      LOG_VERBOSE_ASYNC_ON_MAIN(
+          "received BLE status update = SUCCESS_NOTIFY, code = %d, characteristic UUID = %s",
+          code,
+          pCharacteristic->getUUID().toString().c_str());
+      if (pCharacteristic->getUUID().equals(_debugCharacteristic->getUUID())) {
+        _waitingForDebugPacketResponse = false;
+        return;
+      } else if (!pCharacteristic->getUUID().equals(_telemetryCharacteristic->getUUID())) {
+        return;
+      }
+      AsyncController::main.executePossiblySync([this, pCharacteristic]() {
+        if (_telemetryTransmissionCompleteHandler != nullptr) {
+          _telemetryTransmissionCompleteHandler();
+          _telemetryTransmissionCompleteHandler = nullptr;
+        }
+      });
+      break;
+    case BLECharacteristicCallbacks::Status::ERROR_INDICATE_DISABLED:
+      LOG_ERROR_ASYNC_ON_MAIN(
+          "received BLE status update = ERROR_INDICATE_DISABLED, code = %d, characteristic UUID = %s",
+          code,
+          pCharacteristic->getUUID().toString().c_str());
+      break;
+    case BLECharacteristicCallbacks::Status::ERROR_NOTIFY_DISABLED:
+      LOG_ERROR_ASYNC_ON_MAIN(
+          "received BLE status update = ERROR_NOTIFY_DISABLED, code = %d, characteristic UUID = %s",
+          code,
+          pCharacteristic->getUUID().toString().c_str());
+      break;
+    case BLECharacteristicCallbacks::Status::ERROR_GATT:
+      LOG_ERROR_ASYNC_ON_MAIN(
+          "received BLE status update = ERROR_GATT, code = %d, characteristic UUID = %s",
+          code,
+          pCharacteristic->getUUID().toString().c_str());
+      break;
+    case BLECharacteristicCallbacks::Status::ERROR_NO_CLIENT:
+      LOG_ERROR_ASYNC_ON_MAIN(
+          "received BLE status update = ERROR_NO_CLIENT, code = %d, characteristic UUID = %s",
+          code,
+          pCharacteristic->getUUID().toString().c_str());
+      break;
+    case BLECharacteristicCallbacks::Status::ERROR_INDICATE_TIMEOUT:
+      LOG_ERROR_ASYNC_ON_MAIN(
+          "received BLE status update = ERROR_INDICATE_TIMEOUT, code = %d, characteristic UUID = %s",
+          code,
+          pCharacteristic->getUUID().toString().c_str());
+      break;
+    case BLECharacteristicCallbacks::Status::ERROR_INDICATE_FAILURE:
+      LOG_ERROR_ASYNC_ON_MAIN(
+          "received BLE status update = ERROR_INDICATE_FAILURE, code = %d, characteristic UUID = %s",
+          code,
+          pCharacteristic->getUUID().toString().c_str());
+      break;
+  }
+}
+
 void BLEController::uploadDebugData(uint8_t *data, size_t length)
 {
   LOG_INFO("Begin debug data upload");
   int currentByteIndex = 0;
   const int packetSize = 160;
   String firstInfo = String("debug:") + String((int)length);
+
+  _waitingForDebugPacketResponse = true;
   _debugCharacteristic->setValue(firstInfo.c_str());
   _debugCharacteristic->notify();
-  delay(100);
+  while (_waitingForDebugPacketResponse) {
+    // spin until we get a response
+  }
   while (currentByteIndex < length) {
+    _waitingForDebugPacketResponse = true;
     if (currentByteIndex + packetSize < length) {
       _debugCharacteristic->setValue(&data[currentByteIndex], packetSize);
     } else {
       _debugCharacteristic->setValue(&data[currentByteIndex], length - currentByteIndex);
     }
     _debugCharacteristic->notify();
-    delay(30);
+    while (_waitingForDebugPacketResponse) {
+      // spin until we get a response
+    }
     currentByteIndex += packetSize;
   }
 
@@ -297,9 +370,9 @@ void BLEController::uploadDebugData(uint8_t *data, size_t length)
   LOG_INFO("End debug data upload");
 }
 
-void BLEController::sendTelemetryUpdate(String packet)
+void BLEController::sendTelemetryUpdate(uint8_t *data, size_t size)
 {
-  _telemetryCharacteristic->setValue(packet.c_str());
+  _telemetryCharacteristic->setValue(data, size);
   _telemetryCharacteristic->notify();
 }
 
@@ -356,4 +429,13 @@ void BLEController::setCalibrationUpdateHandler(std::function<void()> calibratio
 void BLEController::setDebugDataUpdateHandler(std::function<void(debug_recording_update_t)> debugDataUpdateHandler)
 {
   _debugDataUpdateHandler = debugDataUpdateHandler;
+}
+
+void BLEController::setTelemetryTransmissionCompleteHandler(std::function<void()> telemetryTransmissionCompleteHandler)
+{
+  if (_telemetryTransmissionCompleteHandler != nullptr) {
+    LOG_ERROR("Telemetry transmission complete handler already set");
+    return;
+  }
+  _telemetryTransmissionCompleteHandler = telemetryTransmissionCompleteHandler;
 }

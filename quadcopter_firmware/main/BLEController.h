@@ -58,10 +58,10 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   bool isConnected;
   volatile bool isProcessingBluetoothTransaction;
   void uploadDebugData(uint8_t *data, size_t length);
-  void sendTelemetryUpdate(String packet);
+  void sendTelemetryUpdate(uint8_t *data, size_t size);
   void sendCalibrationData(calibration_data_t calibrationData);
 
-  // update handlers
+  // update handlers - these are always called on the main core
   void setControlsUpdateHandler(std::function<void(controls_update_t)> controlsUpdateHandler);
   void setArmStatusUpdateHandler(std::function<void(bool)> armStatusUpdateHandler);
   void setResetStatusUpdateHandler(std::function<void(void)> resetHandler);
@@ -69,6 +69,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   void setMotorDebugUpdateHandler(std::function<void(motor_debug_update_t)> motorDebugUpdateHandler);
   void setCalibrationUpdateHandler(std::function<void()> calibrationUpdateHandler);
   void setDebugDataUpdateHandler(std::function<void(debug_recording_update_t)> debugDataUpdateHandler);
+  void setTelemetryTransmissionCompleteHandler(std::function<void()> telemetryTransmissionCompleteHandler);
 
   // Override methods from BLEServerCallbacks
   void onConnect(BLEServer *pServer) override;
@@ -77,6 +78,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
 
   // Override methods from BLECharacteristicCallbacks
   void onWrite(BLECharacteristic *pCharacteristic) override;
+  void onStatus(BLECharacteristic *pCharacteristic, Status s, uint32_t code) override;
 
  private:
   BLEServer *_server;
@@ -96,6 +98,9 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   std::function<void(motor_debug_update_t)> _motorDebugUpdateHandler;
   std::function<void()> _calibrationUpdateHandler;
   std::function<void(debug_recording_update_t)> _debugDataUpdateHandler;
+  std::function<void()> _telemetryTransmissionCompleteHandler;
+
+  bool _waitingForDebugPacketResponse = false;
 };
 
 #endif

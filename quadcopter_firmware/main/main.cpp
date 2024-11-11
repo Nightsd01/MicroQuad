@@ -18,6 +18,7 @@
 #include "Logger.h"
 #include "SPI.h"
 #include "driver/rmt.h"
+#include "TelemetryController.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "led_controller.h"
@@ -29,12 +30,19 @@ static Servo _speedControllers[NUM_MOTORS];
 // LED Setup
 #define LED_DATA_PIN GPIO_NUM_38
 
-LEDController ledController(LED_DATA_PIN);
+static LEDController ledController(LED_DATA_PIN);
 
 const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
 
-#define TELEM_DELIMITER ","
+struct _memory_usage_telemetry_packet_t
+{
+  uint32_t freeHeap;
+  uint32_t minFreeHeap;
+  uint32_t totalHeapSize;
+};
+
 #define TELEM_UPDATE_INTERVAL_MILLIS 100
+static TelemetryController *_telemetryController;
 
 // Battery capacity sensing constants
 #define BATTERY_SENSE_PIN 9
@@ -59,15 +67,13 @@ BLEController _bluetoothController;
 bool _armed = false;
 bool previousArmStatus = false;
 
-long long lastTelemetryUpdateTimeMillis = 0;
-
-motor_outputs_t previousMotorOutputs;
+motor_outputs_t _previousMotorOutputs;
 bool setMotorOutputs = false;
 
 bool _resetFlag = false;
 
 bool _motorDebugEnabled = false;
-double _motorDebugValues[4] = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
+float _motorDebugValues[4] = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
 
 bool startMonitoringPid = false;
 
@@ -114,6 +120,7 @@ static void updateArmStatus(void)
     }
     _completedFirstArm = true;
   }
+  _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange, &_armed, sizeof(bool));
 }
 
 QuadcopterController *controller;
@@ -162,7 +169,6 @@ static controller_values_t _controllerValues = {
 
 static FusionEuler _euler;
 static uint64_t _previousMicros = 0;
-static uint64_t _previousLogMillis = 0;
 static const FusionMatrix gyroscopeMisalignment = {0.7071f, -0.7071f, 0.0f, 0.7071f, 0.7071f, 0.0f, 0.0f, 0.0f, 1.0f};
 static const FusionVector gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
 static const FusionVector gyroscopeOffset = {0.0f, 0.0f, 0.0f};
@@ -326,6 +332,9 @@ void setup()
   // Setup BLE Server
   _bluetoothController.beginBluetooth();
 
+  LOG_INFO("Initializing telemetry controller");
+  _telemetryController = new TelemetryController(&_bluetoothController);
+
   LOG_INFO("Configuring magnetometer");
 
   while (!_compass.begin()) {
@@ -409,41 +418,39 @@ float batteryLevel()
   return BATTERY_SCALE * (float)val;
 }
 
+void sendTelemData(float batVoltage)
+{
+  _telemetryController->updateTelemetryEvent(
+      TelemetryEvent::MotorValues,
+      _previousMotorOutputs.data(),
+      NUM_MOTORS * sizeof(float));
+
+  _telemetryController->updateTelemetryEvent(TelemetryEvent::BatteryVoltage, &batVoltage, sizeof(float));
+
+  if (_gotFirstIMUUpdate) {
+    _telemetryController->updateTelemetryEvent(TelemetryEvent::EulerYawPitchRoll, &_euler.angle, sizeof(float) * 3);
+  }
+
+  multi_heap_info_t info;
+  heap_caps_get_info(&info, MALLOC_CAP_8BIT);
+  _memory_usage_telemetry_packet_t memoryStats = {
+      .freeHeap = info.total_free_bytes,
+      .minFreeHeap = info.minimum_free_bytes,
+      .totalHeapSize = heap_caps_get_total_size(MALLOC_CAP_8BIT),
+  };
+  _telemetryController->updateTelemetryEvent(
+      TelemetryEvent::MemoryStats,
+      &memoryStats,
+      sizeof(_memory_usage_telemetry_packet_t));
+}
+
 void updateClientTelemetryIfNeeded(float batVoltage)
 {
-  if (!_bluetoothController.isConnected || millis() - lastTelemetryUpdateTimeMillis < TELEM_UPDATE_INTERVAL_MILLIS) {
+  if (!_bluetoothController.isConnected) {
     return;
   }
 
-  lastTelemetryUpdateTimeMillis = millis();
-
-  String packet = String(_armed);
-  packet += TELEM_DELIMITER;
-
-  for (int i = 0; i < 4; i++) {
-    if (setMotorOutputs) {
-      packet += String(previousMotorOutputs[i]);
-      packet += TELEM_DELIMITER;
-    } else {
-      packet += "0";
-      packet += TELEM_DELIMITER;
-    }
-  }
-
-  packet += String(batVoltage);
-  packet += TELEM_DELIMITER;
-  packet += String(batteryPercent(batVoltage));
-
-  if (_gotFirstIMUUpdate) {
-    packet += TELEM_DELIMITER;
-    packet += String(_euler.angle.yaw);
-    packet += TELEM_DELIMITER;
-    packet += String(_euler.angle.pitch);
-    packet += TELEM_DELIMITER;
-    packet += String(_euler.angle.roll);
-  }
-
-  _bluetoothController.sendTelemetryUpdate(packet);
+  EXECUTE_PERIODIC(TELEM_UPDATE_INTERVAL_MILLIS, { sendTelemData(batVoltage); });
 }
 
 void updateMotors(motor_outputs_t outputs)
@@ -475,6 +482,8 @@ void loop()
   if (_bluetoothController.isProcessingBluetoothTransaction) {
     return;
   }
+
+  _telemetryController->loopHandler();
 
   if (_armed != previousArmStatus) {
     LOG_INFO("Updating arm LED");
@@ -580,7 +589,7 @@ void loop()
     samples = 0;
   }
 
-  previousMotorOutputs = outputs;
+  _previousMotorOutputs = outputs;
 
   if (_controllerValues.leftStickInput.y < 20) {
     motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
