@@ -3,9 +3,16 @@
 #include "Logger.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/timers.h"
 
 #define DEFAULT_STACK_SIZE 4096
 #define DEFAULT_TASK_PRIORITY 1
+
+struct _async_controller_timer_params_t
+{
+  AsyncController *self;
+  std::function<void()> task;
+};
 
 // Define the static member variables
 AsyncController AsyncController::main(1, "main_task");
@@ -17,6 +24,13 @@ static void _handler(void *pvParams)
   (*funcPtr)();
   delete funcPtr;
   vTaskDelete(NULL);
+}
+
+static void _timerCallback(TimerHandle_t xTimer)
+{
+  auto *params = static_cast<_async_controller_timer_params_t *>(pvTimerGetTimerID(xTimer));
+  params->self->executePossiblySync(params->task);
+  free(params);
 }
 
 // Public Functions
@@ -33,6 +47,28 @@ void AsyncController::executeAsync(std::function<void()> task) { this->_execute(
 void AsyncController::executeOnce(AsyncControllerOnceToken &flag, std::function<void()> task)
 {
   std::call_once(flag, [this, task = std::move(task)]() { this->executePossiblySync(task); });
+}
+
+void AsyncController::executeAfter(uint64_t delayMillis, std::function<void()> task)
+{
+  auto *params = new _async_controller_timer_params_t{
+      .self = this,  // if calling from within AsyncController
+      .task = std::move(task)};
+  if (params == nullptr) {
+    LOG_ERROR("Failed to allocate memory for timer params");
+    return;
+  }
+  TimerHandle_t timer = xTimerCreate(
+      "DelayedExecutor",
+      pdMS_TO_TICKS(delayMillis),
+      pdFALSE,  // One-shot
+      static_cast<void *>(params),
+      _timerCallback);
+  if (timer != nullptr) {
+    xTimerStart(timer, 0);
+  } else {
+    LOG_ERROR("Failed to create timer");
+  }
 }
 
 // Private Functions

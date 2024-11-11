@@ -36,6 +36,7 @@ class AsyncController
   static AsyncController background;
   void executePossiblySync(std::function<void()> task);
   void executeAsync(std::function<void()> task);
+  void executeAfter(uint64_t delayMillis, std::function<void()> task);
 
   // Guaranteed to execute only once per the given flag
   // If you are currently running on main and try to call this
