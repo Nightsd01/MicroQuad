@@ -99,16 +99,16 @@ calibration_data_t IMU::calibrate(void)
 {
   if (_imu->calibrateGyro() != 1) {
     LOG_ERROR("Failed gyro calibration");
-    return {.success = false};
+    return calibration_data_t::createError();
   }
   _imu->setAllOffsets();
   if (_imu->calibrateAccel() != 1) {
     LOG_ERROR("Failed accel calibration");
-    return {.success = false};
+    return calibration_data_t::createError();
   }
   if (_imu->computeOffsets() != 1) {
     LOG_ERROR("Failed to compute offsets");
-    return {.success = false};
+    return calibration_data_t::createError();
   }
   std::array<int16_t, 3> gyroOffsets = _imu->getGyrOffsets();
   std::array<int16_t, 3> accelOffsets = _imu->getAccOffsets();

@@ -27,6 +27,13 @@ struct calibration_data_t
 
   // must be the last value/s - the client app doesn't care about data after this point
   bool success;
+
+  static calibration_data_t createError()
+  {
+    calibration_data_t data = {};  // Zero-initialize all fields
+    data.success = false;
+    return data;
+  }
 };
 
 class IMU
