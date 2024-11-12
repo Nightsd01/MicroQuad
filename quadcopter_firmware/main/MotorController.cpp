@@ -20,8 +20,8 @@ MotorController::MotorController(gpio_num_t pin)
       .gpio_num = pin,
       .clk_src = RMT_CLK_SRC_DEFAULT,  // select a clock that can provide needed resolution
       .resolution_hz = DSHOT_ESC_RESOLUTION_HZ,
-      .mem_block_symbols = 64,
-      .trans_queue_depth = 10,  // set the number of transactions that can be pending in the background
+      .mem_block_symbols = 48,
+      .trans_queue_depth = 4,  // set the number of transactions that can be pending in the background
   };
   ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_chan_config, &_escChan));
 
