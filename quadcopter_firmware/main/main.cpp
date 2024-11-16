@@ -63,21 +63,21 @@ static TelemetryController *_telemetryController;
 
 BLEController _bluetoothController;
 
-bool _armed = false;
-bool previousArmStatus = false;
+static bool _armed = false;
+static bool _previousArmStatus = false;
 
 motor_outputs_t _previousMotorOutputs;
-bool setMotorOutputs = false;
+static bool _setMotorOutputs = false;
 
-bool _resetFlag = false;
+static bool _resetFlag = false;
 
-bool _motorDebugEnabled = false;
+static bool _motorDebugEnabled = false;
 float _motorDebugValues[4] = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
 
-bool startMonitoringPid = false;
+static bool _startMonitoringPid = false;
 
-bool _sendDebugData = false;
-bool _recordDebugData = false;
+static bool _sendDebugData = false;
+static bool _recordDebugData = false;
 
 static bool _completedFirstArm = false;
 
@@ -122,13 +122,13 @@ static void updateArmStatus(void)
   _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange, &_armed, sizeof(bool));
 }
 
-QuadcopterController *controller;
-DebugHelper *helper;
+static QuadcopterController *_controller;
+static DebugHelper *_helper;
 
 static void initController()
 {
-  delete controller;
-  controller = new QuadcopterController(
+  delete _controller;
+  _controller = new QuadcopterController(
       {
           .angleGains =
               {{// yaw
@@ -157,7 +157,7 @@ static void initController()
                 .kI = 0.07f,
                 .kD = 0.0008f}}
   },
-      helper,
+      _helper,
       micros());
 }
 
@@ -230,21 +230,21 @@ static void _receivedIMUUpdate(imu_update_t update)
   _receivedImuUpdate = true;
   _gotFirstIMUUpdate = true;
 
-  helper->accelFiltered[0] = accelerometer.axis.x;
-  helper->accelFiltered[1] = accelerometer.axis.y;
-  helper->accelFiltered[2] = accelerometer.axis.z;
-  helper->accelRaw[0] = update.accel_x;
-  helper->accelRaw[1] = update.accel_y;
-  helper->accelRaw[2] = update.accel_z;
-  helper->gyroFiltered[0] = gyroscope.axis.x;
-  helper->gyroFiltered[1] = gyroscope.axis.y;
-  helper->gyroFiltered[2] = gyroscope.axis.z;
-  helper->gyroRaw[0] = update.gyro_x;
-  helper->gyroRaw[1] = update.gyro_y;
-  helper->gyroRaw[2] = update.gyro_z;
-  helper->ypr[0] = _euler.angle.yaw;
-  helper->ypr[1] = _euler.angle.pitch;
-  helper->ypr[2] = _euler.angle.roll;
+  _helper->accelFiltered[0] = accelerometer.axis.x;
+  _helper->accelFiltered[1] = accelerometer.axis.y;
+  _helper->accelFiltered[2] = accelerometer.axis.z;
+  _helper->accelRaw[0] = update.accel_x;
+  _helper->accelRaw[1] = update.accel_y;
+  _helper->accelRaw[2] = update.accel_z;
+  _helper->gyroFiltered[0] = gyroscope.axis.x;
+  _helper->gyroFiltered[1] = gyroscope.axis.y;
+  _helper->gyroFiltered[2] = gyroscope.axis.z;
+  _helper->gyroRaw[0] = update.gyro_x;
+  _helper->gyroRaw[1] = update.gyro_y;
+  _helper->gyroRaw[2] = update.gyro_z;
+  _helper->ypr[0] = _euler.angle.yaw;
+  _helper->ypr[1] = _euler.angle.pitch;
+  _helper->ypr[2] = _euler.angle.roll;
 
   LOG_INFO_PERIODIC_MILLIS(
       100,  // log at most up to every 100 millis
@@ -281,7 +281,7 @@ void setup()
   Serial.begin(115200);
   LOG_INFO("BEGAN APP");
 
-  helper = new DebugHelper();
+  _helper = new Debug_Helper();
 
   initController();
 
@@ -392,28 +392,28 @@ void setup()
   LOG_INFO("SETUP COMPLETE AFTER %lu ms", millis() - initializationTime);
 }
 
-void uploadDebugData()
+static void uploadDebugData()
 {
-  DebugDataManager manager = helper->dataManager;
+  DebugDataManager manager = _helper->dataManager;
   uint8_t *data = manager.data;
   uint64_t dataSize = manager.numSamples * DEBUG_PACKET_SIZE;
   _bluetoothController.uploadDebugData(data, dataSize);
 }
 
-float batteryPercent(float batteryVoltage)
+static float batteryPercent(float batteryVoltage)
 {
   const float averageVoltagePerCell = batteryVoltage / (float)NUM_BATTERY_CELLS;
   const float cellRange = BATTERY_CELL_MAX_VOLTAGE - BATTERY_CELL_MIN_VOLTAGE;
   return (averageVoltagePerCell - BATTERY_CELL_MIN_VOLTAGE) / cellRange;
 }
 
-float batteryLevel()
+static float batteryLevel()
 {
   const int val = analogRead(BATTERY_SENSE_PIN);
   return BATTERY_SCALE * (float)val;
 }
 
-void sendTelemData(float batVoltage)
+static void sendTelemData(float batVoltage)
 {
   _telemetryController->updateTelemetryEvent(
       TelemetryEvent::MotorValues,
@@ -439,7 +439,7 @@ void sendTelemData(float batVoltage)
       sizeof(_memory_usage_telemetry_packet_t));
 }
 
-void updateClientTelemetryIfNeeded(float batVoltage)
+static void updateClientTelemetryIfNeeded(float batVoltage)
 {
   if (!_bluetoothController.isConnected) {
     return;
@@ -448,7 +448,7 @@ void updateClientTelemetryIfNeeded(float batVoltage)
   EXECUTE_PERIODIC(TELEM_UPDATE_INTERVAL_MILLIS, { sendTelemData(batVoltage); });
 }
 
-void updateMotors(motor_outputs_t outputs)
+static void updateMotors(motor_outputs_t outputs)
 {
   if (!_completedFirstArm) {
     return;
@@ -462,12 +462,7 @@ void updateMotors(motor_outputs_t outputs)
   }
 }
 
-unsigned long startedMonitoringTimestamp = 0;
-
-static int samples = 0;
-static int lastPrint = 0;
-
-void loop()
+static void loop()
 {
   TIMERG0.wdtwprotect.val = 0x50D83AA1;
   TIMERG0.wdtfeed.val = 1;
@@ -480,11 +475,11 @@ void loop()
 
   _telemetryController->loopHandler();
 
-  if (_armed != previousArmStatus) {
+  if (_armed != _previousArmStatus) {
     LOG_INFO("Updating arm LED");
     updateArmStatus();
     LOG_INFO("Updated arm LED");
-    previousArmStatus = _armed;
+    _previousArmStatus = _armed;
     LOG_INFO("Updated previous arm status");
   }
 
@@ -510,11 +505,10 @@ void loop()
 
   const float batteryVoltage = batteryLevel();
   updateClientTelemetryIfNeeded(batteryVoltage);
-  helper->voltage = batteryVoltage;
+  _helper->voltage = batteryVoltage;
 
-  if (!startMonitoringPid && _controllerValues.leftStickInput.y > 20.0f) {
-    startMonitoringPid = true;
-    startedMonitoringTimestamp = timestamp;
+  if (!_startMonitoringPid && _controllerValues.leftStickInput.y > 20.0f) {
+    _startMonitoringPid = true;
   }
 
   imu->loopHandler();
@@ -537,7 +531,7 @@ void loop()
   }
   _receivedImuUpdate = false;
 
-  if (!startMonitoringPid) {
+  if (!_startMonitoringPid) {
     return;
   }
 
@@ -572,17 +566,7 @@ void loop()
     beganRun = true;
   }
 
-  motor_outputs_t outputs = controller->calculateOutputs(_imuValues, _controllerValues, micros(), _recordDebugData);
-
-  samples++;
-  if (timestampMillis - lastPrint > 1000) {
-    lastPrint = timestampMillis;
-    // LOG_INFO("%i samples per second", samples);
-    // LOG_INFO("Throttle = %f, motors %f, %f, %f, %f",
-    //          _controllerValues.leftStickInput.y, outputs[0], outputs[1],
-    //          outputs[2], outputs[3]);
-    samples = 0;
-  }
+  motor_outputs_t outputs = _controller->calculateOutputs(_imuValues, _controllerValues, micros(), _recordDebugData);
 
   _previousMotorOutputs = outputs;
 
@@ -597,11 +581,11 @@ void loop()
       updateMotors(outputs);
     }
   }
-  setMotorOutputs = true;
+  _setMotorOutputs = true;
 
   static unsigned long lastRecordMillis = timestampMillis;
   if (_recordDebugData && timestampMillis - lastRecordMillis >= 5) {
-    helper->saveValues(timestampMillis);
+    _helper->saveValues(timestampMillis);
     lastRecordMillis = timestampMillis;
   }
 

@@ -31,8 +31,6 @@ QuadcopterController::QuadcopterController(
   }
 }
 
-static unsigned long lastUpdateMillis = 0;
-
 // TODO: {bradhesse} Convert whole codebase purely to use radians and not
 // degrees It is really poor practice to use one unit of measurement (degrees)
 // in some parts of the codebase and another (radians) in other parts, this
@@ -47,7 +45,7 @@ motor_outputs_t QuadcopterController::calculateOutputs(
   // Gives us a value between -(INPUT_MAX_CONTROLLER_INPUT/2) and
   // (INPUT_MAX_CONTROLLER_INPUT/2)
   const double desiredYawDegreesDelta = controllerValues.leftStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
-  const double desiredYawDegrees = imuValues.accelOutput[0] + desiredYawDegreesDelta;
+  const double desiredYawDegrees = imuValues.yawPitchRollDegrees[0] + desiredYawDegreesDelta;
 
   const double desiredPitchDelta =
       (controllerValues.rightStickInput.y - (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) / (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
@@ -69,7 +67,7 @@ motor_outputs_t QuadcopterController::calculateOutputs(
     // yaw/pitch/roll rate We then feed this into the rate controller to get the
     // desired motor output
     angleControllerOutputs[i] = _angleControllers[i]->computeOutput(
-        DEG_TO_RAD(imuValues.accelOutput[i]),
+        DEG_TO_RAD(imuValues.yawPitchRollDegrees[i]),
         DEG_TO_RAD(desiredAnglesDegrees[i]),
         timeSeconds);
 
@@ -80,10 +78,10 @@ motor_outputs_t QuadcopterController::calculateOutputs(
 
   // Axes 1
   motor_outputs_t motors = {
-      throttle - rateControllerOutputs[1] + rateControllerOutputs[2] - rateControllerOutputs[0],
-      throttle + rateControllerOutputs[1] - rateControllerOutputs[2] - rateControllerOutputs[0],
-      throttle - rateControllerOutputs[1] - rateControllerOutputs[2] + rateControllerOutputs[0],
-      throttle + rateControllerOutputs[1] + rateControllerOutputs[2] + rateControllerOutputs[0]};
+      (float)(throttle - rateControllerOutputs[1] + rateControllerOutputs[2] - rateControllerOutputs[0]),
+      (float)(throttle + rateControllerOutputs[1] - rateControllerOutputs[2] - rateControllerOutputs[0]),
+      (float)(throttle - rateControllerOutputs[1] - rateControllerOutputs[2] + rateControllerOutputs[0]),
+      (float)(throttle + rateControllerOutputs[1] + rateControllerOutputs[2] + rateControllerOutputs[0])};
 
   for (int i = 0; i < NUM_MOTORS; i++) {
     // Clamp to 0 to 255

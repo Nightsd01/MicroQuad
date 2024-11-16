@@ -23,7 +23,7 @@ typedef double imu_values_t[3];
 typedef struct
 {
   imu_values_t gyroOutput;
-  imu_values_t accelOutput;
+  imu_values_t yawPitchRollDegrees;
 } imu_output_t;
 
 typedef struct
@@ -38,17 +38,17 @@ typedef struct
   stick_input_values_t rightStickInput;
 } controller_values_t;
 
-typedef std::array<double, 4> motor_outputs_t;
+typedef std::array<float, 4> motor_outputs_t;
 
 typedef struct
-{ // yaw, pitch, and roll gains
+{  // yaw, pitch, and roll gains
   gains_t angleGains[3];
   gains_t rateGains[3];
 } quadcopter_config_t;
 
 class QuadcopterController
 {
-public:
+ public:
   // Call this in arduino setup()
   QuadcopterController(quadcopter_config_t config, DebugHelper *debugHelper, unsigned long timeMicros);
 
@@ -57,7 +57,7 @@ public:
   motor_outputs_t calculateOutputs(
       imu_output_t imuValues, controller_values_t controllerValues, unsigned long timeMicros, bool recordData);
 
-private:
+ private:
   std::array<std::unique_ptr<PIDController>, 3> _angleControllers;
   std::array<std::unique_ptr<PIDController>, 3> _rateControllers;
   double _throttle;
