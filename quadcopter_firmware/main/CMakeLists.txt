@@ -1,5 +1,7 @@
+file(GLOB_RECURSE app_sources *.cpp)
+
 idf_component_register(
-    SRCS "TelemetryController.cpp" "MotorController.cpp" "BLEController.cpp" "main.cpp" "IMU.cpp" "LEDController.cpp"
+    SRCS ${app_sources}
     INCLUDE_DIRS ""
     REQUIRES arduino
     REQUIRES MicroQuad
