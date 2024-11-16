@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "TelemetryController.cpp" "MotorController.cpp" "BLEController.cpp" "main.cpp" "IMU.cpp" "led_controller.cpp"
+    SRCS "TelemetryController.cpp" "MotorController.cpp" "BLEController.cpp" "main.cpp" "IMU.cpp" "LEDController.cpp"
     INCLUDE_DIRS ""
     REQUIRES arduino
     REQUIRES MicroQuad
