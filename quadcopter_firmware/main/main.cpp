@@ -109,21 +109,30 @@ static bool _recordDebugDataLEDStateChanged = false;
 
 // We only have 4 RMT channels on the ESP32 and so in order to use 4 motors
 // and 1 LED we need to share the channel
+static bool _waitingForLED = false;
 static void _updateLED(int red, int green, int blue)
 {
+  if (_waitingForLED) {
+    LOG_WARN("Already waiting for LED transition to occur");
+    return;
+  }
   LOG_INFO("Showing color: %i, %i, %i", red, green, blue);
-  if (_speedControllers.size() > 0) {
+  if (_speedControllers.size() > 0 && _speedControllers[0].isConnected()) {
     _speedControllers[0].disconnectRMT();
+  } else if (_speedControllers.size() > 0) {
+    LOG_WARN("RMT multiplexing issue: Speed controller was already disconnected");
   }
   // Calling showRGB initializes the RMT channel
   _ledController.showRGB(red, green, blue);
 
   // Give the LED a bit of time to display the color
+  _waitingForLED = true;
   AsyncController::main.executeAfter(10, []() {
     _ledController.disconnectRMT();
     if (_speedControllers.size() > 0) {
       _speedControllers[0].connectRMT();
     }
+    _waitingForLED = false;
   });
 }
 
