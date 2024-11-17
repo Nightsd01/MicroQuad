@@ -43,6 +43,7 @@ public class QuadStatus : ObservableObject {
   @Published var gyroRaw : XYZ?
   @Published var gyroFiltered : XYZ?
   @Published var memoryStatus : MemoryStatus?
+  @Published var loopUpdateRateHz : UInt64?
   
   private func parseNumericArray<T : Numeric>(withData data : Data, count: Int) -> [T]?
   {
@@ -147,6 +148,12 @@ public class QuadStatus : ObservableObject {
         }
         self.motorValues = values
         break
+      case .LoopUpdateRate:
+        guard let values : [UInt64] = parseNumericArray(withData: payload, count: 1) else {
+          print("ERROR: Received invalid \(type) update")
+          return
+        }
+      self.loopUpdateRateHz = values[0]
       default:
         print("ERROR: Received invalid \(type) update case")
         break

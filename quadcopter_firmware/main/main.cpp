@@ -119,7 +119,7 @@ static void _updateLED(int red, int green, int blue)
   _ledController.showRGB(red, green, blue);
 
   // Give the LED a bit of time to display the color
-  AsyncController::main.executeAfter(10, [_ledController, _speedControllers]() {
+  AsyncController::main.executeAfter(10, []() {
     _ledController.disconnectRMT();
     if (_speedControllers.size() > 0) {
       _speedControllers[0].connectRMT();
@@ -482,6 +482,8 @@ static void updateMotors(motor_outputs_t outputs)
   }
 }
 
+static uint64_t _loopCounter = 1;
+
 void loop()
 {
   TIMERG0.wdtwprotect.val = 0x50D83AA1;
@@ -492,6 +494,11 @@ void loop()
   if (_bluetoothController.isProcessingBluetoothTransaction) {
     return;
   }
+  _loopCounter++;
+  EXECUTE_PERIODIC(1000, {
+    _telemetryController->updateTelemetryEvent(TelemetryEvent::LoopUpdateRate, &_loopCounter, sizeof(uint64_t));
+    _loopCounter = 0;
+  });
 
   _telemetryController->loopHandler();
 

@@ -29,7 +29,7 @@ struct MemoryStatusView : View {
               .frame(maxWidth: .infinity, alignment: .leading)
               .foregroundColor(.white)
               .padding(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
-            Text(String(format: "%.2f%%", 100.0 * Float(memoryStatus.totalHeapSizeByteCount - memoryStatus.freeHeapByteCount) / Float(memoryStatus.totalHeapSizeByteCount)))
+            Text(String(format: "%.2f%%\n\(status.loopUpdateRateHz ?? 0)Hz", 100.0 * Float(memoryStatus.totalHeapSizeByteCount - memoryStatus.freeHeapByteCount) / Float(memoryStatus.totalHeapSizeByteCount)))
               .bold()
               .foregroundColor(.white)
               .padding(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
