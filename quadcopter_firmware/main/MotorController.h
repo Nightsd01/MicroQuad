@@ -19,7 +19,14 @@ class MotorController
   // Permanently stops the motor until device reset. Use with emergency mode
   void halt(void);
 
+  void disconnectRMT(void);
+
+  void connectRMT(void);
+
+  bool isConnected;
+
  private:
+  gpio_num_t _pin;
   dshot_esc_throttle_t _throttle;
   rmt_channel_handle_t _escChan;
   rmt_encoder_handle_t _encoder;

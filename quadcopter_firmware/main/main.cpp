@@ -29,7 +29,7 @@ static std::vector<MotorController> _speedControllers;
 // LED Setup
 #define LED_DATA_PIN GPIO_NUM_38
 
-static LEDController ledController(LED_DATA_PIN);
+static LEDController _ledController(LED_DATA_PIN);
 
 const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
 
@@ -107,9 +107,28 @@ static volatile bool _calibrate = false;
 static uint64_t _startedRecordingDebugDataTimeMillis = 0;
 static bool _recordDebugDataLEDStateChanged = false;
 
-static void updateArmStatus(void)
+// We only have 4 RMT channels on the ESP32 and so in order to use 4 motors
+// and 1 LED we need to share the channel
+static void _updateLED(int red, int green, int blue)
 {
-  ledController.showRGB(_armed ? 255 : 0, _armed ? 0 : 255, 0);
+  LOG_INFO("Showing color: %i, %i, %i", red, green, blue);
+  if (_speedControllers.size() > 0) {
+    _speedControllers[0].disconnectRMT();
+  }
+  // Calling showRGB initializes the RMT channel
+  _ledController.showRGB(red, green, blue);
+
+  // Give the LED a bit of time to display the color
+  AsyncController::main.executeAfter(10, [_ledController, _speedControllers]() {
+    _ledController.disconnectRMT();
+    if (_speedControllers.size() > 0) {
+      _speedControllers[0].connectRMT();
+    }
+  });
+}
+
+static void _updateArmStatus(void)
+{
   if (_armed && !_completedFirstArm) {
     LOG_INFO("Setting up motor outputs");
     for (int i = 0; i < NUM_MOTORS; i++) {
@@ -120,6 +139,7 @@ static void updateArmStatus(void)
     _completedFirstArm = true;
   }
   _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange, &_armed, sizeof(bool));
+  _updateLED(_armed ? 255 : 0, _armed ? 0 : 255, 0);
 }
 
 static QuadcopterController *_controller;
@@ -281,7 +301,7 @@ void setup()
   Serial.begin(115200);
   LOG_INFO("BEGAN APP");
 
-  _helper = new Debug_Helper();
+  _helper = new DebugHelper();
 
   initController();
 
@@ -352,7 +372,7 @@ void setup()
   _compass.setDeclinationAngle(declinationAngle);
   LOG_INFO("Successfully initialized magnetometer");
 
-  updateArmStatus();
+  _updateArmStatus();
 
   LOG_INFO("Initializing attitude & heading reference system");
   // FusionOffsetInitialise(&_offset, 4000);
@@ -387,7 +407,7 @@ void setup()
   };
 
   LOG_INFO("Initializing Arming Signal LED");
-  ledController.showRGB(0, 255, 0);
+  _updateLED(0, 255, 0);
 
   LOG_INFO("SETUP COMPLETE AFTER %lu ms", millis() - initializationTime);
 }
@@ -462,7 +482,7 @@ static void updateMotors(motor_outputs_t outputs)
   }
 }
 
-static void loop()
+void loop()
 {
   TIMERG0.wdtwprotect.val = 0x50D83AA1;
   TIMERG0.wdtfeed.val = 1;
@@ -477,7 +497,7 @@ static void loop()
 
   if (_armed != _previousArmStatus) {
     LOG_INFO("Updating arm LED");
-    updateArmStatus();
+    _updateArmStatus();
     LOG_INFO("Updated arm LED");
     _previousArmStatus = _armed;
     LOG_INFO("Updated previous arm status");
@@ -542,7 +562,7 @@ static void loop()
     // the motors
     _enteredEmergencyMode = true;
     _armed = false;
-    updateArmStatus();
+    _updateArmStatus();
     LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.angle.pitch, _euler.angle.roll);
   }
 #endif
@@ -593,13 +613,13 @@ static void loop()
       timestampMillis - _startedRecordingDebugDataTimeMillis < RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS) {
     // Switch LED to emit blue light
     _recordDebugDataLEDStateChanged = true;
-    ledController.showRGB(0, 0, 254);
+    _updateLED(0, 0, 254);
     LOG_INFO("Flashing LED blue");
   } else if (
       _recordDebugData && _recordDebugDataLEDStateChanged &&
       timestampMillis - _startedRecordingDebugDataTimeMillis > RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS) {
     // Switch LED back to emit red light
-    ledController.showRGB(254, 0, 0);
+    _updateLED(254, 0, 0);
     _recordDebugDataLEDStateChanged = false;
     LOG_INFO("Switched LED back to red");
   }

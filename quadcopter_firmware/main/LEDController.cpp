@@ -15,11 +15,13 @@
 #define T1L_TICKS (uint16_t)(T1L_NS / RMT_TICK_DURATION_NS)
 #define RESET_TICKS (uint32_t)(RESET_US * 1000 / RMT_TICK_DURATION_NS)
 
-LEDController::LEDController(int dataPin) : _dataPin(dataPin)
+LEDController::LEDController(gpio_num_t dataPin) : _dataPin(dataPin) {}
+
+void LEDController::_connectRMT(void)
 {
   // Configure the RMT channel for TX
   rmt_tx_channel_config_t tx_config = {
-      .gpio_num = (gpio_num_t)dataPin,
+      .gpio_num = _dataPin,
       .clk_src = RMT_CLK_SRC_DEFAULT,
       .resolution_hz = 80000000, // RMT runs at 80MHz
       .mem_block_symbols = 48,
@@ -38,10 +40,27 @@ LEDController::LEDController(int dataPin) : _dataPin(dataPin)
   // Create a copy encoder (raw encoder)
   rmt_copy_encoder_config_t encoder_config = {};
   ESP_ERROR_CHECK(rmt_new_copy_encoder(&encoder_config, &_encoder));
+
+  _connectedRMT = true;
+}
+
+void LEDController::disconnectRMT(void)
+{
+  // Disable the RMT channel for the LED
+  ESP_ERROR_CHECK(rmt_disable(_rmt_channel));
+
+  // Delete the LED encoder
+  ESP_ERROR_CHECK(rmt_del_encoder(_encoder));
+
+  // Delete the RMT channel for the LED
+  ESP_ERROR_CHECK(rmt_del_channel(_rmt_channel));
+
+  _connectedRMT = false;
 }
 
 void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
 {
+  _connectRMT();
   rmt_symbol_word_t items[25];  // 24 items for bits, 1 for reset
   uint32_t grb = ((uint32_t)green << 16) | ((uint32_t)red << 8) | blue;
 
@@ -78,5 +97,5 @@ void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
   ESP_ERROR_CHECK(rmt_transmit(_rmt_channel, _encoder, items, sizeof(items), &tx_config));
 
   // Wait for transmission to complete
-  ESP_ERROR_CHECK(rmt_tx_wait_all_done(_rmt_channel, -1));
+  ESP_ERROR_CHECK(rmt_tx_wait_all_done(_rmt_channel, 30));
 }
