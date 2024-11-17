@@ -202,6 +202,8 @@ static float _previousFilteredAccelValues[3] = {0.0f, 0.0f, 1.0f};
 static float _previousFilteredGyroValues[3] = {0.0f, 0.0f, 0.0f};
 static const float _accelerometerLowPassAlpha = 0.1f;  // lower alpha = more smoothing but more lag
 static const float _gyroscopeLowPassAlpha = 0.5f;      // lower alpha = more smoothing but more lag
+
+static uint64_t _imuUpdateCounter = 0;
 static void _receivedIMUUpdate(imu_update_t update)
 {
   const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
@@ -292,6 +294,12 @@ static void _receivedIMUUpdate(imu_update_t update)
       _controllerValues.leftStickInput.y,
       _controllerValues.rightStickInput.x,
       _controllerValues.rightStickInput.y);
+
+  _imuUpdateCounter++;
+  EXECUTE_PERIODIC(1000, {
+    _telemetryController->updateTelemetryEvent(TelemetryEvent::IMUUpdateRate, &_imuUpdateCounter, sizeof(uint64_t));
+    _imuUpdateCounter = 0;
+  });
 }
 
 // Initial setup

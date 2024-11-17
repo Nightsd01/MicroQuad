@@ -14,4 +14,5 @@ CROSS_PLATFORM_ENUM(uint8_t, TelemetryEvent){
     GyroXYZFiltered = 6,
     MemoryStats = 7,
     MotorValues = 8,
-    LoopUpdateRate = 9};
+    LoopUpdateRate = 9,
+    IMUUpdateRate = 10};

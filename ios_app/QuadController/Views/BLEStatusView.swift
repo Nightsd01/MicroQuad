@@ -70,8 +70,8 @@ struct BLEStatusView: View {
       VStack{
         if let euler = status.euler {
           HStack {
-            Text("YPR: ").bold()
-            Text(String(format: "%.2f°  %.2f°  %.2f°", euler.yaw, euler.pitch, euler.roll))
+            Text("IMU: ").bold()
+            Text(String(format: "%.2f°  %.2f°  %.2f°  \(status.imuUpdateRateHz ?? 0)Hz", euler.yaw, euler.pitch, euler.roll))
           }
         } else {
           Text("No IMU").bold()
