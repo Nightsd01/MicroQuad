@@ -72,6 +72,8 @@ struct BLEStatusView: View {
           HStack {
             Text("IMU: ").bold()
             Text(String(format: "%.2f°  %.2f°  %.2f°  \(status.imuUpdateRateHz ?? 0)Hz", euler.yaw, euler.pitch, euler.roll))
+              .lineLimit(1)
+              .minimumScaleFactor(0.5)
           }
         } else {
           Text("No IMU").bold()

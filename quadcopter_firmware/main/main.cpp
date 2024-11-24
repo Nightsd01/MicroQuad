@@ -303,6 +303,7 @@ static void _receivedIMUUpdate(imu_update_t update)
       _controllerValues.leftStickInput.y,
       _controllerValues.rightStickInput.x,
       _controllerValues.rightStickInput.y);
+  _helper->magHeading = _magValues.HeadingDegress;
 
   _imuUpdateCounter++;
   EXECUTE_PERIODIC(1000, {

@@ -247,6 +247,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
 
   func processDebugData(_ data : Data) {
     // 8 bytes: timestamp
+    // 24 bytes: yaw pitch roll[3]
     // 24 bytes: accel raw[3]
     // 24 bytes: gyro raw[3]
     // 24 bytes: accel filtered[3]
@@ -254,10 +255,11 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     // 24 bytes: angle PID outputs[3]
     // 24 bytes: rate PID outputs[3]
     // 32 bytes: motor values[4]
+    // 8 bytes: mag heading
     // 8 bytes: throttle
     // 8 bytes: voltage
     var result = ""
-    let valuesPerPacket = 28
+    let valuesPerPacket = 29
     let byteCount = data.count / 8
     for i in 0..<byteCount {
       let value = data.withUnsafeBytes { buffer in
