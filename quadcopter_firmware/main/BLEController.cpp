@@ -348,9 +348,7 @@ void BLEController::uploadDebugData(uint8_t *data, size_t length)
   _waitingForDebugPacketResponse = true;
   _debugCharacteristic->setValue(firstInfo.c_str());
   _debugCharacteristic->notify();
-  while (_waitingForDebugPacketResponse) {
-    // spin until we get a response
-  }
+  delay(30);
   while (currentByteIndex < length) {
     _waitingForDebugPacketResponse = true;
     if (currentByteIndex + packetSize < length) {
@@ -359,9 +357,7 @@ void BLEController::uploadDebugData(uint8_t *data, size_t length)
       _debugCharacteristic->setValue(&data[currentByteIndex], length - currentByteIndex);
     }
     _debugCharacteristic->notify();
-    while (_waitingForDebugPacketResponse) {
-      // spin until we get a response
-    }
+    delay(30);
     currentByteIndex += packetSize;
   }
 

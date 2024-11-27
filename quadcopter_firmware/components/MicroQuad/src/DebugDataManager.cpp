@@ -36,14 +36,14 @@ void DebugDataManager::_growHeapIfNeeded(void)
         (int)_head,
         (int)currentSize,
         (int)(currentSize + (1024 * 4)));
-    uint64_t newDataSize = currentSize + (1024 * 4);
+    uint64_t newDataSize = currentSize + (1024 * 64);
     uint8_t *newData = (uint8_t *)realloc(data, newDataSize);
     if (newData == NULL) {
       LOG_ERROR("Failed to grow data heap size");
     } else {
       LOG_INFO("Successfully grew data heap size");
       data = newData;
-      currentSize += 1024 * 4;
+      currentSize += 1024 * 64;
     }
     _reallocating = false;
   }

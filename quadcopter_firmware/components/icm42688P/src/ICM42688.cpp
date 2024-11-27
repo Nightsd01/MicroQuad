@@ -801,24 +801,6 @@ int ICM42688::computeOffsets()
     _GyrOffset[ii] = (int16_t)((-_rawGyrBias[ii]) * (FullScale_Gyr / 32768.0f * 32));  // 1/32 dps resolution
   }
 
-  // Serial.println("The new raw Bias are:");
-  // for(size_t ii = 0; ii< 3; ii++){
-  //   Serial.print(_rawAccBias[ii]);Serial.print("\t");
-  // }
-  //  for(size_t ii = 0; ii< 3; ii++){
-  //   Serial.print(_rawGyrBias[ii]);Serial.print("\t");
-  // }
-  // Serial.println("");
-
-  // Serial.println("The new Offsets are:");
-  // for(size_t ii = 0; ii< 3; ii++){
-  //   Serial.print(_AccOffset[ii]);Serial.print("\t");
-  // }
-  //  for(size_t ii = 0; ii< 3; ii++){
-  //   Serial.print(_GyrOffset[ii]);Serial.print("\t");
-  // }
-  // Serial.println("");
-
   if (setAccelFS(current_Accelfssel) < 0) {
     return -4;
   }

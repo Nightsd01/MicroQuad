@@ -25,7 +25,7 @@ void LEDController::_connectRMT(void)
       .clk_src = RMT_CLK_SRC_DEFAULT,
       .resolution_hz = 80000000, // RMT runs at 80MHz
       .mem_block_symbols = 48,
-      .trans_queue_depth = 4,
+      .trans_queue_depth = 1,
       .flags =
           {
                   .invert_out = false,

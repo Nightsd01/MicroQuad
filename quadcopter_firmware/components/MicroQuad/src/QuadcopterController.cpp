@@ -78,10 +78,10 @@ motor_outputs_t QuadcopterController::calculateOutputs(
 
   // Axes 1
   motor_outputs_t motors = {
-      (float)(throttle - rateControllerOutputs[1] + rateControllerOutputs[2] - rateControllerOutputs[0]),
-      (float)(throttle + rateControllerOutputs[1] - rateControllerOutputs[2] - rateControllerOutputs[0]),
-      (float)(throttle - rateControllerOutputs[1] - rateControllerOutputs[2] + rateControllerOutputs[0]),
-      (float)(throttle + rateControllerOutputs[1] + rateControllerOutputs[2] + rateControllerOutputs[0])};
+      (float)(throttle - rateControllerOutputs[1] - rateControllerOutputs[2] - rateControllerOutputs[0]),
+      (float)(throttle + rateControllerOutputs[1] + rateControllerOutputs[2] - rateControllerOutputs[0]),
+      (float)(throttle + rateControllerOutputs[1] - rateControllerOutputs[2] + rateControllerOutputs[0]),
+      (float)(throttle - rateControllerOutputs[1] + rateControllerOutputs[2] + rateControllerOutputs[0])};
 
   for (int i = 0; i < NUM_MOTORS; i++) {
     // Clamp to 0 to 255
@@ -96,6 +96,14 @@ motor_outputs_t QuadcopterController::calculateOutputs(
   for (int i = 0; i < 4; i++) {
     motors[i] = MIN(MAX(motors[i], THROTTLE_MIN), THROTTLE_MAX);
   }
+
+  LOG_INFO_PERIODIC_MILLIS(
+      100,  // log at most up to every 100 millis
+      "%8.2f, %8.2f, %8.2f, %8.2f",
+      (float)throttle,
+      (float)rateControllerOutputs[1],
+      (float)rateControllerOutputs[2],
+      (float)rateControllerOutputs[0]);
 
   if (recordData) {
     _debugHelper->angleOutputs[0] = angleControllerOutputs[0];

@@ -75,12 +75,6 @@ void TelemetryController::loopHandler(void)
     return;
   }
 
-  int cnt = _eventCount;
-  EXECUTE_PERIODIC(1000, {
-    LOG_INFO("%i telemetry events per second", cnt);
-    _eventCount = 0;
-  });
-
   if (!_waitingForTransmission) {
     _telem_event_t event = _eventQueue[0];
     uint8_t *data = (uint8_t *)event.data;

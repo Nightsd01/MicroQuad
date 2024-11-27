@@ -1,8 +1,6 @@
 #pragma once
 
-#ifndef CROSS_PLATFORM_ENUM
-#define CROSS_PLATFORM_ENUM(_type, _name) enum _name : _type
-#endif
+#include "CrossPlatformEnum.h"
 
 CROSS_PLATFORM_ENUM(uint8_t, TelemetryEvent){
     ArmStatusChange = 0,
