@@ -197,11 +197,31 @@ static controller_values_t _controllerValues = {
 
 static FusionEuler _euler;
 static uint64_t _previousMicros = 0;
-static const FusionMatrix gyroscopeMisalignment = {0.7071f, -0.7071f, 0.0f, 0.7071f, 0.7071f, 0.0f, 0.0f, 0.0f, 1.0f};
+
+static const FusionMatrix gyroscopeMisalignment = {
+    0.7071f,
+    0.7071f,
+    0.0f,  // First row
+    0.7071f,
+    -0.7071f,
+    0.0f,  // Second row
+    0.0f,
+    0.0f,
+    1.0f  // Third row
+};
 static const FusionVector gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
 static const FusionVector gyroscopeOffset = {0.0f, 0.0f, 0.0f};
 static const FusionMatrix accelerometerMisalignment = {
-    0.7071f, -0.7071f, 0.0f, 0.7071f, 0.7071f, 0.0f, 0.0f, 0.0f, 1.0f};
+    0.7071f,
+    0.7071f,
+    0.0f,  // First row
+    0.7071f,
+    -0.7071f,
+    0.0f,  // Second row
+    0.0f,
+    0.0f,
+    1.0f  // Third row
+};
 static const FusionVector accelerometerSensitivity = {1.0f, 1.0f, 1.0f};
 static const FusionVector accelerometerOffset = {0.0f, 0.0f, 0.0f};
 static bool _receivedImuUpdate = false;
