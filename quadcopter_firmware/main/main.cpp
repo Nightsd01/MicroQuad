@@ -148,7 +148,9 @@ static void _updateArmStatus(void)
     _completedFirstArm = true;
   }
   _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange, &_armed, sizeof(bool));
-  _updateLED(_armed ? 255 : 0, _armed ? 0 : 255, 0);
+  if (!_enteredEmergencyMode) {
+    _updateLED(_armed ? 255 : 0, _armed ? 0 : 255, 0);
+  }
 }
 
 static QuadcopterController *_controller;
@@ -615,6 +617,17 @@ void loop()
   if (_enteredEmergencyMode) {
     motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
     updateMotors(motors);
+
+    // Flash LED orange to indicate we entered into emergency mode
+    static bool lightOn = false;
+    EXECUTE_PERIODIC(100, {
+      if (!lightOn) {
+        _updateLED(255, 165, 0);
+      } else {
+        _updateLED(0, 0, 0);
+      }
+      lightOn = !lightOn;
+    });
     return;
   }
 
