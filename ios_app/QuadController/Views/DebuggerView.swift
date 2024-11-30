@@ -56,12 +56,16 @@ struct DebuggerView : View {
           controller.getDebugInfo()
         }
         Spacer()
-        Button("Copy") {
+        Button("Copy CSV") {
           if let dat = controller.debugDataString {
             UIPasteboard.general.string = dat
           }
         }
         .disabled(controller.debugDataString == nil)
+        Spacer()
+        Button("Copy Video") {
+          CameraController.shared.shareViaAirdrop()
+        }.disabled(!CameraController.shared.finishedRecording)
       }
     }
   }

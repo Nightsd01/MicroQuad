@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct QuadControllerApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
+  init() {
+    CameraController.shared.requestCameraPermissionIfNeeded()
+  }
+  var body: some Scene {
+    WindowGroup {
+      ContentView()
     }
+  }
 }
