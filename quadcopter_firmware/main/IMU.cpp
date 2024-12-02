@@ -131,35 +131,14 @@ void IMU::loopHandler(void)
   }
 }
 
-// TODO: This is somewhat similar to the median filter currently implemented in main.cpp
-// though the implementation there is a bit different
-// De-duplicate and add to a utility class
-static int16_t medianFilter(const std::vector<int16_t> &values)
-{
-  if (values.empty()) {
-    LOG_ERROR("Invalid usage of IMU median filter: empty vector");
-    return 0;
-  }
-
-  // Create a copy of the input vector
-  std::vector<int16_t> sorted = values;
-  std::sort(sorted.begin(), sorted.end());
-
-  // Return middle element
-  return sorted[sorted.size() / 2];
-}
-
 void IMU::_continueCalibration(imu_update_t update)
 {
   const int16_t vals[3] = {update.accel_raw_x, update.accel_raw_y, update.accel_raw_z};
 
   // Calculate running median sum for X, Y, and Z axes
   for (int i = 0; i < 3; i++) {
-    _accelCalibrationData.currentValues[i].push_back(vals[i]);
-    if (_accelCalibrationData.currentValues[i].size() > ACCEL_CALIB_MEDIAN_FILTER_WINDOW) {
-      _accelCalibrationData.currentValues[i].erase(_accelCalibrationData.currentValues[i].begin());
-    }
-    _accelCalibrationData.currentSums[i] += medianFilter(_accelCalibrationData.currentValues[i]);
+    _accelCalibrationData.medianFilters[i].addValue(vals[i]);
+    _accelCalibrationData.currentSums[i] += _accelCalibrationData.medianFilters[i].getMedian();
   }
 
   if (++_accelCalibrationData.currentStageSamples >= NUM_ACCEL_CALIBRATION_SAMPLES_PER_AXIS) {

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "CalibrationEvent.h"
+#include "Filters/MedianFilter.h"
 #include "ICM42688.h"
 #include "PersistentKeyValueStore.h"
 
@@ -24,12 +25,13 @@ struct accel_calibration_data_t
   std::array<int64_t, 3> currentSums;
   int16_t currentStageSamples;
 
-  std::vector<int16_t> currentValues[3];
+  std::array<MedianFilter<int16_t>, 3> medianFilters = {
+      MedianFilter<int16_t>(ACCEL_CALIB_MEDIAN_FILTER_WINDOW),
+      MedianFilter<int16_t>(ACCEL_CALIB_MEDIAN_FILTER_WINDOW),
+      MedianFilter<int16_t>(ACCEL_CALIB_MEDIAN_FILTER_WINDOW)};
 
   // Offsets
   std::map<CalibrationRequest, std::array<int64_t, 3>> offsets;
-
-  // additional gyro calibration fields here
 };
 
 struct imu_update_t

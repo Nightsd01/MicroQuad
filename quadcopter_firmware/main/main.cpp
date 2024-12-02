@@ -13,6 +13,8 @@
 
 #include "AsyncController.h"
 #include "BLEController.h"
+#include "Filters/KalmanFilter.h"
+#include "Filters/MedianFilter.h"
 #include "IMU.h"
 #include "LEDController.h"
 #include "Logger.h"
@@ -261,10 +263,28 @@ static bool _gotFirstIMUUpdate = false;
 
 static float _previousFilteredAccelValues[3] = {0.0f, 0.0f, 1.0f};
 static float _previousFilteredGyroValues[3] = {0.0f, 0.0f, 0.0f};
-static const float _accelerometerLowPassAlpha = 0.1f;  // lower alpha = more smoothing but more lag
-static const float _gyroscopeLowPassAlpha = 0.5f;      // lower alpha = more smoothing but more lag
 
 static uint64_t _imuUpdateCounter = 0;
+
+static const float _accelerometerLowPassAlpha = 0.075f;  // lower alpha = more smoothing but more lag
+static const float _gyroscopeLowPassAlpha = 0.1f;        // lower alpha = more smoothing but more lag
+
+#define MEDIAN_FILTER_WINDOW 20
+static std::array<MedianFilter<float>, 3> _gyroHistories = {
+    MedianFilter<float>(MEDIAN_FILTER_WINDOW),
+    MedianFilter<float>(MEDIAN_FILTER_WINDOW),
+    MedianFilter<float>(MEDIAN_FILTER_WINDOW)};
+
+static std::array<KalmanFilter<float>, 3> _accelKalmanFilters = {
+    KalmanFilter<float>(0.01f, 1.0f, 0.0f, 1.0f, 0.0f),
+    KalmanFilter<float>(0.01f, 1.0f, 0.0f, 1.0f, 0.0f),
+    KalmanFilter<float>(0.01f, 1.0f, 0.0f, 1.0f, 0.0f)};
+
+static std::array<KalmanFilter<float>, 3> _gyroKalmanFilters = {
+    KalmanFilter<float>(0.01f, 1.5f, 0.0f, 1.0f, 0.0f),
+    KalmanFilter<float>(0.01f, 1.5f, 0.0f, 1.0f, 0.0f),
+    KalmanFilter<float>(0.01f, 1.5f, 0.0f, 1.0f, 0.0f)};
+
 static void _receivedIMUUpdate(imu_update_t update)
 {
   const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
@@ -276,30 +296,48 @@ static void _receivedIMUUpdate(imu_update_t update)
       update.gyro_z};  // replace this with actual gyroscope data in degrees/s
   FusionVector accelerometer = {update.accel_x, update.accel_y, update.accel_z};
 
-  accelerometer.axis.x = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[0]) +
-                         (_accelerometerLowPassAlpha * accelerometer.axis.x);
-  accelerometer.axis.y = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[1]) +
-                         (_accelerometerLowPassAlpha * accelerometer.axis.y);
-  accelerometer.axis.z = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[2]) +
-                         (_accelerometerLowPassAlpha * accelerometer.axis.z);
-  _previousFilteredAccelValues[0] = accelerometer.axis.x;
-  _previousFilteredAccelValues[1] = accelerometer.axis.y;
-  _previousFilteredAccelValues[2] = accelerometer.axis.z;
-  gyroscope.axis.x =
-      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[0]) + (_gyroscopeLowPassAlpha * gyroscope.axis.x);
-  gyroscope.axis.y =
-      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[1]) + (_gyroscopeLowPassAlpha * gyroscope.axis.y);
-  gyroscope.axis.z =
-      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[2]) + (_gyroscopeLowPassAlpha * gyroscope.axis.z);
-  _previousFilteredGyroValues[0] = gyroscope.axis.x;
-  _previousFilteredGyroValues[1] = gyroscope.axis.y;
-  _previousFilteredGyroValues[2] = gyroscope.axis.z;
   gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
   accelerometer = FusionCalibrationInertial(
       accelerometer,
       accelerometerMisalignment,
       accelerometerSensitivity,
       accelerometerOffset);
+
+  _gyroHistories[0].addValue(gyroscope.axis.x);
+  gyroscope.axis.x = _gyroHistories[0].getMedian();
+  _gyroHistories[1].addValue(gyroscope.axis.y);
+  gyroscope.axis.y = _gyroHistories[1].getMedian();
+  _gyroHistories[2].addValue(gyroscope.axis.z);
+  gyroscope.axis.z = _gyroHistories[2].getMedian();
+
+  accelerometer.axis.x = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[0]) +
+                         (_accelerometerLowPassAlpha * accelerometer.axis.x);
+  accelerometer.axis.y = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[1]) +
+                         (_accelerometerLowPassAlpha * accelerometer.axis.y);
+  accelerometer.axis.z = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[2]) +
+                         (_accelerometerLowPassAlpha * accelerometer.axis.z);
+  gyroscope.axis.x =
+      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[0]) + (_gyroscopeLowPassAlpha * gyroscope.axis.x);
+  gyroscope.axis.y =
+      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[1]) + (_gyroscopeLowPassAlpha * gyroscope.axis.y);
+  gyroscope.axis.z =
+      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[2]) + (_gyroscopeLowPassAlpha * gyroscope.axis.z);
+
+  _previousFilteredGyroValues[0] = gyroscope.axis.x;
+  _previousFilteredGyroValues[1] = gyroscope.axis.y;
+  _previousFilteredGyroValues[2] = gyroscope.axis.z;
+  _previousFilteredAccelValues[0] = accelerometer.axis.x;
+  _previousFilteredAccelValues[1] = accelerometer.axis.y;
+  _previousFilteredAccelValues[2] = accelerometer.axis.z;
+
+  // Apply Kalman filter to accelerometer data
+  accelerometer.axis.x = _accelKalmanFilters[0].applyFilter(accelerometer.axis.x);
+  accelerometer.axis.x = _accelKalmanFilters[1].applyFilter(accelerometer.axis.x);
+  accelerometer.axis.x = _accelKalmanFilters[2].applyFilter(accelerometer.axis.x);
+
+  gyroscope.axis.x = _gyroKalmanFilters[0].applyFilter(gyroscope.axis.x);
+  gyroscope.axis.x = _gyroKalmanFilters[1].applyFilter(gyroscope.axis.x);
+  gyroscope.axis.x = _gyroKalmanFilters[2].applyFilter(gyroscope.axis.x);
 
   // Update gyroscope AHRS algorithm
   FusionAhrsUpdateExternalHeading(&_fusion, gyroscope, accelerometer, _magValues.HeadingDegress, deltaTimeSeconds);
