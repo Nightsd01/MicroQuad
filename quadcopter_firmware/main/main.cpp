@@ -679,6 +679,9 @@ void loop()
 #endif
 
   if (_enteredEmergencyMode) {
+    if (_recordDebugData) {
+      _helper->saveValues(micros());
+    }
     motor_outputs_t motors = {1000.0f, 1000.0f, 1000.0f, 1000.0f};
     updateMotors(motors);
 
@@ -725,10 +728,8 @@ void loop()
   }
   _setMotorOutputs = true;
 
-  static unsigned long lastRecordMillis = timestampMillis;
-  if (_recordDebugData && timestampMillis - lastRecordMillis >= 5) {
-    _helper->saveValues(timestampMillis);
-    lastRecordMillis = timestampMillis;
+  if (_recordDebugData) {
+    _helper->saveValues(micros());
   }
 
   if (_recordDebugData && !_recordDebugDataLEDStateChanged &&
