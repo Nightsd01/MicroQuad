@@ -8,3 +8,4 @@
 #define CROSS_PLATFORM_ENUM(_type, _name) NS_ENUM(_type, _name)
 
 #import "../../quadcopter_firmware/main/TelemetryEvent.h"
+#import "../../quadcopter_firmware/main/CalibrationEvent.h"

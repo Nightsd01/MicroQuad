@@ -18,7 +18,9 @@ private class PreviousControlValues {
 }
 
 struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
+  
   @ObservedObject var controller = BLEController()
+  @ObservedObject var calibrationController = CalibrationController()
   @State private var showingPopover = false
   @State fileprivate var leftStickValues = PreviousControlValues(x : 0.0, y : 127.5)
   @State fileprivate var rightStickValues = PreviousControlValues(x : 127.5, y : 127.5)
@@ -30,6 +32,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   @State private var motor2 = 0.0
   @State private var motor3 = 0.0
   @State private var motor4 = 0.0
+  
   
   var leftStick = ControllerView(StickConfiguration(identifier: 0,
                                                     returnsToDefaultForAxes: Set([.horizontal]),
@@ -53,6 +56,30 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
       controller.scan()
     }
     controller.delegate = self
+    calibrationController.provideBLEController(controller)
+  }
+  
+  func calibrationButton() -> some View
+  {
+    Button("Calibrate Accel") {
+      controller.startAccelerometerCalibration()
+    }
+    .alert(calibrationController.calibrationAlert ?? "None", isPresented: .constant(calibrationController.calibrationAlert != nil)) {
+      if calibrationController.alertButtonsAndHandlers != nil {
+        ForEach(Array(calibrationController.alertButtonsAndHandlers!.keys), id: \.self) { button in
+            Button(button) {
+              calibrationController.alertButtonsAndHandlers![button]?()
+            }
+        }
+      } else {
+        Button("Done") {
+          calibrationController.calibrationAlert = nil
+        }
+      }
+    }
+    .onChange(of: calibrationController.calibrationAlert) { newValue in
+            print("calibrationAlert changed to: \(newValue ?? "nil")")
+        }
   }
   
   var body: some View {
@@ -123,9 +150,11 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
             changeMotorDebugState(editing: showingPopover)
           })
           Spacer()
-          Button("Calibrate") {
-            controller.calibrate()
+          Button("Calibrate Gyro") {
+            controller.calibrateGyro()
           }
+          Spacer()
+          calibrationButton()
           Spacer()
           Button(recordingDebugData ? "Stop Recording" : "Start Recording") {
             recordingDebugData = !recordingDebugData
@@ -167,7 +196,6 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
           )
         }
       }
-      
       CameraPreview()
         .frame(width: 120, height: 67.5, alignment: .topTrailing)
         .cornerRadius(12)
@@ -210,6 +238,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
     )
   }
   
+  // TODO: do something with these
   func didDisconnect() {
     
   }

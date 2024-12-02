@@ -13,6 +13,10 @@ protocol BLEControllerDelegate {
   func didDisconnect()
 }
 
+protocol BLEAccelerometerCalibrationDelegate : AnyObject {
+  func didGetCalibrationRequest(_ request : CalibrationRequest)
+}
+
 class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, ObservableObject {
   static let serviceUUID = "ab0828b1-198e-4351-b779-901fa0e0371e"
   static let controlCharacteristicUUID = "4ac8a682-9736-4e5d-932b-e9b31405049c"
@@ -44,6 +48,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   var armStatus = false
   var debugData : Data?
   var debugDataExpectedBytes = 0
+  var receivingGyroCalibrationData = false
   @Published var receivingDebugData = false
   @Published var transferProgress = 0.0
 
@@ -54,6 +59,8 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   public var quadStatus = QuadStatus()
   @Published var bleStatus = "None"
   @Published var debugDataString : String?
+  
+  public weak var calibrationDelegate : BLEAccelerometerCalibrationDelegate?
   
   var delegate : BLEControllerDelegate? {
     didSet {
@@ -92,11 +99,27 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
       device?.setNotifyValue(true, for: characteristic)
     }
   }
-
-  func calibrate() {
+  
+  func calibrateGyro() {
     if let characteristic = calibrationCharacteristic {
-      device?.writeValue("calibrate".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
+      device?.writeValue("gyro".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
     }
+  }
+  
+  func startAccelerometerCalibration() {
+    if let characteristic = calibrationCharacteristic {
+      device?.writeValue("\(CalibrationResponse.Start.rawValue)".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
+    }
+  }
+  
+  func continueAccelerometerCalibration(_ response : CalibrationResponse) {
+    guard let calibrationCharacteristic = calibrationCharacteristic else {
+      print("Unable to continue calibration: no calibration characteristic found")
+      return
+    }
+    
+    print("Writing response \(response) via BLEController")
+    device?.writeValue("\(response.rawValue)".data(using: .utf8)!, for: calibrationCharacteristic, type: .withoutResponse)
   }
 
   func updateMotorDebugStatus(inProgress: Bool) {
@@ -331,12 +354,28 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
       return
     }
     
-    if let calibData = calibrationData, let str = String(data: data, encoding: .utf8), str == BLEController.terminationString {
-      finishedCalibration(calibrationData: calibData)
+    if let calibData = calibrationData, let str = String(data: data, encoding: .utf8) {
+      if str == "type:gyro" {
+        receivingGyroCalibrationData = true
+      } else if str == BLEController.terminationString {
+        finishedCalibration(calibrationData: calibData)
+      } else if str.starts(with: "accel:") {
+        let components = str.components(separatedBy: ":")
+        guard components.count == 2,
+                let updateCase = UInt8(components[1]),
+                let request = CalibrationRequest(rawValue: updateCase) else {
+          print("Got invalid accel calibration update")
+          return
+        }
+        
+        calibrationDelegate?.didGetCalibrationRequest(request)
+      }
     } else if calibrationData == nil {
       calibrationData = data
-    } else {
+    } else if receivingGyroCalibrationData {
       calibrationData = calibrationData! + data
+    } else {
+      print("Unable to handle calibration update")
     }
   }
   
