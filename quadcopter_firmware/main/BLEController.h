@@ -10,6 +10,7 @@
 #include "BLECharacteristic.h"
 #include "BLEDevice.h"
 #include "BLEServer.h"
+#include "CalibrationEvent.h"
 #include "IMU.h"
 
 // Bluetooth constants
@@ -60,6 +61,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   void uploadDebugData(uint8_t *data, size_t length);
   void sendTelemetryUpdate(uint8_t *data, size_t size);
   void sendCalibrationData(calibration_data_t calibrationData);
+  void sendCalibrationUpdate(CalibrationRequest calibrationEvent);
 
   // update handlers - these are always called on the main core
   void setControlsUpdateHandler(std::function<void(controls_update_t)> controlsUpdateHandler);
@@ -67,7 +69,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   void setResetStatusUpdateHandler(std::function<void(void)> resetHandler);
   void setMotorDebugEnabledUpdateHandler(std::function<void(bool)> motorDebugEnabledUpdateHandler);
   void setMotorDebugUpdateHandler(std::function<void(motor_debug_update_t)> motorDebugUpdateHandler);
-  void setCalibrationUpdateHandler(std::function<void()> calibrationUpdateHandler);
+  void setCalibrationUpdateHandler(std::function<void(CalibrationType, CalibrationResponse)> calibrationUpdateHandler);
   void setDebugDataUpdateHandler(std::function<void(debug_recording_update_t)> debugDataUpdateHandler);
   void setTelemetryTransmissionCompleteHandler(std::function<void()> telemetryTransmissionCompleteHandler);
 
@@ -96,7 +98,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   std::function<void(void)> _resetStatusUpdateHandler;
   std::function<void(bool)> _motorDebugEnabledUpdateHandler;
   std::function<void(motor_debug_update_t)> _motorDebugUpdateHandler;
-  std::function<void()> _calibrationUpdateHandler;
+  std::function<void(CalibrationType, CalibrationResponse)> _calibrationUpdateHandler;
   std::function<void(debug_recording_update_t)> _debugDataUpdateHandler;
   std::function<void()> _telemetryTransmissionCompleteHandler;
 

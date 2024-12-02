@@ -248,7 +248,21 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
     }
   } else if (characteristic->getUUID().equals(_calibrationCharacteristic->getUUID())) {
     if (_calibrationUpdateHandler) {
-      _calibrationUpdateHandler();
+      std::string value = characteristic->getValue();
+      if (strncmp(value.c_str(), "gyro", 4) == 0) {
+        _calibrationUpdateHandler(CalibrationType::Gyro, CalibrationResponse::Start);
+      } else {
+        // WARNING: if the bluetooth app sends anything other than a valid
+        // integer, this will treat it as a 0 (calibration start)
+        const int calibrationResponse = atoi(value.c_str());
+        LOG_INFO_ASYNC_ON_MAIN(
+            "Received accelerometer calibration response: %i (%s)",
+            calibrationResponse,
+            value.c_str());
+        _calibrationUpdateHandler(CalibrationType::Accelerometer, (CalibrationResponse)calibrationResponse);
+      }
+    } else {
+      LOG_ERROR("No calibration update handler set");
     }
   } else if (characteristic->getUUID().equals(_debugCharacteristic->getUUID())) {
     std::string val = characteristic->getValue();
@@ -374,6 +388,9 @@ void BLEController::sendTelemetryUpdate(uint8_t *data, size_t size)
 
 void BLEController::sendCalibrationData(calibration_data_t calibrationData)
 {
+  _calibrationCharacteristic->setValue("type:gyro");
+  _calibrationCharacteristic->notify();
+  delay(30);
   uint8_t *data = (uint8_t *)&calibrationData;
   const size_t size = sizeof(calibrationData);
 
@@ -387,6 +404,14 @@ void BLEController::sendCalibrationData(calibration_data_t calibrationData)
 
   // Send termination signal
   _calibrationCharacteristic->setValue(TERMINATE_UPLOAD_STREAM_SIGNAL);
+  _calibrationCharacteristic->notify();
+  delay(30);
+}
+
+void BLEController::sendCalibrationUpdate(CalibrationRequest calibrationEvent)
+{
+  String packet = "accel:" + String((int)calibrationEvent);
+  _calibrationCharacteristic->setValue(packet.c_str());
   _calibrationCharacteristic->notify();
   delay(30);
 }
@@ -417,7 +442,8 @@ void BLEController::setMotorDebugUpdateHandler(std::function<void(motor_debug_up
   _motorDebugUpdateHandler = motorDebugUpdateHandler;
 }
 
-void BLEController::setCalibrationUpdateHandler(std::function<void()> calibrationUpdateHandler)
+void BLEController::setCalibrationUpdateHandler(
+    std::function<void(CalibrationType, CalibrationResponse)> calibrationUpdateHandler)
 {
   _calibrationUpdateHandler = calibrationUpdateHandler;
 }

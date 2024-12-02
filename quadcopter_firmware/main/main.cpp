@@ -18,6 +18,7 @@
 #include "Logger.h"
 #include "MotorController.h"
 #include "PersistentKeyValueStore.h"
+#include "PersistentKeysCommon.h"
 #include "SPI.h"
 #include "TelemetryController.h"
 #include "esp_log.h"
@@ -193,6 +194,33 @@ static void initController()
   },
       _helper,
       micros());
+}
+
+static void _handleCalibration(CalibrationType type, CalibrationResponse response)
+{
+  switch (type) {
+    case CalibrationType::Gyro: {
+      AsyncController::main.executePossiblySync([=]() {
+        calibration_data_t dat = _imu->calibrate__deprecated();
+        if (dat.success) {
+          LOG_INFO("Calibration successful");
+          _bluetoothController.sendCalibrationData(dat);
+        } else {
+          LOG_ERROR("Calibration failed");
+        }
+      });
+      break;
+    }
+    case CalibrationType::Accelerometer: {
+      AsyncController::main.executePossiblySync([=]() {
+        std::map<CalibrationResponse, std::function<void(void)>> handlers = _imu->calibrationHandlers(
+            [](CalibrationRequest request) { _bluetoothController.sendCalibrationUpdate(request); });
+        LOG_INFO("Handling calibration response %d", response);
+        handlers[response]();
+      });
+      break;
+    }
+  }
 }
 
 static controller_values_t _controllerValues = {
@@ -373,7 +401,12 @@ void setup()
     _motorDebugValues[motorDebugUpdate.motorNum] = motorDebugUpdate.motorWriteValue;
   });
 
-  _bluetoothController.setCalibrationUpdateHandler([&]() { _calibrate = true; });
+  _bluetoothController.setCalibrationUpdateHandler([&](CalibrationType type, CalibrationResponse response) {
+    AsyncController::main.executePossiblySync([type, response]() {
+      _handleCalibration(type, response);
+      LOG_INFO("Calibration update received: type = %d, response = %d", type, response);
+    });
+  });
 
   _bluetoothController.setDebugDataUpdateHandler([&](debug_recording_update_t debugDataUpdate) {
     AsyncController::main.executePossiblySync([debugDataUpdate]() {
@@ -431,13 +464,14 @@ void setup()
 
   LOG_INFO("Initializing IMU");
   bool setupSuccess = false;
-  imu = new IMU(
+  _imu = new IMU(
       SPI0_CS_PIN,
       SPI0_MISO_PIN,
       SPI0_MOSI_PIN,
       SPI0_SCLK_PIN,
       IMU_INT_PIN,
       [](imu_update_t update) { _receivedIMUUpdate(update); },
+      &_persistentKvStore,
       &setupSuccess);
 
   if (!setupSuccess) {
@@ -581,18 +615,7 @@ void loop()
     _startMonitoringPid = true;
   }
 
-  imu->loopHandler();
-
-  if (_calibrate) {
-    _calibrate = false;
-    calibration_data_t dat = imu->calibrate();
-    if (dat.success) {
-      LOG_INFO("Calibration successful");
-      _bluetoothController.sendCalibrationData(dat);
-    } else {
-      LOG_ERROR("Calibration failed");
-    }
-  }
+  _imu->loopHandler();
 
   if (!_receivedImuUpdate || _lastMagnetometerRead == 0) {
     // Wait until we have both an IMU and magnetometer read before

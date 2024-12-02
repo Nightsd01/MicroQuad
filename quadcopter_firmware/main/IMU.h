@@ -3,9 +3,34 @@
 
 #include <SPI.h>
 
+#include <array>
 #include <functional>
+#include <map>
+#include <vector>
 
+#include "CalibrationEvent.h"
 #include "ICM42688.h"
+#include "PersistentKeyValueStore.h"
+
+#define NUM_ACCEL_CALIBRATION_SAMPLES_PER_AXIS 2000
+#define ACCEL_CALIB_MEDIAN_FILTER_WINDOW 20
+
+struct accel_calibration_data_t
+{
+  std::function<void(CalibrationRequest)> requestHandler;
+  CalibrationRequest stage;
+  bool calibrationFailed;
+  bool awaitingResponse;
+  std::array<int64_t, 3> currentSums;
+  int16_t currentStageSamples;
+
+  std::vector<int16_t> currentValues[3];
+
+  // Offsets
+  std::map<CalibrationRequest, std::array<int64_t, 3>> offsets;
+
+  // additional gyro calibration fields here
+};
 
 struct imu_update_t
 {
@@ -45,9 +70,12 @@ class IMU
       uint8_t sclkPin,
       uint8_t interruptPin,
       std::function<void(imu_update_t)> updateHandler,
+      PersistentKeyValueStore *persistentKvStore,
       bool *success);
   void loopHandler(void);
-  calibration_data_t calibrate(void);
+  calibration_data_t calibrate__deprecated(void);
+  std::map<CalibrationResponse, std::function<void(void)>> calibrationHandlers(
+      std::function<void(CalibrationRequest)> requestHandler);
 
  private:
   SPIClass _spi;
@@ -57,6 +85,10 @@ class IMU
   imu_update_t _mostRecentUpdate;
   bool _calibrated;
   float _accelScale;
+  bool _accelerometerCalibrationInProgress;
+  accel_calibration_data_t _accelCalibrationData;
+  void _continueCalibration(imu_update_t update);
+  PersistentKeyValueStore *_persistentKvStore;
 };
 
 #endif
