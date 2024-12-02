@@ -26,7 +26,7 @@
 #include "soc/timer_group_reg.h"
 #include "soc/timer_group_struct.h"
 
-static std::vector<MotorController> _speedControllers;
+static std::vector<MotorController *> _speedControllers;
 
 // LED Setup
 #define LED_DATA_PIN GPIO_NUM_38
@@ -121,8 +121,8 @@ static void _updateLED(int red, int green, int blue)
     return;
   }
   LOG_INFO("Showing color: %i, %i, %i", red, green, blue);
-  if (_speedControllers.size() > 0 && _speedControllers[0].isConnected()) {
-    _speedControllers[0].disconnectRMT();
+  if (_speedControllers.size() > 0 && _speedControllers[0]->isConnected) {
+    _speedControllers[0]->disconnectRMT();
   } else if (_speedControllers.size() > 0) {
     LOG_WARN("RMT multiplexing issue: Speed controller was already disconnected");
   }
@@ -134,7 +134,7 @@ static void _updateLED(int red, int green, int blue)
   AsyncController::main.executeAfter(10, []() {
     _ledController.disconnectRMT();
     if (_speedControllers.size() > 0) {
-      _speedControllers[0].connectRMT();
+      _speedControllers[0]->connectRMT();
     }
     _waitingForLED = false;
   });
@@ -146,7 +146,7 @@ static void _updateArmStatus(void)
     LOG_INFO("Setting up motor outputs");
     for (int i = 0; i < NUM_MOTORS; i++) {
       LOG_INFO("Attaching motor %i to pin %i", i, motorPins[i]);
-      MotorController controller = MotorController(motorPins[i]);
+      MotorController *controller = new MotorController(motorPins[i]);
       _speedControllers.push_back(controller);
     }
     _completedFirstArm = true;
@@ -171,26 +171,26 @@ static void initController()
                 .kI = 0.01f,
                 .kD = 0.0f},
                            {// pitch
-                .kP = 8.0f,
-                .kI = 0.05f,
-                .kD = 0.0f},
+                .kP = 6.0f,
+                .kI = 0.0075f,
+                .kD = 0.1f},
                            {// roll
-                .kP = 8.0f,
-                .kI = 0.05f,
-                .kD = 0.0f}   },
+                .kP = 6.0f,
+                .kI = 0.0075f,
+                .kD = 0.1f}  },
           .rateGains =
               {{// yaw
                 .kP = 3.1f,
                 .kI = 0.01f,
                 .kD = 0.0005f},
                            {// pitch
-                .kP = 2.7f,
-                .kI = 0.07f,
-                .kD = 0.0008f},
+                .kP = 6.0f,
+                .kI = 0.02f,
+                .kD = 0.003f},
                            {// roll
-                .kP = 2.7f,
-                .kI = 0.07f,
-                .kD = 0.0008f}}
+                .kP = 6.0f,
+                .kI = 0.02f,
+                .kD = 0.003f}}
   },
       _helper,
       micros());
@@ -230,7 +230,6 @@ static controller_values_t _controllerValues = {
 
 static FusionEuler _euler;
 static uint64_t _previousMicros = 0;
-
 static const FusionMatrix gyroscopeMisalignment = {
     0.7071f,
     0.7071f,
@@ -329,11 +328,12 @@ static void _receivedIMUUpdate(imu_update_t update)
   _helper->ypr[0] = _euler.angle.yaw;
   _helper->ypr[1] = _euler.angle.pitch;
   _helper->ypr[2] = _euler.angle.roll;
+  _helper->magHeading = _magValues.HeadingDegress;
 
   LOG_INFO_PERIODIC_MILLIS(
       100,  // log at most up to every 100 millis
-      "%ld, %.2f, %.2f, %.2f, %.2f, %d, %d, %d, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %i, %i, %i, %.2f, %.2f, %.2f, "
-      "%.2f, %.2f",
+      "%8ld, %8.2f, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, "
+      "%8.2f, %8.2f, %8.2f, %8.2f, %8.2f",
       millis(),
       deltaTimeSeconds,
       _euler.angle.yaw,
@@ -356,7 +356,6 @@ static void _receivedIMUUpdate(imu_update_t update)
       _controllerValues.leftStickInput.y,
       _controllerValues.rightStickInput.x,
       _controllerValues.rightStickInput.y);
-  _helper->magHeading = _magValues.HeadingDegress;
 
   _imuUpdateCounter++;
   EXECUTE_PERIODIC(1000, {
@@ -368,6 +367,7 @@ static void _receivedIMUUpdate(imu_update_t update)
 // Initial setup
 void setup()
 {
+  esp_log_level_set("rmt", ESP_LOG_DEBUG);
   const unsigned long initializationTime = millis();
   Serial.begin(115200);
   LOG_INFO("BEGAN APP");
@@ -456,8 +456,8 @@ void setup()
 
   const FusionAhrsSettings settings = {
       .convention = FusionConventionNwu,
-      .gain = 0.2f,
-      .accelerationRejection = 90.0f,
+      .gain = 0.5f,
+      .accelerationRejection = 10.0f,
       .recoveryTriggerPeriod = 5000, /* 5 seconds */
   };
   FusionAhrsSetSettings(&_fusion, &settings);
@@ -552,9 +552,9 @@ static void updateMotors(motor_outputs_t outputs)
   }
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!_armed) {
-      _speedControllers[i].setSpeed(MIN_THROTTLE_RANGE);
+      _speedControllers[i]->setSpeed(MIN_THROTTLE_RANGE);
     } else {
-      _speedControllers[i].setSpeed(map(outputs[i], 1000, 2000, MIN_THROTTLE_RANGE, MAX_THROTTLE_RANGE));
+      _speedControllers[i]->setSpeed(map(outputs[i], 1000, 2000, MIN_THROTTLE_RANGE, MAX_THROTTLE_RANGE));
     }
   }
 }

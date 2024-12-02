@@ -151,7 +151,8 @@
         "rmt_encoder.h": "c",
         "rmt_common.h": "c",
         "stdlib.h": "c",
-        "esp_check.h": "c"
+        "esp_check.h": "c",
+        "esp_memory_utils.h": "c"
     },
     "idf.openOcdConfigs": [
         "board/esp32s3-builtin.cfg"

@@ -11,6 +11,7 @@ idf_component_register(
     REQUIRES qmc5883l
     REQUIRES ESP32Servo
     REQUIRES DShot
+    REQUIRES nvs_flash
 )
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DCONFIG_MPU_SPI")
