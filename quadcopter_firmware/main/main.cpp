@@ -17,6 +17,7 @@
 #include "LEDController.h"
 #include "Logger.h"
 #include "MotorController.h"
+#include "PersistentKeyValueStore.h"
 #include "SPI.h"
 #include "TelemetryController.h"
 #include "esp_log.h"
@@ -94,7 +95,9 @@ DFRobot_QMC5883 _compass(&Wire, /*I2C addr*/ QMC5883_ADDRESS);
 static uint64_t _lastMagnetometerRead = 0;
 static sVector_t _magValues;
 
-static IMU *imu = NULL;
+PersistentKeyValueStore _persistentKvStore;
+
+static IMU *_imu = NULL;
 static imu_output_t _imuValues;
 static FusionAhrs _fusion;
 
