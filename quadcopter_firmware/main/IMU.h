@@ -41,6 +41,7 @@ struct imu_update_t
   float mag_x, mag_y, mag_z;
   int16_t gyro_raw_x, gyro_raw_y, gyro_raw_z;
   int16_t accel_raw_x, accel_raw_y, accel_raw_z;
+  float gyro_dps_x, gyro_dps_y, gyro_dps_z;
 };
 
 // NOTE: Keep this in sync with BLEController.swift's struct CalibrationData
@@ -85,9 +86,8 @@ class IMU
   std::function<void(imu_update_t)> _updateHandler;
   imu_update_t _offsets;
   imu_update_t _mostRecentUpdate;
-  bool _calibrated;
-  float _accelScale;
-  bool _accelerometerCalibrationInProgress;
+  bool _calibrated = false;
+  bool _accelerometerCalibrationInProgress = false;
   accel_calibration_data_t _accelCalibrationData;
   void _continueCalibration(imu_update_t update);
   PersistentKeyValueStore *_persistentKvStore;

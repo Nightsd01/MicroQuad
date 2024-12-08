@@ -371,15 +371,15 @@ static void _receivedIMUUpdate(imu_update_t update)
 
   // Apply Kalman filter to accelerometer data
   accelerometer.axis.x = _accelKalmanFilters[0].applyFilter(accelerometer.axis.x);
-  accelerometer.axis.x = _accelKalmanFilters[1].applyFilter(accelerometer.axis.y);
-  accelerometer.axis.x = _accelKalmanFilters[2].applyFilter(accelerometer.axis.z);
+  accelerometer.axis.y = _accelKalmanFilters[1].applyFilter(accelerometer.axis.y);
+  accelerometer.axis.z = _accelKalmanFilters[2].applyFilter(accelerometer.axis.z);
 
   gyroscope.axis.x = _gyroKalmanFilters[0].applyFilter(gyroscope.axis.x);
-  gyroscope.axis.x = _gyroKalmanFilters[1].applyFilter(gyroscope.axis.y);
-  gyroscope.axis.x = _gyroKalmanFilters[2].applyFilter(gyroscope.axis.z);
+  gyroscope.axis.y = _gyroKalmanFilters[1].applyFilter(gyroscope.axis.y);
+  gyroscope.axis.z = _gyroKalmanFilters[2].applyFilter(gyroscope.axis.z);
 
   // Update gyroscope AHRS algorithm
-  FusionAhrsUpdateExternalHeading(&_fusion, gyroscope, accelerometer, _magValues.HeadingDegress, deltaTimeSeconds);
+  FusionAhrsUpdateNoMagnetometer(&_fusion, gyroscope, accelerometer, deltaTimeSeconds);
   _euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&_fusion));
 
   _imuValues = {

@@ -15,17 +15,40 @@ static void handleInterrupt(void) { _gotInterrupt = true; }
     ±2000 dps: 16.4 LSB/dps
 */
 #define GYRO_FSR ICM42688::GyroFS::dps500
-#define GYRO_SENSITIVITY 16.4
 #define UPDATE_RATE_GYRO_HZ ICM42688::ODR::odr1k
 #define UPDATE_RATE_ACCEL_HZ ICM42688::ODR::odr1k
 
-#define ACCEL_FSR ICM42688::AccelFS::gpm8
+#define ACCEL_FSR ICM42688::AccelFS::gpm4
+
+#define INT16T_MAX 32767.0f
+
+static float gyroDPS(int16_t rawValue)
+{
+  switch (GYRO_FSR) {
+    case ICM42688::GyroFS::dps15_625:
+      return (15.625f / INT16T_MAX) * rawValue;
+    case ICM42688::GyroFS::dps31_25:
+      return (31.25f / INT16T_MAX) * rawValue;
+    case ICM42688::GyroFS::dps62_5:
+      return (62.5f / INT16T_MAX) * rawValue;
+    case ICM42688::GyroFS::dps125:
+      return (125.0f / INT16T_MAX) * rawValue;
+    case ICM42688::GyroFS::dps250:
+      return (250.0f / INT16T_MAX) * rawValue;
+    case ICM42688::GyroFS::dps500:
+      return (500.0f / INT16T_MAX) * rawValue;
+    case ICM42688::GyroFS::dps1000:
+      return (1000.0f / INT16T_MAX) * rawValue;
+    case ICM42688::GyroFS::dps2000:
+      return (2000.0f / INT16T_MAX) * rawValue;
+  }
+}
 
 /**
  * These calibration values were determined by sitting the device on a flat
  * surface and averaging the gyroscope x, y, and z readings for a full minute
  */
-static const int16_t kGyroOffsets[3] = {-24, -28, 34};
+static const int16_t kGyroOffsets[3] = {9, 10, 1};
 static const double kGyroBiases[3] = {0.767975, 0.885338, -1.082153};
 
 IMU::IMU(
@@ -44,9 +67,6 @@ IMU::IMU(
   _spi.begin(sclkPin, misoPin, mosiPin, csPin);
 
   _imu = new ICM42688(_spi, csPin);
-  _imu->setGyroBiasX(kGyroBiases[0]);
-  _imu->setGyroBiasY(kGyroBiases[1]);
-  _imu->setGyroBiasZ(kGyroBiases[2]);
   _imu->setGyrXOffset(kGyroOffsets[0]);
   _imu->setGyrYOffset(kGyroOffsets[1]);
   _imu->setGyrZOffset(kGyroOffsets[2]);
@@ -81,9 +101,6 @@ IMU::IMU(
   _imu->setGyroFS(GYRO_FSR);
   _updateHandler = updateHandler;
 
-  const float fsrVals[4] = {2.0f, 4.0f, 8.0f, 16.0f};
-  _accelScale = fsrVals[(int)(ACCEL_FSR)] / 32768.0f;
-
   if (_imu->begin() < 0) {
     LOG_ERROR("Failed to initialize ICM42688P IMU");
     return;
@@ -117,6 +134,9 @@ void IMU::loopHandler(void)
     update.gyro_x = _imu->gyrX();
     update.gyro_y = _imu->gyrY();
     update.gyro_z = _imu->gyrZ();
+    update.gyro_dps_x = gyroDPS(update.gyro_x);
+    update.gyro_dps_y = gyroDPS(update.gyro_y);
+    update.gyro_dps_z = gyroDPS(update.gyro_z);
 
     _updateHandler(update);
 
