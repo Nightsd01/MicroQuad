@@ -7,8 +7,8 @@
 #include <string>
 
 // Magnetometer
-#include <DFRobot_QMC5883.h>
 #include <Fusion.h>
+#include <QMC5883L.h>
 #include <esp_partition.h>
 
 #include "AsyncController.h"
@@ -23,6 +23,7 @@
 #include "PersistentKeysCommon.h"
 #include "SPI.h"
 #include "TelemetryController.h"
+#include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "soc/timer_group_reg.h"
@@ -90,13 +91,10 @@ static bool _completedFirstArm = false;
 // rebooted
 static bool _enteredEmergencyMode = false;
 
-DFRobot_QMC5883 _compass(&Wire, /*I2C addr*/ QMC5883_ADDRESS);
+static QMC5883L _compass;
 
-// Keep these 2 in sync
-#define MAG_UPDATE_RATE_MILLIS 5
-#define MAG_DATARATE QMC5883_DATARATE_200HZ
-static uint64_t _lastMagnetometerRead = 0;
-static sVector_t _magValues;
+static mag_update_t _magValues;
+static bool _receivedMagUpdate = false;
 
 PersistentKeyValueStore _persistentKvStore;
 
@@ -156,6 +154,47 @@ static void _updateArmStatus(void)
   _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange, &_armed, sizeof(bool));
   if (!_enteredEmergencyMode) {
     _updateLED(_armed ? 255 : 0, _armed ? 0 : 255, 0);
+  }
+}
+
+static void _configureMagnetometer(void)
+{
+  ESP_ERROR_CHECK(_compass.begin(Wire, [&](mag_update_t update) {
+    _receivedMagUpdate = true;
+    _magValues = update;
+  }));
+
+  /**
+   * @brief  Set declination angle on your location and fix heading
+   * @n      You can find your declination on:
+   * http://magnetic-declination.com/
+   * @n      (+) Positive or (-) for negative
+   * @n      For Bytom / Poland declination angle is 4'26E (positive)
+   * @n      Formula: (deg + (min / 60.0)) / (180 / PI);
+   */
+  const float declinationAngle = (12.0 + (55.0 / 60.0)) / (180 / PI);
+  _compass.setRange(QMC5883L::Range::GAUSS_2);
+  _compass.setMeasurementMode(QMC5883L::MeasurementMode::CONTINUOUS);
+  _compass.setDataRate(QMC5883L::DataRate::HZ200);
+  _compass.setSamples(QMC5883L::Samples::OSR64);
+  _compass.setDeclinationAngle(declinationAngle);
+
+  if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSET_X)) {
+    _compass.setXOffset(_persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_X));
+  } else {
+    LOG_WARN("magnetometer: No X offset found in persistent storage, please calibrate the compass");
+  }
+
+  if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSET_Y)) {
+    _compass.setYOffset(_persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_Y));
+  } else {
+    LOG_WARN("magnetometer: No Y offset found in persistent storage, please calibrate the compass");
+  }
+
+  if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSET_Z)) {
+    _compass.setZOffset(_persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_Z));
+  } else {
+    LOG_WARN("magnetometer: No Z offset found in persistent storage, please calibrate the compass");
   }
 }
 
@@ -366,12 +405,12 @@ static void _receivedIMUUpdate(imu_update_t update)
   _helper->ypr[0] = _euler.angle.yaw;
   _helper->ypr[1] = _euler.angle.pitch;
   _helper->ypr[2] = _euler.angle.roll;
-  _helper->magHeading = _magValues.HeadingDegress;
+  _helper->magHeading = _magValues.heading;
 
   LOG_INFO_PERIODIC_MILLIS(
       100,  // log at most up to every 100 millis
       "%8ld, %8.2f, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, "
-      "%8.2f, %8.2f, %8.2f, %8.2f, %8.2f",
+      "%8.2f, %f, %f, %f",
       millis(),
       deltaTimeSeconds,
       _euler.angle.yaw,
@@ -389,11 +428,10 @@ static void _receivedIMUUpdate(imu_update_t update)
       (int)update.gyro_raw_x,
       (int)update.gyro_raw_y,
       (int)update.gyro_raw_z,
-      _magValues.HeadingDegress,
-      _controllerValues.leftStickInput.x,
-      _controllerValues.leftStickInput.y,
-      _controllerValues.rightStickInput.x,
-      _controllerValues.rightStickInput.y);
+      _magValues.heading,
+      update.gyro_dps_x,
+      update.gyro_dps_y,
+      update.gyro_dps_z);
 
   _imuUpdateCounter++;
   EXECUTE_PERIODIC(1000, {
@@ -466,24 +504,8 @@ void setup()
 
   LOG_INFO("Configuring magnetometer");
 
-  while (!_compass.begin()) {
-    LOG_ERROR("Failed to initialize magnetometer");
-    delay(500);
-  }
-  /**
-   * @brief  Set declination angle on your location and fix heading
-   * @n      You can find your declination on:
-   * http://magnetic-declination.com/
-   * @n      (+) Positive or (-) for negative
-   * @n      For Bytom / Poland declination angle is 4'26E (positive)
-   * @n      Formula: (deg + (min / 60.0)) / (180 / PI);
-   */
-  const float declinationAngle = (12.0 + (55.0 / 60.0)) / (180 / PI);
-  _compass.setRange(QMC5883_RANGE_2GA);
-  _compass.setMeasurementMode(QMC5883_CONTINOUS);
-  _compass.setDataRate(QMC5883_DATARATE_200HZ);
-  _compass.setSamples(QMC5883_SAMPLES_8);
-  _compass.setDeclinationAngle(declinationAngle);
+  _configureMagnetometer();
+
   LOG_INFO("Successfully initialized magnetometer");
 
   _updateArmStatus();
@@ -616,6 +638,7 @@ void loop()
   });
 
   _telemetryController->loopHandler();
+  _compass.loopHandler();
 
   if (_armed != _previousArmStatus) {
     LOG_INFO("Updating arm LED");
@@ -639,12 +662,6 @@ void loop()
     initController();
   }
 
-  if (timestampMillis - _lastMagnetometerRead > MAG_UPDATE_RATE_MILLIS) {
-    _magValues = _compass.readRaw();
-    _compass.getHeadingDegrees();
-    _lastMagnetometerRead = timestampMillis;
-  }
-
   const float batteryVoltage = batteryLevel();
   updateClientTelemetryIfNeeded(batteryVoltage);
   _helper->voltage = batteryVoltage;
@@ -655,7 +672,7 @@ void loop()
 
   _imu->loopHandler();
 
-  if (!_receivedImuUpdate || _lastMagnetometerRead == 0) {
+  if (!_receivedImuUpdate || !_receivedMagUpdate) {
     // Wait until we have both an IMU and magnetometer read before
     // proceeding
     return;

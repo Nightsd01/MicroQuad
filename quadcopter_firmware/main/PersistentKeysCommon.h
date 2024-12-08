@@ -10,4 +10,8 @@ const std::string ACCEL_OFFSET_X = "ACCEL_OFFSET_X";
 const std::string ACCEL_OFFSET_Y = "ACCEL_OFFSET_Y";
 const std::string ACCEL_OFFSET_Z = "ACCEL_OFFSET_Z";
 
+const std::string MAG_OFFSET_X = "MAG_OFFSET_X";
+const std::string MAG_OFFSET_Y = "MAG_OFFSET_Y";
+const std::string MAG_OFFSET_Z = "MAG_OFFSET_Z";
+
 };  // namespace PersistentKeysCommon
