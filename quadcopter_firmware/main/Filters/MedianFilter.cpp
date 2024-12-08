@@ -13,51 +13,32 @@ MedianFilter<T>::MedianFilter(size_t windowSize) : _windowSize(windowSize), _ind
 template <typename T>
 void MedianFilter<T>::addValue(const T& value)
 {
-  // Add new value to the appropriate heap
-  if (_maxHeap.empty() || value <= _maxHeap.top()) {
-    _maxHeap.push(value);
+  // Insert (value, index) into one of the heaps
+  if (_maxHeap.empty() || value <= _maxHeap.top().first) {
+    _maxHeap.push(std::make_pair(value, _index));
   } else {
-    _minHeap.push(value);
+    _minHeap.push(std::make_pair(value, _index));
   }
 
-  // Add the value and its index to the window
   _window.emplace_back(value, _index);
 
-  // Rebalance the heaps if necessary
-  if (_maxHeap.size() > _minHeap.size() + 1) {
-    _minHeap.push(_maxHeap.top());
-    _maxHeap.pop();
-  } else if (_minHeap.size() > _maxHeap.size() + 1) {
-    _maxHeap.push(_minHeap.top());
-    _minHeap.pop();
-  }
+  // Balance after adding the new element
+  rebalanceHeaps();
 
-  // Remove elements outside the window
+  // If the window is too large, remove the oldest element
   if (_window.size() > _windowSize) {
-    T old_value = _window.front().first;
-    size_t old_index = _window.front().second;
+    auto old = _window.front();
     _window.pop_front();
 
-    // Mark the old value for delayed removal
-    _delayedElements[old_value]++;
+    // Mark old element for delayed removal
+    _delayedElements.insert(old.second);
 
-    // Remove outdated elements from maxHeap
-    while (!_maxHeap.empty() && _delayedElements.count(_maxHeap.top())) {
-      _delayedElements[_maxHeap.top()]--;
-      if (_delayedElements[_maxHeap.top()] == 0) {
-        _delayedElements.erase(_maxHeap.top());
-      }
-      _maxHeap.pop();
-    }
+    // Clean up any delayed elements now at the top
+    removeDelayedElements(_maxHeap, true);
+    removeDelayedElements(_minHeap, false);
 
-    // Remove outdated elements from minHeap
-    while (!_minHeap.empty() && _delayedElements.count(_minHeap.top())) {
-      _delayedElements[_minHeap.top()]--;
-      if (_delayedElements[_minHeap.top()] == 0) {
-        _delayedElements.erase(_minHeap.top());
-      }
-      _minHeap.pop();
-    }
+    // Rebalance again if needed after removals
+    rebalanceHeaps();
   }
 
   ++_index;
@@ -66,20 +47,57 @@ void MedianFilter<T>::addValue(const T& value)
 template <typename T>
 T MedianFilter<T>::getMedian() const
 {
-  if (_maxHeap.empty() && _minHeap.empty()) throw std::runtime_error("No data available to compute median.");
+  if (_maxHeap.empty() && _minHeap.empty()) {
+    throw std::runtime_error("No data available to compute median.");
+  }
 
+  // If sizes are equal, median is average of tops
   if (_maxHeap.size() == _minHeap.size()) {
-    // Even number of elements
-    return static_cast<T>((_maxHeap.top() + _minHeap.top()) / static_cast<double>(2));
+    double val = (static_cast<double>(_maxHeap.top().first) + static_cast<double>(_minHeap.top().first)) / 2.0;
+    return static_cast<T>(val);
   } else if (_maxHeap.size() > _minHeap.size()) {
-    // maxHeap has more elements
-    return _maxHeap.top();
+    return _maxHeap.top().first;
   } else {
-    // minHeap has more elements
-    return _minHeap.top();
+    return _minHeap.top().first;
   }
 }
 
-// Add additional templates as needed for additional types
+template <typename T>
+void MedianFilter<T>::rebalanceHeaps()
+{
+  // Ensure heaps differ in size by at most 1
+  if (_maxHeap.size() > _minHeap.size() + 1) {
+    _minHeap.push(_maxHeap.top());
+    _maxHeap.pop();
+  } else if (_minHeap.size() > _maxHeap.size() + 1) {
+    _maxHeap.push(_minHeap.top());
+    _minHeap.pop();
+  }
+}
+
+template <typename T>
+void MedianFilter<T>::removeDelayedElements(std::priority_queue<std::pair<T, size_t>>& heap, bool isMaxHeap)
+{
+  // Remove elements from the heap top that are marked for delayed removal
+  while (!heap.empty() && _delayedElements.find(heap.top().second) != _delayedElements.end()) {
+    _delayedElements.erase(heap.top().second);
+    heap.pop();
+  }
+}
+
+template <typename T>
+void MedianFilter<T>::removeDelayedElements(
+    std::priority_queue<std::pair<T, size_t>, std::vector<std::pair<T, size_t>>, std::greater<std::pair<T, size_t>>>&
+        heap,
+    bool isMaxHeap)
+{
+  // Remove elements from the heap top that are marked for delayed removal
+  while (!heap.empty() && _delayedElements.find(heap.top().second) != _delayedElements.end()) {
+    _delayedElements.erase(heap.top().second);
+    heap.pop();
+  }
+}
+
+// Explicit template instantiations as needed
 template class MedianFilter<int16_t>;
 template class MedianFilter<float>;
