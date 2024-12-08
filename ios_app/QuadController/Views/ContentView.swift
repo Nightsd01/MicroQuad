@@ -59,10 +59,10 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
     calibrationController.provideBLEController(controller)
   }
   
-  func calibrationButton() -> some View
+  func accelerometerCalibrationButton() -> some View
   {
     Button("Calibrate Accel") {
-      controller.startAccelerometerCalibration()
+      controller.sendCalibrationUpdate(forSensorType: .Accelerometer, response: .Start)
     }
     .alert(calibrationController.calibrationAlert ?? "None", isPresented: .constant(calibrationController.calibrationAlert != nil)) {
       if calibrationController.alertButtonsAndHandlers != nil {
@@ -151,10 +151,14 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
           })
           Spacer()
           Button("Calibrate Gyro") {
-            controller.calibrateGyro()
+            controller.sendCalibrationUpdate(forSensorType: .Gyro, response: .Start)
           }
           Spacer()
-          calibrationButton()
+          accelerometerCalibrationButton()
+          Spacer()
+          Button("Calibrate Magnetometer") {
+            controller.sendCalibrationUpdate(forSensorType: .Magnetometer, response: .Start)
+          }
           Spacer()
           Button(recordingDebugData ? "Stop Recording" : "Start Recording") {
             recordingDebugData = !recordingDebugData

@@ -56,10 +56,10 @@ class CalibrationController : ObservableObject, BLEAccelerometerCalibrationDeleg
     calibrationAlert = alert
     alertButtonsAndHandlers = [
       "Next" : { [weak self] in
-        self?.bleController?.continueAccelerometerCalibration(.Continue)
+        self?.bleController?.sendCalibrationUpdate(forSensorType: .Accelerometer, response: .Continue)
       },
       "Cancel" : { [weak self] in
-        self?.bleController?.continueAccelerometerCalibration(.Cancel)
+        self?.bleController?.sendCalibrationUpdate(forSensorType: .Accelerometer, response: .Cancel)
       }
     ]
   }

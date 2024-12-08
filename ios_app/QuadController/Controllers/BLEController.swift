@@ -100,26 +100,10 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     }
   }
   
-  func calibrateGyro() {
+  func sendCalibrationUpdate(forSensorType type : CalibrationType, response : CalibrationResponse) {
     if let characteristic = calibrationCharacteristic {
-      device?.writeValue("gyro".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
+      device?.writeValue("\(type.rawValue):\(response.rawValue)".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
     }
-  }
-  
-  func startAccelerometerCalibration() {
-    if let characteristic = calibrationCharacteristic {
-      device?.writeValue("\(CalibrationResponse.Start.rawValue)".data(using: .utf8)!, for: characteristic, type: .withoutResponse)
-    }
-  }
-  
-  func continueAccelerometerCalibration(_ response : CalibrationResponse) {
-    guard let calibrationCharacteristic = calibrationCharacteristic else {
-      print("Unable to continue calibration: no calibration characteristic found")
-      return
-    }
-    
-    print("Writing response \(response) via BLEController")
-    device?.writeValue("\(response.rawValue)".data(using: .utf8)!, for: calibrationCharacteristic, type: .withoutResponse)
   }
 
   func updateMotorDebugStatus(inProgress: Bool) {
