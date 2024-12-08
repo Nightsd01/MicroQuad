@@ -241,24 +241,34 @@ static void _handleCalibration(CalibrationType type, CalibrationResponse respons
 {
   switch (type) {
     case CalibrationType::Gyro: {
-      AsyncController::main.executePossiblySync([=]() {
-        calibration_data_t dat = _imu->calibrate__deprecated();
-        if (dat.success) {
-          LOG_INFO("Calibration successful");
-          _bluetoothController.sendCalibrationData(dat);
-        } else {
-          LOG_ERROR("Calibration failed");
-        }
-      });
+      calibration_data_t dat = _imu->calibrate__deprecated();
+      if (dat.success) {
+        LOG_INFO("Calibration successful");
+        _bluetoothController.sendCalibrationData(dat);
+      } else {
+        LOG_ERROR("Calibration failed");
+      }
       break;
     }
     case CalibrationType::Accelerometer: {
-      AsyncController::main.executePossiblySync([=]() {
-        std::map<CalibrationResponse, std::function<void(void)>> handlers = _imu->calibrationHandlers(
-            [](CalibrationRequest request) { _bluetoothController.sendCalibrationUpdate(request); });
-        LOG_INFO("Handling calibration response %d", response);
-        handlers[response]();
-      });
+      std::map<CalibrationResponse, std::function<void(void)>> handlers = _imu->calibrationHandlers(
+          [](CalibrationRequest request) { _bluetoothController.sendCalibrationUpdate(request); });
+      LOG_INFO("Handling calibration response %d", response);
+      handlers[response]();
+      break;
+    }
+    case CalibrationType::Magnetometer: {
+      LOG_INFO("Calibrating magnetometer");
+      mag_calibration_offsets_t calibrationData = _compass.calibrate();
+      ESP_ERROR_CHECK(calibrationData.error);
+      LOG_INFO(
+          "Successfully calibrated compass: %f, %f, %f",
+          calibrationData.x_offset,
+          calibrationData.y_offset,
+          calibrationData.z_offset);
+      _persistentKvStore.setFloatForKey(PersistentKeysCommon::MAG_OFFSET_X, calibrationData.x_offset);
+      _persistentKvStore.setFloatForKey(PersistentKeysCommon::MAG_OFFSET_Y, calibrationData.y_offset);
+      _persistentKvStore.setFloatForKey(PersistentKeysCommon::MAG_OFFSET_Z, calibrationData.z_offset);
       break;
     }
   }

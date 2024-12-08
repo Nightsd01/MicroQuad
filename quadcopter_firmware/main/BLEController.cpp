@@ -249,18 +249,17 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
   } else if (characteristic->getUUID().equals(_calibrationCharacteristic->getUUID())) {
     if (_calibrationUpdateHandler) {
       std::string value = characteristic->getValue();
-      if (strncmp(value.c_str(), "gyro", 4) == 0) {
-        _calibrationUpdateHandler(CalibrationType::Gyro, CalibrationResponse::Start);
-      } else {
-        // WARNING: if the bluetooth app sends anything other than a valid
-        // integer, this will treat it as a 0 (calibration start)
-        const int calibrationResponse = atoi(value.c_str());
-        LOG_INFO_ASYNC_ON_MAIN(
-            "Received accelerometer calibration response: %i (%s)",
-            calibrationResponse,
-            value.c_str());
-        _calibrationUpdateHandler(CalibrationType::Accelerometer, (CalibrationResponse)calibrationResponse);
+      std::vector<std::string> components = _split(value, ":");
+      if (components.size() != 2) {
+        LOG_ERROR_ASYNC_ON_MAIN("Incorrect calibration packet");
+        return;
       }
+      std::string firstValue = components[0];
+      std::string secondValue = components[1];
+      CalibrationType type = (CalibrationType)atoi(firstValue.c_str());
+      CalibrationResponse response = (CalibrationResponse)atoi(secondValue.c_str());
+      LOG_INFO_ASYNC_ON_MAIN("Received calibration response: sensor = %i, response = %i)", type, response);
+      _calibrationUpdateHandler(type, response);
     } else {
       LOG_ERROR("No calibration update handler set");
     }
