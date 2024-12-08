@@ -32,8 +32,11 @@ Ultimately, this project will be broken up into components that will make it eas
 - Also in `settings.json` we are hard coding the device serial port which is even hackier
 
 ### TODO List
-- [ ] Add iOS controller codebase
+- [X] Add iOS controller codebase
 - [ ] Add PCB schematic + gerber files
 - [ ] Update firmware to utilize radians everywhere in the codebase instead of using degrees
 - [ ] Clean up the DebugHelper, there is a lot of now-unncessesary code in there
 - [ ] Break up the codebase in general, for example the core stability logic should be extracted to a different component from the Logger
+- [ ] Update PCB to use a more recent barometric sensor than the BME280
+- [ ] Update magnetometer to use a more recent sensor than the QMC5883L, newer mags are less sensitive to EMI noise
+- [ ] Utilize separate GPIO's for ESC DShot telemetry, it is supposed to be bidirectional but the ESP32 cannot switch between output/input modes on a GPIO pin fast enough for this to be feasible with only a single pin. 
