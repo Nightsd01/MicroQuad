@@ -24,6 +24,8 @@ Ultimately, this project will be broken up into components that will make it eas
 - Launch OpenOCD using the command `idf.py openocd`
 - In VS Code's debug menu click 'Start Debugging' with the [Eclipse CDT Remote](https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/DEBUGGING.md) target
 
+![alt text](assets/controller_app.jpg)
+
 ### Notes on Hacks
 - Currently there are a few hardcoded hacks here:
 - In VS Code's `.vscode/settings.json`, we are currently hardcoding a lot of `esp32` executable paths which is not ideal because it will break whenever versions change
