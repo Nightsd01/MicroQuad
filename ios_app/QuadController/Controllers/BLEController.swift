@@ -13,7 +13,7 @@ protocol BLEControllerDelegate {
   func didDisconnect()
 }
 
-protocol BLEAccelerometerCalibrationDelegate : AnyObject {
+@objc protocol BLESensorCalibrationDelegate : AnyObject {
   func didGetCalibrationRequest(_ request : CalibrationRequest)
 }
 
@@ -51,16 +51,12 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   var receivingGyroCalibrationData = false
   @Published var receivingDebugData = false
   @Published var transferProgress = 0.0
-
-  @Published var calibrated = false
-  var calibrationData : Data?
-  @Published var calibrationValues : CalibrationValues?
   
   public var quadStatus = QuadStatus()
   @Published var bleStatus = "None"
   @Published var debugDataString : String?
   
-  public weak var calibrationDelegate : BLEAccelerometerCalibrationDelegate?
+  private var calibrationDelegates : [CalibrationType : WeakReference<BLESensorCalibrationDelegate>] = [:]
   
   var delegate : BLEControllerDelegate? {
     didSet {
@@ -326,9 +322,8 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     }
   }
   
-  func finishedCalibration(calibrationData : Data) {
-    self.calibrationValues = CalibrationValues(calibrationData)
-    self.calibrated = true
+  func addCalibrationDelegate(forSensorType type : CalibrationType, calibrationDelegate : BLESensorCalibrationDelegate) {
+    calibrationDelegates[type] = WeakReference(calibrationDelegate)
   }
 
   // we unfortunately transmit 10 bytes at a time due to iOS BLE packet size limits....
@@ -338,26 +333,18 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
       return
     }
     
-    if let calibData = calibrationData, let str = String(data: data, encoding: .utf8) {
-      if str == "type:gyro" {
-        receivingGyroCalibrationData = true
-      } else if str == BLEController.terminationString {
-        finishedCalibration(calibrationData: calibData)
-      } else if str.starts(with: "accel:") {
-        let components = str.components(separatedBy: ":")
-        guard components.count == 2,
-                let updateCase = UInt8(components[1]),
-                let request = CalibrationRequest(rawValue: updateCase) else {
-          print("Got invalid accel calibration update")
-          return
-        }
-        
-        calibrationDelegate?.didGetCalibrationRequest(request)
+    if let str = String(data: data, encoding: .utf8) {
+      let components = str.components(separatedBy: ":")
+      guard components.count == 2,
+            let sensorTypeCase = UInt8(components[0]),
+            let sensorType = CalibrationType(rawValue: sensorTypeCase),
+            let updateCase = UInt8(components[1]),
+            let request = CalibrationRequest(rawValue: updateCase) else {
+        print("Got invalid accel+gyro calibration update")
+        return
       }
-    } else if calibrationData == nil {
-      calibrationData = data
-    } else if receivingGyroCalibrationData {
-      calibrationData = calibrationData! + data
+      
+      calibrationDelegates[sensorType]?.value?.didGetCalibrationRequest(request)
     } else {
       print("Unable to handle calibration update")
     }

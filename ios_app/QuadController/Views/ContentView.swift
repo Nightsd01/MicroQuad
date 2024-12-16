@@ -20,13 +20,13 @@ private class PreviousControlValues {
 struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   
   @ObservedObject var controller = BLEController()
-  @ObservedObject var calibrationController = CalibrationController()
+  @ObservedObject var accelGyroCalibrationController = CalibrationController(calibrationType: .AccelerometerGyro)
+  @ObservedObject var magnetometerCalibrationController = CalibrationController(calibrationType: .Magnetometer)
   @State private var showingPopover = false
   @State fileprivate var leftStickValues = PreviousControlValues(x : 0.0, y : 127.5)
   @State fileprivate var rightStickValues = PreviousControlValues(x : 127.5, y : 127.5)
   @State private var recordingDebugData = false
   @State private var showingDebugMenu = false
-  @State private var calibrating = false
   
   @State private var motor1 = 0.0
   @State private var motor2 = 0.0
@@ -56,13 +56,14 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
       controller.scan()
     }
     controller.delegate = self
-    calibrationController.provideBLEController(controller)
+    accelGyroCalibrationController.provideBLEController(controller)
+    magnetometerCalibrationController.provideBLEController(controller)
   }
   
-  func accelerometerCalibrationButton() -> some View
+  func calibrationButton(type : CalibrationType, typeLabel : String, calibrationController : CalibrationController) -> some View
   {
-    Button("Calibrate Accel") {
-      controller.sendCalibrationUpdate(forSensorType: .Accelerometer, response: .Start)
+    Button("Calibrate \(typeLabel)") {
+      controller.sendCalibrationUpdate(forSensorType: type, response: .Start)
     }
     .alert(calibrationController.calibrationAlert ?? "None", isPresented: .constant(calibrationController.calibrationAlert != nil)) {
       if calibrationController.alertButtonsAndHandlers != nil {
@@ -150,15 +151,9 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
             changeMotorDebugState(editing: showingPopover)
           })
           Spacer()
-          Button("Calibrate Gyro") {
-            controller.sendCalibrationUpdate(forSensorType: .Gyro, response: .Start)
-          }
+          calibrationButton(type: .AccelerometerGyro, typeLabel: "Accel+Gyro", calibrationController: accelGyroCalibrationController)
           Spacer()
-          accelerometerCalibrationButton()
-          Spacer()
-          Button("Calibrate Magnetometer") {
-            controller.sendCalibrationUpdate(forSensorType: .Magnetometer, response: .Start)
-          }
+          calibrationButton(type: .Magnetometer, typeLabel: "Magnetometer", calibrationController: magnetometerCalibrationController)
           Spacer()
           Button(recordingDebugData ? "Stop Recording" : "Start Recording") {
             recordingDebugData = !recordingDebugData
@@ -182,24 +177,6 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
         .frame(maxWidth: .infinity, maxHeight: 44, alignment: .center)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-      .alert("Calibration Complete", isPresented: .constant(controller.connected && controller.calibrated && controller.calibrationValues != nil)) {
-        Button("OK") {
-          controller.calibrated = false
-          controller.calibrationValues = nil
-        }
-      } message: {
-        if (controller.calibrationValues == nil) {
-          Text("")
-        } else {
-          Text(
-            "Gyro Bias: \(controller.calibrationValues!.gyroBiasX), \(controller.calibrationValues!.gyroBiasY), \(controller.calibrationValues!.gyroBiasZ)"
-            + "\nAccel Bias: \(controller.calibrationValues!.accelBiasX), \(controller.calibrationValues!.accelBiasY), \(controller.calibrationValues!.accelBiasZ)"
-            + "\nAccel Scale Factor: \(controller.calibrationValues!.accelScaleX), \(controller.calibrationValues!.accelScaleY), \(controller.calibrationValues!.accelScaleZ)"
-            + "\nGyro Offsets: \(controller.calibrationValues!.gyroOffsetX), \(controller.calibrationValues!.gyroOffsetY), \(controller.calibrationValues!.gyroOffsetZ)"
-            + "\nnAccel Offsets: \(controller.calibrationValues!.accelOffsetX), \(controller.calibrationValues!.accelOffsetY), \(controller.calibrationValues!.accelOffsetZ)"
-          )
-        }
-      }
       CameraPreview()
         .frame(width: 120, height: 67.5, alignment: .topTrailing)
         .cornerRadius(12)

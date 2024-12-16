@@ -20,7 +20,7 @@
 		CA8BF34C25BCEE1F007B3440 /* StickUpdateParams.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8BF34B25BCEE1F007B3440 /* StickUpdateParams.swift */; };
 		CA8BF34F25BD035D007B3440 /* BLEStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8BF34E25BD035D007B3440 /* BLEStatusView.swift */; };
 		CA8BF35225BD0419007B3440 /* QuadStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8BF35125BD0419007B3440 /* QuadStatus.swift */; };
-		CAC003742CD7078C0008FD5A /* CalibrationValues.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC003732CD7078C0008FD5A /* CalibrationValues.swift */; };
+		CA9E90712D07DD4F00E35D4E /* WeakReference.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA9E90702D07DD4F00E35D4E /* WeakReference.swift */; };
 		CAC0037A2CE1A20A0008FD5A /* MemoryStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC003792CE1A20A0008FD5A /* MemoryStatusView.swift */; };
 		CAC77FB42A8322FA00E8ABA7 /* DGCharts in Frameworks */ = {isa = PBXBuildFile; productRef = CAC77FB32A8322FA00E8ABA7 /* DGCharts */; };
 		CAF03F7C2544D7A500D04771 /* QuadControllerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF03F7B2544D7A500D04771 /* QuadControllerApp.swift */; };
@@ -56,7 +56,7 @@
 		CA8BF34B25BCEE1F007B3440 /* StickUpdateParams.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickUpdateParams.swift; sourceTree = "<group>"; };
 		CA8BF34E25BD035D007B3440 /* BLEStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEStatusView.swift; sourceTree = "<group>"; };
 		CA8BF35125BD0419007B3440 /* QuadStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuadStatus.swift; sourceTree = "<group>"; };
-		CAC003732CD7078C0008FD5A /* CalibrationValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationValues.swift; sourceTree = "<group>"; };
+		CA9E90702D07DD4F00E35D4E /* WeakReference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeakReference.swift; sourceTree = "<group>"; };
 		CAC003762CE0483E0008FD5A /* QuadController-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "QuadController-Bridging-Header.h"; sourceTree = "<group>"; };
 		CAC003792CE1A20A0008FD5A /* MemoryStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStatusView.swift; sourceTree = "<group>"; };
 		CAF03F782544D7A500D04771 /* QuadController.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuadController.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -110,7 +110,6 @@
 				CA62E3DD25462FB2008C511B /* StickConfiguration.swift */,
 				CA8BF34B25BCEE1F007B3440 /* StickUpdateParams.swift */,
 				CA8BF35125BD0419007B3440 /* QuadStatus.swift */,
-				CAC003732CD7078C0008FD5A /* CalibrationValues.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -148,6 +147,7 @@
 				CA62E3DB25462F9F008C511B /* Models */,
 				CA62E3D925462F97008C511B /* Views */,
 				CA62E3D32546186A008C511B /* HelperExtensions.swift */,
+				CA9E90702D07DD4F00E35D4E /* WeakReference.swift */,
 				CAF03F7F2544D7A600D04771 /* Assets.xcassets */,
 				CAF03F842544D7A600D04771 /* Info.plist */,
 				CAF03F812544D7A600D04771 /* Preview Content */,
@@ -247,9 +247,9 @@
 				CA8BF34F25BD035D007B3440 /* BLEStatusView.swift in Sources */,
 				CAF03F7E2544D7A500D04771 /* ContentView.swift in Sources */,
 				CA524551255225B500537AD4 /* BLEController.swift in Sources */,
+				CA9E90712D07DD4F00E35D4E /* WeakReference.swift in Sources */,
 				CA62E3D42546186A008C511B /* HelperExtensions.swift in Sources */,
 				CA62E3DE25462FB2008C511B /* StickConfiguration.swift in Sources */,
-				CAC003742CD7078C0008FD5A /* CalibrationValues.swift in Sources */,
 				CA011B122CFAA159006E5C74 /* CameraPreview.swift in Sources */,
 				CAF03F7C2544D7A500D04771 /* QuadControllerApp.swift in Sources */,
 				CA011B102CF976A2006E5C74 /* CameraController.swift in Sources */,
