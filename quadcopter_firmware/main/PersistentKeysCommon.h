@@ -14,4 +14,8 @@ const std::string MAG_OFFSET_X = "MAG_OFFSET_X";
 const std::string MAG_OFFSET_Y = "MAG_OFFSET_Y";
 const std::string MAG_OFFSET_Z = "MAG_OFFSET_Z";
 
+const std::string GYRO_OFFSET_X = "GYRO_OFFSET_X";
+const std::string GYRO_OFFSET_Y = "GYRO_OFFSET_Y";
+const std::string GYRO_OFFSET_Z = "GYRO_OFFSET_Z";
+
 };  // namespace PersistentKeysCommon

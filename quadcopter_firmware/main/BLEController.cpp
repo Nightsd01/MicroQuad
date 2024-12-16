@@ -250,18 +250,21 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
     if (_calibrationUpdateHandler) {
       std::string value = characteristic->getValue();
       std::vector<std::string> components = _split(value, ":");
-      if (components.size() != 2) {
+      if (components.size() < 2) {
         LOG_ERROR_ASYNC_ON_MAIN("Incorrect calibration packet");
         return;
       }
-      std::string firstValue = components[0];
-      std::string secondValue = components[1];
-      CalibrationType type = (CalibrationType)atoi(firstValue.c_str());
-      CalibrationResponse response = (CalibrationResponse)atoi(secondValue.c_str());
-      LOG_INFO_ASYNC_ON_MAIN("Received calibration response: sensor = %i, response = %i)", type, response);
-      _calibrationUpdateHandler(type, response);
+      // WARNING: if the bluetooth app sends anything other than a valid
+      // integer, this will treat it as a 0 (calibration start)
+      const int calibrationResponse = atoi(components[1].c_str());
+      const int calibrationType = atoi(components[0].c_str());
+      LOG_INFO_ASYNC_ON_MAIN(
+          "Received calibration update: type = %d, response = %d",
+          calibrationType,
+          calibrationResponse);
+      _calibrationUpdateHandler((CalibrationType)calibrationType, (CalibrationResponse)calibrationResponse);
     } else {
-      LOG_ERROR("No calibration update handler set");
+      LOG_ERROR_ASYNC_ON_MAIN("No calibration update handler set");
     }
   } else if (characteristic->getUUID().equals(_debugCharacteristic->getUUID())) {
     std::string val = characteristic->getValue();
@@ -385,31 +388,9 @@ void BLEController::sendTelemetryUpdate(uint8_t *data, size_t size)
   _telemetryCharacteristic->notify();
 }
 
-void BLEController::sendCalibrationData(calibration_data_t calibrationData)
+void BLEController::sendCalibrationUpdate(CalibrationType type, CalibrationRequest calibrationEvent)
 {
-  _calibrationCharacteristic->setValue("type:gyro");
-  _calibrationCharacteristic->notify();
-  delay(30);
-  uint8_t *data = (uint8_t *)&calibrationData;
-  const size_t size = sizeof(calibrationData);
-
-  // Send data chunks
-  for (size_t byteIndex = 0; byteIndex < size; byteIndex += MAX_CALIBRATION_PACKET_SIZE_BYTES) {
-    const size_t packetSize = MIN(MAX_CALIBRATION_PACKET_SIZE_BYTES, size - byteIndex);
-    _calibrationCharacteristic->setValue(&data[byteIndex], packetSize);
-    _calibrationCharacteristic->notify();
-    delay(30);
-  }
-
-  // Send termination signal
-  _calibrationCharacteristic->setValue(TERMINATE_UPLOAD_STREAM_SIGNAL);
-  _calibrationCharacteristic->notify();
-  delay(30);
-}
-
-void BLEController::sendCalibrationUpdate(CalibrationRequest calibrationEvent)
-{
-  String packet = "accel:" + String((int)calibrationEvent);
+  String packet = String((int)type) + ":" + String((int)calibrationEvent);
   _calibrationCharacteristic->setValue(packet.c_str());
   _calibrationCharacteristic->notify();
   delay(30);

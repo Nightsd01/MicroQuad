@@ -237,38 +237,54 @@ static void initController()
       micros());
 }
 
-static void _handleCalibration(CalibrationType type, CalibrationResponse response)
+static void _handleMagnetometerCalibration(CalibrationResponse response)
 {
-  switch (type) {
-    case CalibrationType::Gyro: {
-      calibration_data_t dat = _imu->calibrate__deprecated();
-      if (dat.success) {
-        LOG_INFO("Calibration successful");
-        _bluetoothController.sendCalibrationData(dat);
-      } else {
-        LOG_ERROR("Calibration failed");
-      }
+  switch (response) {
+    case CalibrationResponse::Start: {
+      LOG_INFO("Starting magnetometer calibration");
+      _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Roll360);
       break;
     }
-    case CalibrationType::Accelerometer: {
-      std::map<CalibrationResponse, std::function<void(void)>> handlers = _imu->calibrationHandlers(
-          [](CalibrationRequest request) { _bluetoothController.sendCalibrationUpdate(request); });
-      LOG_INFO("Handling calibration response %d", response);
-      handlers[response]();
-      break;
-    }
-    case CalibrationType::Magnetometer: {
-      LOG_INFO("Calibrating magnetometer");
+    case CalibrationResponse::Continue: {
       mag_calibration_offsets_t calibrationData = _compass.calibrate();
-      ESP_ERROR_CHECK(calibrationData.error);
+      if (calibrationData.error != ESP_OK) {
+        LOG_ERROR("Failed to calibrate compass: %d", calibrationData.error);
+        _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Failed);
+        return;
+      }
       LOG_INFO(
           "Successfully calibrated compass: %f, %f, %f",
           calibrationData.x_offset,
           calibrationData.y_offset,
           calibrationData.z_offset);
+      _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Complete);
       _persistentKvStore.setFloatForKey(PersistentKeysCommon::MAG_OFFSET_X, calibrationData.x_offset);
       _persistentKvStore.setFloatForKey(PersistentKeysCommon::MAG_OFFSET_Y, calibrationData.y_offset);
       _persistentKvStore.setFloatForKey(PersistentKeysCommon::MAG_OFFSET_Z, calibrationData.z_offset);
+      break;
+    }
+    default: {
+      LOG_ERROR("Received unexpected calibration response: %d", response);
+      _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Failed);
+      break;
+    }
+  }
+}
+
+static void _handleCalibration(CalibrationType type, CalibrationResponse response)
+{
+  switch (type) {
+    case CalibrationType::AccelerometerGyro: {
+      std::map<CalibrationResponse, std::function<void(void)>> handlers =
+          _imu->calibrationHandlers([](CalibrationRequest request) {
+            _bluetoothController.sendCalibrationUpdate(CalibrationType::AccelerometerGyro, request);
+          });
+      LOG_INFO("Handling calibration response %d", response);
+      handlers[response]();
+      break;
+    }
+    case CalibrationType::Magnetometer: {
+      _handleMagnetometerCalibration(response);
       break;
     }
   }

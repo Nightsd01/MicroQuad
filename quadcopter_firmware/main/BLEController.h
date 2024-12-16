@@ -60,8 +60,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   volatile bool isProcessingBluetoothTransaction;
   void uploadDebugData(uint8_t *data, size_t length);
   void sendTelemetryUpdate(uint8_t *data, size_t size);
-  void sendCalibrationData(calibration_data_t calibrationData);
-  void sendCalibrationUpdate(CalibrationRequest calibrationEvent);
+  void sendCalibrationUpdate(CalibrationType type, CalibrationRequest calibrationEvent);
 
   // update handlers - these are always called on the main core
   void setControlsUpdateHandler(std::function<void(controls_update_t)> controlsUpdateHandler);

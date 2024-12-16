@@ -44,13 +44,6 @@ static float gyroDPS(int16_t rawValue)
   }
 }
 
-/**
- * These calibration values were determined by sitting the device on a flat
- * surface and averaging the gyroscope x, y, and z readings for a full minute
- */
-static const int16_t kGyroOffsets[3] = {9, 10, 1};
-static const double kGyroBiases[3] = {0.767975, 0.885338, -1.082153};
-
 IMU::IMU(
     uint8_t csPin,
     uint8_t misoPin,
@@ -67,9 +60,6 @@ IMU::IMU(
   _spi.begin(sclkPin, misoPin, mosiPin, csPin);
 
   _imu = new ICM42688(_spi, csPin);
-  _imu->setGyrXOffset(kGyroOffsets[0]);
-  _imu->setGyrYOffset(kGyroOffsets[1]);
-  _imu->setGyrZOffset(kGyroOffsets[2]);
 
   bool setAnyOffset = false;
   if (persistentKvStore->hasValueForKey(PersistentKeysCommon::ACCEL_OFFSET_X)) {
@@ -90,6 +80,27 @@ IMU::IMU(
     const int16_t zOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Z);
     LOG_INFO("Setting Z accel offset: %d", zOffset);
     _imu->setAccZOffset(zOffset);
+    setAnyOffset = true;
+  }
+
+  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_X)) {
+    const int16_t xOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_X);
+    LOG_INFO("Setting X gyro offset: %d", xOffset);
+    _imu->setGyrXOffset(xOffset);
+    setAnyOffset = true;
+  }
+
+  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Y)) {
+    const int16_t yOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Y);
+    LOG_INFO("Setting Y gyro offset: %d", yOffset);
+    _imu->setGyrYOffset(yOffset);
+    setAnyOffset = true;
+  }
+
+  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Z)) {
+    const int16_t zOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Z);
+    LOG_INFO("Setting Z gyro offset: %d", zOffset);
+    _imu->setGyrZOffset(zOffset);
     setAnyOffset = true;
   }
 
@@ -157,24 +168,48 @@ void IMU::_continueCalibration(imu_update_t update)
 
   // Calculate running median sum for X, Y, and Z axes
   for (int i = 0; i < 3; i++) {
-    _accelCalibrationData.medianFilters[i].addValue(vals[i]);
-    _accelCalibrationData.currentSums[i] += _accelCalibrationData.medianFilters[i].getMedian();
+    _accelCalibrationData.accelMedianFilters[i].addValue(vals[i]);
+    _accelCalibrationData.accelCurrentSums[i] += _accelCalibrationData.accelMedianFilters[i].getMedian();
+  }
+  if (_accelCalibrationData.stage == CalibrationRequest::PlaceFlat) {
+    const int16_t gyroVals[3] = {update.gyro_raw_x, update.gyro_raw_y, update.gyro_raw_z};
+    for (int i = 0; i < 3; i++) {
+      _accelCalibrationData.gyroMedianFilters[i].addValue(gyroVals[i]);
+      _accelCalibrationData.gyroCurrentSums[i] += _accelCalibrationData.gyroMedianFilters[i].getMedian();
+    }
   }
 
-  if (++_accelCalibrationData.currentStageSamples >= NUM_ACCEL_CALIBRATION_SAMPLES_PER_AXIS) {
+  if (++_accelCalibrationData.currentStageSamples >= NUM_CALIBRATION_SAMPLES_PER_AXIS) {
     // We're done with this stage
     LOG_INFO("Completed stage %d", (int)_accelCalibrationData.stage);
     _accelerometerCalibrationInProgress = false;
 
+    if (_accelCalibrationData.stage == CalibrationRequest::PlaceFlat) {
+      int16_t averages[3];
+      for (int i = 0; i < 3; i++) {
+        averages[i] = (int16_t)(_accelCalibrationData.gyroCurrentSums[i] / NUM_CALIBRATION_SAMPLES_PER_AXIS);
+      }
+
+      _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_X, -averages[0]);
+      _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Y, -averages[1]);
+      _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Z, -averages[2]);
+
+      _imu->setGyrXOffset(-averages[0]);
+      _imu->setGyrYOffset(-averages[1]);
+      _imu->setGyrZOffset(-averages[2]);
+
+      LOG_INFO("Gyro calibration complete: %d, %d, %d", -averages[0], -averages[1], -averages[2]);
+    }
+
     _accelCalibrationData.offsets[_accelCalibrationData.stage] = {
-        (int64_t)(_accelCalibrationData.currentSums[0] / NUM_ACCEL_CALIBRATION_SAMPLES_PER_AXIS),
-        (int64_t)(_accelCalibrationData.currentSums[1] / NUM_ACCEL_CALIBRATION_SAMPLES_PER_AXIS),
-        (int64_t)(_accelCalibrationData.currentSums[2] / NUM_ACCEL_CALIBRATION_SAMPLES_PER_AXIS),
+        (int64_t)(_accelCalibrationData.accelCurrentSums[0] / NUM_CALIBRATION_SAMPLES_PER_AXIS),
+        (int64_t)(_accelCalibrationData.accelCurrentSums[1] / NUM_CALIBRATION_SAMPLES_PER_AXIS),
+        (int64_t)(_accelCalibrationData.accelCurrentSums[2] / NUM_CALIBRATION_SAMPLES_PER_AXIS),
     };
 
     if (_accelCalibrationData.stage == CalibrationRequest::RollLeft) {
       // Final Stage Completed
-      if (_accelCalibrationData.offsets.size() != NUM_CALIBRATION_STAGES) {
+      if (_accelCalibrationData.offsets.size() != NUM_ACCELGYRO_CALIBRATION_STAGES) {
         LOG_ERROR("Accelerometer calibration failed: Not all stages completed.");
         _accelCalibrationData.requestHandler(CalibrationRequest::Failed);
         return;
@@ -182,10 +217,10 @@ void IMU::_continueCalibration(imu_update_t update)
 
       int64_t offsets[3] = {0, 0, 0};
       for (int axis = 0; axis < 3; axis++) {
-        for (int i = 0; i < NUM_CALIBRATION_STAGES; i++) {
+        for (int i = 0; i < NUM_ACCELGYRO_CALIBRATION_STAGES; i++) {
           offsets[axis] += _accelCalibrationData.offsets[(CalibrationRequest)i][axis];
         }
-        offsets[axis] /= NUM_CALIBRATION_STAGES;
+        offsets[axis] /= NUM_ACCELGYRO_CALIBRATION_STAGES;
       }
 
       LOG_INFO("Accelerometer calibration complete:");
@@ -200,12 +235,15 @@ void IMU::_continueCalibration(imu_update_t update)
       _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_X, offsets[0]);
       _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Y, offsets[1]);
       _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Z, offsets[2]);
+
+      // Handle gyro calibration from the first stage data
+
     } else {
       // continue to the next stage
       const int nextStage = (int)(_accelCalibrationData.stage) + 1;
       _accelCalibrationData.stage = (CalibrationRequest)nextStage;
       _accelCalibrationData.currentStageSamples = 0;
-      _accelCalibrationData.currentSums = {0, 0, 0};
+      _accelCalibrationData.accelCurrentSums = {0, 0, 0};
       // We will wait for the user to send CalibrationResponse::Continue before continuing
       _accelCalibrationData.awaitingResponse = true;
       _accelCalibrationData.requestHandler(_accelCalibrationData.stage);
@@ -226,7 +264,7 @@ std::map<CalibrationResponse, std::function<void(void)>> IMU::calibrationHandler
         .stage = CalibrationRequest::PlaceFlat,
         .calibrationFailed = false,
         .awaitingResponse = true,
-        .currentSums = {0, 0, 0},
+        .accelCurrentSums = {0, 0, 0},
         .currentStageSamples = 0,
     };
     requestHandler(CalibrationRequest::PlaceFlat);
@@ -246,53 +284,4 @@ std::map<CalibrationResponse, std::function<void(void)>> IMU::calibrationHandler
   };
 
   return responseHandlers;
-}
-
-calibration_data_t IMU::calibrate__deprecated(void)
-{
-  if (_imu->calibrateGyro() != 1) {
-    LOG_ERROR("Failed gyro calibration");
-    return calibration_data_t::createError();
-  }
-  _imu->setAllOffsets();
-  if (_imu->calibrateAccel() != 1) {
-    LOG_ERROR("Failed accel calibration");
-    return calibration_data_t::createError();
-  }
-  if (_imu->computeOffsets() != 1) {
-    LOG_ERROR("Failed to compute offsets");
-    return calibration_data_t::createError();
-  }
-  std::array<int16_t, 3> gyroOffsets = _imu->getGyrOffsets();
-  std::array<int16_t, 3> accelOffsets = _imu->getAccOffsets();
-  LOG_INFO(
-      "Calibration complete. Gyro biases: %f, %f, %f, "
-      "Accel bias values: %f, %f, %f, "
-      "accel scale factors: %f, %f, %f, "
-      "gyro offsets: %d, %d, %d, "
-      "accel offets: %d, %d, %d",
-      _imu->getGyroBiasX(),
-      _imu->getGyroBiasY(),
-      _imu->getGyroBiasZ(),
-      _imu->getAccelBiasX_mss(),
-      _imu->getAccelBiasY_mss(),
-      _imu->getAccelBiasZ_mss(),
-      _imu->getAccelScaleFactorX(),
-      _imu->getAccelScaleFactorY(),
-      _imu->getAccelScaleFactorZ(),
-      gyroOffsets[0],
-      gyroOffsets[1],
-      gyroOffsets[2],
-      accelOffsets[0],
-      accelOffsets[1],
-      accelOffsets[2]);
-
-  return {
-      .gyro_biases = {_imu->getGyroBiasX(),         _imu->getGyroBiasY(),         _imu->getGyroBiasZ()        },
-      .accel_biases = {_imu->getAccelBiasX_mss(),    _imu->getAccelBiasY_mss(),    _imu->getAccelBiasZ_mss()   },
-      .accel_scales = {_imu->getAccelScaleFactorX(), _imu->getAccelScaleFactorY(), _imu->getAccelScaleFactorZ()},
-      .gyro_offsets = {gyroOffsets[0],               gyroOffsets[1],               gyroOffsets[2]              },
-      .accel_offsets = {accelOffsets[0],              accelOffsets[1],              accelOffsets[2]             },
-      .success = true
-  };
 }
