@@ -190,15 +190,15 @@ void IMU::_continueCalibration(imu_update_t update)
         averages[i] = (int16_t)(_accelCalibrationData.gyroCurrentSums[i] / NUM_CALIBRATION_SAMPLES_PER_AXIS);
       }
 
-      _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_X, -averages[0]);
-      _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Y, -averages[1]);
-      _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Z, -averages[2]);
+      _persistentKvStore->setIntForKey(PersistentKeysCommon::GYRO_OFFSET_X, averages[0]);
+      _persistentKvStore->setIntForKey(PersistentKeysCommon::GYRO_OFFSET_Y, averages[1]);
+      _persistentKvStore->setIntForKey(PersistentKeysCommon::GYRO_OFFSET_Z, averages[2]);
 
-      _imu->setGyrXOffset(-averages[0]);
-      _imu->setGyrYOffset(-averages[1]);
-      _imu->setGyrZOffset(-averages[2]);
+      _imu->setGyrXOffset(averages[0]);
+      _imu->setGyrYOffset(averages[1]);
+      _imu->setGyrZOffset(averages[2]);
 
-      LOG_INFO("Gyro calibration complete: %d, %d, %d", -averages[0], -averages[1], -averages[2]);
+      LOG_INFO("Gyro calibration complete: %d, %d, %d", averages[0], averages[1], averages[2]);
     }
 
     _accelCalibrationData.offsets[_accelCalibrationData.stage] = {
@@ -236,8 +236,7 @@ void IMU::_continueCalibration(imu_update_t update)
       _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Y, offsets[1]);
       _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Z, offsets[2]);
 
-      // Handle gyro calibration from the first stage data
-
+      _accelCalibrationData.requestHandler(CalibrationRequest::Complete);
     } else {
       // continue to the next stage
       const int nextStage = (int)(_accelCalibrationData.stage) + 1;

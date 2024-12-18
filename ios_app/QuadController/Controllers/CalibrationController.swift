@@ -14,8 +14,7 @@ class CalibrationController : ObservableObject, BLESensorCalibrationDelegate {
   
   public let calibrationSensorType : CalibrationType
   
-  @Published public var calibrationAlert : String?
-  @Published public var alertButtonsAndHandlers : [String : () -> Void]?
+  @Published public var currentAlert : AlertData?
   
   init(calibrationType : CalibrationType) {
     calibrationSensorType = calibrationType
@@ -26,7 +25,7 @@ class CalibrationController : ObservableObject, BLESensorCalibrationDelegate {
     self.bleController?.addCalibrationDelegate(forSensorType: calibrationSensorType, calibrationDelegate: self)
   }
   
-  private func updateAlertActionHandlers(_ request : CalibrationRequest) {
+  private func updateAlertData(_ title : String, _ request : CalibrationRequest) {
     switch request {
       case .PlaceFlat,
           .PitchUp,
@@ -35,25 +34,23 @@ class CalibrationController : ObservableObject, BLESensorCalibrationDelegate {
           .RollRight,
           .RollLeft,
           .Roll360:
-          alertButtonsAndHandlers = [
-            "Next" : { [weak self] in
+          self.currentAlert = AlertData(title: title, buttons: [
+            AlertButton(text: "Next", action: { [weak self] in
               guard let sensorType = self?.calibrationSensorType else {
                 return
               }
               self?.bleController?.sendCalibrationUpdate(forSensorType: sensorType, response: .Continue)
-            },
-            "Cancel" : { [weak self] in
+            }),
+            AlertButton(text: "Cancel", action: { [weak self] in
               guard let sensorType = self?.calibrationSensorType else {
                 return
               }
               self?.bleController?.sendCalibrationUpdate(forSensorType: sensorType, response: .Cancel)
-            }
-          ]
+            })
+          ])
           break
         case .Complete, .Failed:
-          alertButtonsAndHandlers = [
-            "Done" : {}
-          ]
+          self.currentAlert = AlertData(title: title, buttons: [AlertButton(text: "Done", action: {})])
         default:
           fatalError("Received unacceptable CalibrationRequest case")
     }
@@ -86,16 +83,15 @@ class CalibrationController : ObservableObject, BLESensorCalibrationDelegate {
         break
       case .Complete:
         alert = "Calibration completed successfully"
-        return
+        break
       case .Failed:
         alert = "Calibration failed"
-        return
+        break
       default:
         fatalError("Received unacceptable CalibrationRequest case")
     }
-    updateAlertActionHandlers(request)
+    updateAlertData(alert, request)
     print("Showing calibration alert: \(alert ?? "Invalid")")
-    calibrationAlert = alert
 
   }
 }

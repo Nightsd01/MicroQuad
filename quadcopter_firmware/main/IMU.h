@@ -13,7 +13,7 @@
 #include "ICM42688.h"
 #include "PersistentKeyValueStore.h"
 
-#define NUM_CALIBRATION_SAMPLES_PER_AXIS 10000
+#define NUM_CALIBRATION_SAMPLES_PER_AXIS 5000
 #define CALIB_MEDIAN_FILTER_WINDOW 20
 
 struct calib_data_t

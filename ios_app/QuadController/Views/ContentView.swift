@@ -65,22 +65,19 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
     Button("Calibrate \(typeLabel)") {
       controller.sendCalibrationUpdate(forSensorType: type, response: .Start)
     }
-    .alert(calibrationController.calibrationAlert ?? "None", isPresented: .constant(calibrationController.calibrationAlert != nil)) {
-      if calibrationController.alertButtonsAndHandlers != nil {
-        ForEach(Array(calibrationController.alertButtonsAndHandlers!.keys), id: \.self) { button in
-            Button(button) {
-              calibrationController.alertButtonsAndHandlers![button]?()
+    .alert(calibrationController.currentAlert?.title ?? "None", isPresented: .constant(calibrationController.currentAlert != nil)) {
+      if let buttons = calibrationController.currentAlert?.buttons {
+        ForEach(buttons, id: \.text) { button in
+            Button(button.text) {
+                button.action()
             }
         }
       } else {
         Button("Done") {
-          calibrationController.calibrationAlert = nil
+          calibrationController.currentAlert = nil
         }
       }
     }
-    .onChange(of: calibrationController.calibrationAlert) { newValue in
-            print("calibrationAlert changed to: \(newValue ?? "nil")")
-        }
   }
   
   var body: some View {
