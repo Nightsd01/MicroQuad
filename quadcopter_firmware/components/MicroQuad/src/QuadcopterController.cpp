@@ -78,10 +78,10 @@ motor_outputs_t QuadcopterController::calculateOutputs(
 
   // Axes 1
   motor_outputs_t motors = {
-      (float)(throttle + rateControllerOutputs[1] - rateControllerOutputs[2] - rateControllerOutputs[0]),
-      (float)(throttle - rateControllerOutputs[1] + rateControllerOutputs[2] - rateControllerOutputs[0]),
-      (float)(throttle - rateControllerOutputs[1] - rateControllerOutputs[2] + rateControllerOutputs[0]),
-      (float)(throttle + rateControllerOutputs[1] + rateControllerOutputs[2] + rateControllerOutputs[0])};
+      (float)(throttle + rateControllerOutputs[1] + rateControllerOutputs[2]),
+      (float)(throttle - rateControllerOutputs[1] - rateControllerOutputs[2]),
+      (float)(throttle + rateControllerOutputs[1] - rateControllerOutputs[2]),
+      (float)(throttle - rateControllerOutputs[1] + rateControllerOutputs[2])};
 
   for (int i = 0; i < NUM_MOTORS; i++) {
     // Clamp to 0 to 255

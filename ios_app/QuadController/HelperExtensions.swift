@@ -7,6 +7,15 @@
 
 import UIKit
 import AudioToolbox
+import CryptoKit
+
+extension Data {
+  var md5Hash : String {
+    let digest = Insecure.MD5.hash(data: self)
+    // Convert the digest to a hex string
+    return digest.map { String(format: "%02x", $0) }.joined()
+  }
+}
 
 extension UIDevice {
   static func vibrate() {

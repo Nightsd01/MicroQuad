@@ -6,6 +6,9 @@
 #include <esp_gap_ble_api.h>
 #include <esp_gatt_common_api.h>
 #include <esp_gattc_api.h>
+#include <mbedtls/md5.h>
+#include <stdio.h>   // For sprintf, if you want a hex string output
+#include <string.h>  // For memset, if needed
 
 #include "BLE2902.h"
 #include "BLEUtils.h"
@@ -48,6 +51,33 @@ static std::vector<std::string> _split(std::string to_split, std::string delimit
   return matches;
 }
 
+std::string _calculateMD5HashString(const uint8_t *data, size_t length)
+{
+  uint8_t md5_result[16];
+  mbedtls_md5_context ctx;
+  mbedtls_md5_init(&ctx);
+
+  // Initialize MD5 state
+  mbedtls_md5_starts(&ctx);
+
+  // Process the data
+  mbedtls_md5_update(&ctx, data, length);
+
+  // Finalize and get the hash
+  mbedtls_md5_finish(&ctx, md5_result);
+
+  // Free the context
+  mbedtls_md5_free(&ctx);
+
+  char md5_string[33];  // 32 hex characters + null terminator
+  for (int i = 0; i < 16; i++) {
+    sprintf(&md5_string[i * 2], "%02x", md5_result[i]);
+  }
+  md5_string[32] = '\0';
+
+  return std::string(md5_string);
+}
+
 void BLEController::beginBluetooth(void)
 {
   BLEDevice::init(DEVICE_NAME);
@@ -55,7 +85,7 @@ void BLEController::beginBluetooth(void)
   _server = BLEDevice::createServer();
   _server->setCallbacks(this);
 
-  _service = _server->createService(BLEUUID(std::string(SERVICE_UUID)), 30, 0);
+  _service = _server->createService(BLEUUID(SERVICE_UUID), 30, 0);
 
   _controlCharacteristic = _service->createCharacteristic(
       CONTROL_CHARACTERISTIC_UUID,
@@ -168,7 +198,7 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
   // TODO: switch this to a mutex
   isProcessingBluetoothTransaction = true;
   if (characteristic->getUUID().equals(_controlCharacteristic->getUUID())) {
-    std::string data = characteristic->getValue();
+    std::string data = std::string(characteristic->getValue().c_str());
     char *str = (char *)malloc((strlen(data.c_str()) * sizeof(char)) + 10);
     strcpy(str, data.c_str());
     char *ptr = strtok(str, ",");
@@ -208,7 +238,7 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
       _resetStatusUpdateHandler();
     }
   } else if (characteristic->getUUID().equals(_motorDebugCharacteristic->getUUID())) {
-    std::string value = characteristic->getValue();
+    std::string value = std::string(characteristic->getValue().c_str());
     std::vector<std::string> components = _split(value, ":");
     if (components.size() == 0) {
       LOG_ERROR_ASYNC_ON_MAIN("ERROR: Incorrect motor debug packet (1)");
@@ -248,7 +278,7 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
     }
   } else if (characteristic->getUUID().equals(_calibrationCharacteristic->getUUID())) {
     if (_calibrationUpdateHandler) {
-      std::string value = characteristic->getValue();
+      std::string value = std::string(characteristic->getValue().c_str());
       std::vector<std::string> components = _split(value, ":");
       if (components.size() < 2) {
         LOG_ERROR_ASYNC_ON_MAIN("Incorrect calibration packet");
@@ -267,7 +297,7 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
       LOG_ERROR_ASYNC_ON_MAIN("No calibration update handler set");
     }
   } else if (characteristic->getUUID().equals(_debugCharacteristic->getUUID())) {
-    std::string val = characteristic->getValue();
+    std::string val = std::string(characteristic->getValue().c_str());
     LOG_INFO_ASYNC_ON_MAIN("Received debug command: %s", val.c_str());
     debug_recording_update_t debugDataUpdate = {.recordDebugData = false, .sendDebugData = false};
     if (val == "request") {
@@ -302,10 +332,7 @@ void BLEController::onStatus(BLECharacteristic *pCharacteristic, Status s, uint3
           "received BLE status update = SUCCESS_NOTIFY, code = %d, characteristic UUID = %s",
           code,
           pCharacteristic->getUUID().toString().c_str());
-      if (pCharacteristic->getUUID().equals(_debugCharacteristic->getUUID())) {
-        _waitingForDebugPacketResponse = false;
-        return;
-      } else if (!pCharacteristic->getUUID().equals(_telemetryCharacteristic->getUUID())) {
+      if (!pCharacteristic->getUUID().equals(_telemetryCharacteristic->getUUID())) {
         return;
       }
       AsyncController::main.executePossiblySync([this, pCharacteristic]() {
@@ -356,30 +383,44 @@ void BLEController::onStatus(BLECharacteristic *pCharacteristic, Status s, uint3
 
 void BLEController::uploadDebugData(uint8_t *data, size_t length)
 {
-  LOG_INFO("Begin debug data upload");
-  int currentByteIndex = 0;
-  const int packetSize = 160;
+  LOG_INFO("Begin debug data upload - %d bytes, MD5 = %s", length, _calculateMD5HashString(data, length).c_str());
   String firstInfo = String("debug:") + String((int)length);
 
-  _waitingForDebugPacketResponse = true;
+  _debugData = data;
+  _debugDataSize = length;
+  _transferringDebugData = true;
   _debugCharacteristic->setValue(firstInfo.c_str());
   _debugCharacteristic->notify();
-  delay(30);
-  while (currentByteIndex < length) {
-    _waitingForDebugPacketResponse = true;
-    if (currentByteIndex + packetSize < length) {
-      _debugCharacteristic->setValue(&data[currentByteIndex], packetSize);
-    } else {
-      _debugCharacteristic->setValue(&data[currentByteIndex], length - currentByteIndex);
-    }
-    _debugCharacteristic->notify();
-    delay(30);
-    currentByteIndex += packetSize;
+}
+
+void BLEController::loopHandler(void)
+{
+  if (!_transferringDebugData) {
+    return;
   }
 
-  _debugCharacteristic->setValue(TERMINATE_UPLOAD_STREAM_SIGNAL);
+  if (millis() - _lastDebugDataTransmissionTimestampMillis < 30) {
+    return;
+  }
+
+  if (_currentByteIndex >= _debugDataSize) {
+    _debugCharacteristic->setValue(TERMINATE_UPLOAD_STREAM_SIGNAL);
+    _debugCharacteristic->notify();
+    _transferringDebugData = false;
+    _debugData = NULL;
+    _currentByteIndex = 0;
+    LOG_INFO("End debug data upload");
+    return;
+  }
+
+  if (_currentByteIndex + DEBUG_PACKET_SIZE_BYTES < _debugDataSize) {
+    _debugCharacteristic->setValue(&_debugData[_currentByteIndex], DEBUG_PACKET_SIZE_BYTES);
+  } else {
+    _debugCharacteristic->setValue(&_debugData[_currentByteIndex], _debugDataSize - _currentByteIndex);
+  }
+  _lastDebugDataTransmissionTimestampMillis = millis();
   _debugCharacteristic->notify();
-  LOG_INFO("End debug data upload");
+  _currentByteIndex += DEBUG_PACKET_SIZE_BYTES;
 }
 
 void BLEController::sendTelemetryUpdate(uint8_t *data, size_t size)

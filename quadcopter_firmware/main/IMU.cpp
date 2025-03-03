@@ -20,7 +20,7 @@ static void handleInterrupt(void) { _gotInterrupt = true; }
 
 #define ACCEL_FSR ICM42688::AccelFS::gpm4
 
-#define INT16T_MAX 32767.0f
+#define INT16T_MAX 32768.0f
 
 static float gyroDPS(int16_t rawValue)
 {

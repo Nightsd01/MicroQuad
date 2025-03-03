@@ -49,6 +49,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   var debugData : Data?
   var debugDataExpectedBytes = 0
   var receivingGyroCalibrationData = false
+  var debugPacketResponseTimer : Timer?
   @Published var receivingDebugData = false
   @Published var transferProgress = 0.0
   
@@ -249,6 +250,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   }
 
   func processDebugData(_ data : Data) {
+    print("Got debug data with MD5 = \(data.md5Hash) total bytes = \(data.count)")
     // 8 bytes: timestamp
     // 24 bytes: yaw pitch roll[3]
     // 24 bytes: accel raw[3]
@@ -258,11 +260,11 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     // 24 bytes: angle PID outputs[3]
     // 24 bytes: rate PID outputs[3]
     // 32 bytes: motor values[4]
-    // 8 bytes: mag heading
+    // 32 bytes: mag values[4]
     // 8 bytes: throttle
     // 8 bytes: voltage
     var result = ""
-    let valuesPerPacket = 29
+    let valuesPerPacket = 32
     let byteCount = data.count / 8
     for i in 0..<byteCount {
       let value = data.withUnsafeBytes { buffer in
@@ -304,14 +306,20 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
       guard debugData != nil else {
         fatalError("debug data was not initialized")
       }
-      if String(data: data, encoding: .utf8) == BLEController.terminationString {
+      if receivingDebugData && String(data: data, encoding: .utf8) == BLEController.terminationString {
         processDebugData(debugData!)
         receivingDebugData = false
         return
       }
+      
       transferProgress = Double(debugData!.count) / Double(debugDataExpectedBytes)
       debugData = debugData! + data
       device?.setNotifyValue(true, for: characteristic)
+      debugPacketResponseTimer?.invalidate()
+      debugPacketResponseTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false, block: { [weak self] timer in
+        self?.device?.setNotifyValue(true, for: characteristic)
+        print("Timer notified")
+      })
       print("Debug data length: \(debugData!.count), expecting: \(debugDataExpectedBytes)")
       if (debugData!.count == debugDataExpectedBytes) {
         print("Finished data transmission")

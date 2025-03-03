@@ -31,7 +31,6 @@ endforeach()
 idf_component_register(
     SRCS ${app_sources}
     INCLUDE_DIRS ${INCLUDE_DIRS}
-    REQUIRES arduino
     REQUIRES MicroQuad
     REQUIRES bt
     REQUIRES Fusion

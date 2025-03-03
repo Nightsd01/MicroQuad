@@ -51,6 +51,8 @@ struct debug_recording_update_t
   bool sendDebugData;
 };
 
+#define DEBUG_PACKET_SIZE_BYTES 160
+
 class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbacks
 {
  public:
@@ -61,6 +63,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   void uploadDebugData(uint8_t *data, size_t length);
   void sendTelemetryUpdate(uint8_t *data, size_t size);
   void sendCalibrationUpdate(CalibrationType type, CalibrationRequest calibrationEvent);
+  void loopHandler(void);
 
   // update handlers - these are always called on the main core
   void setControlsUpdateHandler(std::function<void(controls_update_t)> controlsUpdateHandler);
@@ -101,7 +104,11 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   std::function<void(debug_recording_update_t)> _debugDataUpdateHandler;
   std::function<void()> _telemetryTransmissionCompleteHandler;
 
-  bool _waitingForDebugPacketResponse = false;
+  uint8_t *_debugData;
+  size_t _debugDataSize;
+  int _currentByteIndex;
+  bool _transferringDebugData = false;
+  uint64_t _lastDebugDataTransmissionTimestampMillis = 0;
 };
 
 #endif

@@ -17,7 +17,7 @@ class DebugHelper
   double angleOutputs[3];
   double rateOutputs[3];
   double motorValues[4];
-  double magHeading;
+  double magValues[4];  // x, y, z, heading
   double throttle;
   double inputTimescale;
   double voltage;
