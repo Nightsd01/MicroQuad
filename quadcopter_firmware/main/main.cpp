@@ -22,6 +22,7 @@
 #include "MotorController.h"
 #include "PersistentKeyValueStore.h"
 #include "PersistentKeysCommon.h"
+#include "PinDefines.h"
 #include "SPI.h"
 #include "TelemetryController.h"
 #include "esp_err.h"
@@ -35,11 +36,8 @@ static std::vector<MotorController *> _speedControllers;
 BatteryController *_batteryController;
 
 // LED Setup
-#define LED_DATA_PIN GPIO_NUM_38
 
 static LEDController _ledController(LED_DATA_PIN);
-
-const gpio_num_t motorPins[NUM_MOTORS] = {GPIO_NUM_6, GPIO_NUM_5, GPIO_NUM_7, GPIO_NUM_8};
 
 struct _memory_usage_telemetry_packet_t
 {
@@ -129,16 +127,32 @@ static void _updateLED(int red, int green, int blue)
   });
 }
 
+static void updateMotors(motor_outputs_t outputs)
+{
+  if (!_completedFirstArm) {
+    return;
+  }
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (!_armed) {
+      _speedControllers[i]->setSpeed(MIN_THROTTLE_RANGE);
+    } else {
+      _speedControllers[i]->setSpeed(map(outputs[i], 1000, 2000, MIN_THROTTLE_RANGE, MAX_THROTTLE_RANGE));
+      // LOG_INFO_PERIODIC_MILLIS(100, "Motor %d, %f, %f, %f, %f", i, outputs[0], outputs[1], outputs[2], outputs[3]);
+    }
+  }
+}
+
 static void _updateArmStatus(void)
 {
   if (_armed && !_completedFirstArm) {
     LOG_INFO("Setting up motor outputs");
     for (int i = 0; i < NUM_MOTORS; i++) {
-      LOG_INFO("Attaching motor %i to pin %i", i, motorPins[i]);
-      MotorController *controller = new MotorController(motorPins[i]);
+      LOG_INFO("Attaching motor %i to pin %i", i, MOTOR_PINS[i]);
+      MotorController *controller = new MotorController(MOTOR_PINS[i], MOTOR_TELEM_PINS[i], true);
       _speedControllers.push_back(controller);
     }
     _completedFirstArm = true;
+    updateMotors({1000.0f, 1000.0f, 1000.0f, 1000.0f});
   }
   _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange, &_armed, sizeof(bool));
   if (!_enteredEmergencyMode) {
@@ -169,19 +183,25 @@ static void _configureMagnetometer(void)
   _compass.setDeclinationAngle(declinationAngle);
 
   if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSET_X)) {
-    _compass.setXOffset(_persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_X));
+    const float xOffset = _persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_X);
+    LOG_INFO("Setting magnetometer X offset: %f", xOffset);
+    _compass.setXOffset(xOffset);
   } else {
     LOG_WARN("magnetometer: No X offset found in persistent storage, please calibrate the compass");
   }
 
   if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSET_Y)) {
-    _compass.setYOffset(_persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_Y));
+    const float yOffset = _persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_Y);
+    LOG_INFO("Setting magnetometer Y offset: %f", yOffset);
+    _compass.setYOffset(yOffset);
   } else {
     LOG_WARN("magnetometer: No Y offset found in persistent storage, please calibrate the compass");
   }
 
   if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSET_Z)) {
-    _compass.setZOffset(_persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_Z));
+    const float zOffset = _persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_Z);
+    LOG_INFO("Setting magnetometer Z offset: %f", zOffset);
+    _compass.setZOffset(zOffset);
   } else {
     LOG_WARN("magnetometer: No Z offset found in persistent storage, please calibrate the compass");
   }
@@ -214,11 +234,11 @@ static void initController()
                 .kI = 0.01f,
                 .kD = 0.0005f},
                            {// pitch
-                .kP = 6.0f,
+                .kP = 5.0f,
                 .kI = 0.02f,
                 .kD = 0.003f},
                            {// roll
-                .kP = 6.0f,
+                .kP = 5.0f,
                 .kI = 0.02f,
                 .kD = 0.003f}}
   },
@@ -288,27 +308,27 @@ static FusionEuler _euler;
 static uint64_t _previousMicros = 0;
 static const FusionMatrix gyroscopeMisalignment = {
     0.7071f,
-    0.7071f,
-    0.0f,  // First row
-    0.7071f,
     -0.7071f,
-    0.0f,  // Second row
+    0.0f,  // row 0
+    0.7071f,
+    0.7071f,
+    0.0f,  // row 1
     0.0f,
     0.0f,
-    1.0f  // Third row
+    1.0f  // row 2
 };
 static const FusionVector gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
 static const FusionVector gyroscopeOffset = {0.0f, 0.0f, 0.0f};
 static const FusionMatrix accelerometerMisalignment = {
     0.7071f,
-    0.7071f,
-    0.0f,  // First row
-    0.7071f,
     -0.7071f,
-    0.0f,  // Second row
+    0.0f,  // row 0
+    0.7071f,
+    0.7071f,
+    0.0f,  // row 1
     0.0f,
     0.0f,
-    1.0f  // Third row
+    1.0f  // row 2
 };
 static const FusionVector accelerometerSensitivity = {1.0f, 1.0f, 1.0f};
 static const FusionVector accelerometerOffset = {0.0f, 0.0f, 0.0f};
@@ -344,10 +364,7 @@ static void _receivedIMUUpdate(imu_update_t update)
   const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
   _previousMicros = micros();
 
-  FusionVector gyroscope = {
-      update.gyro_x,
-      update.gyro_y,
-      update.gyro_z};  // replace this with actual gyroscope data in degrees/s
+  FusionVector gyroscope = {update.gyro_x, update.gyro_y, update.gyro_z};
   FusionVector accelerometer = {update.accel_x, update.accel_y, update.accel_z};
 
   gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
@@ -394,7 +411,7 @@ static void _receivedIMUUpdate(imu_update_t update)
   gyroscope.axis.z = _gyroKalmanFilters[2].applyFilter(gyroscope.axis.z);
 
   // Update gyroscope AHRS algorithm
-  FusionAhrsUpdateNoMagnetometer(&_fusion, gyroscope, accelerometer, deltaTimeSeconds);
+  FusionAhrsUpdateExternalHeading(&_fusion, gyroscope, accelerometer, _magValues.heading, deltaTimeSeconds);
   _euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&_fusion));
 
   _imuValues = {
@@ -420,14 +437,23 @@ static void _receivedIMUUpdate(imu_update_t update)
   _helper->ypr[0] = _euler.angle.yaw;
   _helper->ypr[1] = _euler.angle.pitch;
   _helper->ypr[2] = _euler.angle.roll;
-  _helper->magHeading = _magValues.heading;
+  _helper->magValues[0] = _magValues.x;
+  _helper->magValues[1] = _magValues.y;
+  _helper->magValues[2] = _magValues.z;
+  _helper->magValues[3] = _magValues.heading;
+
+  const int stat1 = digitalRead(BATTERY_STAT1_PIN);
+  const int stat2 = digitalRead(BATTERY_STAT2_PIN);
+  const int pg = digitalRead(BATTERY_PG_PIN);
 
   LOG_INFO_PERIODIC_MILLIS(
       100,  // log at most up to every 100 millis
-      "%8ld, %8.2f, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, "
+      "%8ld, %i, %i, %i, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, "
       "%8.2f, %f, %f, %f",
       millis(),
-      deltaTimeSeconds,
+      stat1,
+      stat2,
+      pg,
       _euler.angle.yaw,
       _euler.angle.pitch,
       _euler.angle.roll,
@@ -460,15 +486,14 @@ void setup()
 {
   esp_log_level_set("rmt", ESP_LOG_DEBUG);
   const unsigned long initializationTime = millis();
+  Wire.setClock(400000);
+  Wire.begin(18, 17);
   Serial.begin(115200);
   LOG_INFO("BEGAN APP");
 
   _helper = new DebugHelper();
 
   initController();
-
-  Wire.setClock(400000);
-  Wire.begin(18, 17);
 
   // Wait for serial to become available
   while (!Serial);
@@ -599,27 +624,13 @@ static void sendTelemData()
       sizeof(_memory_usage_telemetry_packet_t));
 }
 
-static void updateClientTelemetryIfNeeded(float batVoltage)
+static void updateClientTelemetryIfNeeded()
 {
   if (!_bluetoothController.isConnected) {
     return;
   }
 
-  EXECUTE_PERIODIC(TELEM_UPDATE_INTERVAL_MILLIS, { sendTelemData(batVoltage); });
-}
-
-static void updateMotors(motor_outputs_t outputs)
-{
-  if (!_completedFirstArm) {
-    return;
-  }
-  for (int i = 0; i < NUM_MOTORS; i++) {
-    if (!_armed) {
-      _speedControllers[i]->setSpeed(MIN_THROTTLE_RANGE);
-    } else {
-      _speedControllers[i]->setSpeed(map(outputs[i], 1000, 2000, MIN_THROTTLE_RANGE, MAX_THROTTLE_RANGE));
-    }
-  }
+  EXECUTE_PERIODIC(TELEM_UPDATE_INTERVAL_MILLIS, { sendTelemData(); });
 }
 
 static uint64_t _loopCounter = 1;
@@ -629,11 +640,11 @@ void loop()
   TIMERG0.wdtwprotect.val = 0x50D83AA1;
   TIMERG0.wdtfeed.val = 1;
   TIMERG0.wdtwprotect.val = 0;
-  uint64_t timestamp = micros();
   uint64_t timestampMillis = millis();
   if (_bluetoothController.isProcessingBluetoothTransaction) {
     return;
   }
+
   _loopCounter++;
   EXECUTE_PERIODIC(1000, {
     _telemetryController->updateTelemetryEvent(TelemetryEvent::LoopUpdateRate, &_loopCounter, sizeof(uint64_t));
@@ -642,6 +653,7 @@ void loop()
 
   _telemetryController->loopHandler();
   _compass.loopHandler();
+  _bluetoothController.loopHandler();
   _batteryController->loopHandler();
 
   if (_armed != _previousArmStatus) {
@@ -666,9 +678,7 @@ void loop()
     initController();
   }
 
-  const float batteryVoltage = batteryLevel();
-  updateClientTelemetryIfNeeded(batteryVoltage);
-  _helper->voltage = batteryVoltage;
+  updateClientTelemetryIfNeeded();
 
   if (!_startMonitoringPid && _controllerValues.leftStickInput.y > 20.0f) {
     _startMonitoringPid = true;
@@ -684,19 +694,23 @@ void loop()
   _receivedImuUpdate = false;
 
   if (!_startMonitoringPid) {
+    if (_recordDebugData) {
+      _helper->saveValues(micros());
+    }
     return;
   }
 
 #ifdef ENABLE_EMERGENCY_MODE
-  // Check if we need to enter into emergency mode
-  if (!_enteredEmergencyMode && (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f)) {
-    // The drone has entered into an unacceptable orientation - this kills
-    // the motors
-    _enteredEmergencyMode = true;
-    _armed = false;
-    _updateArmStatus();
-    LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.angle.pitch, _euler.angle.roll);
-  }
+  // // Check if we need to enter into emergency mode
+  // if (!_enteredEmergencyMode && (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f)) {
+  //   // The drone has entered into an unacceptable orientation - this kills
+  //   // the motors
+  //   _enteredEmergencyMode = true;
+  //   _armed = false;
+  //   _updateArmStatus();
+  //   LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.angle.pitch,
+  //   _euler.angle.roll);
+  // }
 #endif
 
   if (_enteredEmergencyMode) {
@@ -722,11 +736,17 @@ void loop()
   if (_motorDebugEnabled) {
     motor_outputs_t motors = {_motorDebugValues[0], _motorDebugValues[1], _motorDebugValues[2], _motorDebugValues[3]};
     updateMotors(motors);
+    if (_recordDebugData) {
+      _helper->saveValues(micros());
+    }
     return;
   }
 
   static bool beganRun = false;
   if (!beganRun && _controllerValues.leftStickInput.y < 20.0f) {
+    if (_recordDebugData) {
+      _helper->saveValues(micros());
+    }
     return;
   } else if (!beganRun) {
     beganRun = true;

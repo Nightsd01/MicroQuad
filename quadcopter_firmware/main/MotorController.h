@@ -11,7 +11,7 @@
 class MotorController
 {
  public:
-  MotorController(gpio_num_t pin);
+  MotorController(gpio_num_t pin, gpio_num_t telemPin = -1, bool enableTelem = false);
 
   // Range from MIN_THROTTLE_RANGE to MAX_THROTTLE_RANGE
   void setSpeed(uint16_t speed);
@@ -27,6 +27,8 @@ class MotorController
 
  private:
   gpio_num_t _pin;
+  gpio_num_t _telemPin;
+  bool _telemEnabled;
   dshot_esc_throttle_t _throttle;
   rmt_channel_handle_t _escChan;
   rmt_encoder_handle_t _encoder;

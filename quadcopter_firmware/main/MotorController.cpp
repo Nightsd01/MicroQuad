@@ -12,9 +12,11 @@
 #define DSHOT_ESC_RESOLUTION_HZ 40000000  // 40MHz resolution, DSHot protocol needs a relative high resolution
 #endif
 
-MotorController::MotorController(gpio_num_t pin)
+MotorController::MotorController(gpio_num_t pin, gpio_num_t telemPin, bool enableTelem)
 {
   _pin = pin;
+  _telemPin = telemPin;
+  _telemEnabled = enableTelem;
   LOG_INFO("Initializing motor on GPIO %d", pin);
   connectRMT();
   LOG_INFO("Successfully initialized motor on GPIO %d", pin);
@@ -86,7 +88,7 @@ void MotorController::connectRMT(void)
   };
   _throttle = {
       .throttle = 0,
-      .telemetry_req = false,  // telemetry is not supported in this example
+      .telemetry_req = _telemEnabled,
   };
   ESP_ERROR_CHECK(rmt_transmit(_escChan, _encoder, &_throttle, sizeof(_throttle), &_txConfig));
   isConnected = true;
