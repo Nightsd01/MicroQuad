@@ -13,6 +13,7 @@
 
 #include "AsyncController.h"
 #include "BLEController.h"
+#include "BatteryController.h"
 #include "Filters/KalmanFilter.h"
 #include "Filters/MedianFilter.h"
 #include "IMU.h"
@@ -31,6 +32,8 @@
 
 static std::vector<MotorController *> _speedControllers;
 
+BatteryController *_batteryController;
+
 // LED Setup
 #define LED_DATA_PIN GPIO_NUM_38
 
@@ -48,23 +51,9 @@ struct _memory_usage_telemetry_packet_t
 #define TELEM_UPDATE_INTERVAL_MILLIS 100
 static TelemetryController *_telemetryController;
 
-// Battery capacity sensing constants
-#define BATTERY_SENSE_PIN 9
-#define NUM_BATTERY_CELLS 1.0f
-#define BATTERY_CELL_MAX_VOLTAGE 4.2f
-#define BATTERY_CELL_MIN_VOLTAGE 3.3f
-#define BATTERY_SCALE 0.001639280125196f
-
 #define MIN_THROTTLE 1015
 
 #define ARM_MICROSECONDS 1000.0f
-
-// micro whoop
-#define SPI0_CS_PIN 10
-#define SPI0_MOSI_PIN 11
-#define SPI0_SCLK_PIN 12
-#define SPI0_MISO_PIN 13
-#define IMU_INT_PIN 3
 
 BLEController _bluetoothController;
 
@@ -528,6 +517,9 @@ void setup()
   LOG_INFO("Initializing telemetry controller");
   _telemetryController = new TelemetryController(&_bluetoothController);
 
+  LOG_INFO("Initializing battery controller");
+  _batteryController = new BatteryController(_telemetryController, &_bluetoothController, _helper);
+
   LOG_INFO("Configuring magnetometer");
 
   _configureMagnetometer();
@@ -583,27 +575,12 @@ static void uploadDebugData()
   _bluetoothController.uploadDebugData(data, dataSize);
 }
 
-static float batteryPercent(float batteryVoltage)
-{
-  const float averageVoltagePerCell = batteryVoltage / (float)NUM_BATTERY_CELLS;
-  const float cellRange = BATTERY_CELL_MAX_VOLTAGE - BATTERY_CELL_MIN_VOLTAGE;
-  return (averageVoltagePerCell - BATTERY_CELL_MIN_VOLTAGE) / cellRange;
-}
-
-static float batteryLevel()
-{
-  const int val = analogRead(BATTERY_SENSE_PIN);
-  return BATTERY_SCALE * (float)val;
-}
-
-static void sendTelemData(float batVoltage)
+static void sendTelemData()
 {
   _telemetryController->updateTelemetryEvent(
       TelemetryEvent::MotorValues,
       _previousMotorOutputs.data(),
       NUM_MOTORS * sizeof(float));
-
-  _telemetryController->updateTelemetryEvent(TelemetryEvent::BatteryVoltage, &batVoltage, sizeof(float));
 
   if (_gotFirstIMUUpdate) {
     _telemetryController->updateTelemetryEvent(TelemetryEvent::EulerYawPitchRoll, &_euler.angle, sizeof(float) * 3);
@@ -665,6 +642,7 @@ void loop()
 
   _telemetryController->loopHandler();
   _compass.loopHandler();
+  _batteryController->loopHandler();
 
   if (_armed != _previousArmStatus) {
     LOG_INFO("Updating arm LED");
