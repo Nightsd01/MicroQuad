@@ -1,6 +1,8 @@
 #ifndef ASYNC_CONTROLLER_H
 #define ASYNC_CONTROLLER_H
 
+#include <Arduino.h>
+
 #include <functional>
 #include <mutex>
 

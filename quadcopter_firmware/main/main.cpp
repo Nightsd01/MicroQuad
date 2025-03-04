@@ -148,7 +148,7 @@ static void _updateArmStatus(void)
     LOG_INFO("Setting up motor outputs");
     for (int i = 0; i < NUM_MOTORS; i++) {
       LOG_INFO("Attaching motor %i to pin %i", i, MOTOR_PINS[i]);
-      MotorController *controller = new MotorController(MOTOR_PINS[i], MOTOR_TELEM_PINS[i], true);
+      MotorController *controller = new MotorController(i, MOTOR_PINS[i], MOTOR_TELEM_PINS[i], i == 0);
       _speedControllers.push_back(controller);
     }
     _completedFirstArm = true;
