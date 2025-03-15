@@ -60,7 +60,7 @@ struct BLEStatusView: View {
           Text("Disarmed").tag(0)
           Text("Armed").tag(1)
         }).pickerStyle(SegmentedPickerStyle())
-        .onTapGesture {
+        .onChange(of: armedStatus) { oldValue, newValue in
           handleArmChange()
         }
         MemoryStatusView(status: status)
