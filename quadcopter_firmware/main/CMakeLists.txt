@@ -33,7 +33,6 @@ idf_component_register(
     INCLUDE_DIRS ${INCLUDE_DIRS}
     REQUIRES MicroQuad
     REQUIRES bt
-    REQUIRES Fusion
     REQUIRES icm42688P
     REQUIRES qmc5883l
     REQUIRES ESP32Servo

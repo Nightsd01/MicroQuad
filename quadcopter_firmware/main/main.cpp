@@ -7,7 +7,6 @@
 #include <string>
 
 // Magnetometer
-#include <Fusion.h>
 #include <QMC5883L.h>
 #include <esp_partition.h>
 
@@ -19,6 +18,7 @@
 #include "IMU.h"
 #include "LEDController.h"
 #include "Logger.h"
+#include "MahonyAHRS.h"
 #include "MotorController.h"
 #include "PersistentKeyValueStore.h"
 #include "PersistentKeysCommon.h"
@@ -87,9 +87,16 @@ PersistentKeyValueStore _persistentKvStore;
 
 static IMU *_imu = NULL;
 static imu_output_t _imuValues;
-static FusionAhrs _fusion;
 
 static volatile bool _calibrate = false;
+
+MahonyAHRS ahrs;
+EulerAngle _euler;
+static const float _misalignmentMatrix[3][3] = {
+    {0.7071f, -0.7071f, 0.0f},
+    {0.7071f, 0.7071f,  0.0f},
+    {0.0f,    0.0f,     1.0f}
+};
 
 // When we start recording debug data, we want the LED to flash blue
 // for RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS. This lets us align
@@ -304,34 +311,7 @@ static controller_values_t _controllerValues = {
     .rightStickInput = {.x = INPUT_MAX_CONTROLLER_INPUT / 2.0, .y = INPUT_MAX_CONTROLLER_INPUT / 2.0}
 };
 
-static FusionEuler _euler;
 static uint64_t _previousMicros = 0;
-static const FusionMatrix gyroscopeMisalignment = {
-    0.7071f,
-    -0.7071f,
-    0.0f,  // row 0
-    0.7071f,
-    0.7071f,
-    0.0f,  // row 1
-    0.0f,
-    0.0f,
-    1.0f  // row 2
-};
-static const FusionVector gyroscopeSensitivity = {1.0f, 1.0f, 1.0f};
-static const FusionVector gyroscopeOffset = {0.0f, 0.0f, 0.0f};
-static const FusionMatrix accelerometerMisalignment = {
-    0.7071f,
-    -0.7071f,
-    0.0f,  // row 0
-    0.7071f,
-    0.7071f,
-    0.0f,  // row 1
-    0.0f,
-    0.0f,
-    1.0f  // row 2
-};
-static const FusionVector accelerometerSensitivity = {1.0f, 1.0f, 1.0f};
-static const FusionVector accelerometerOffset = {0.0f, 0.0f, 0.0f};
 static bool _receivedImuUpdate = false;
 static bool _gotFirstIMUUpdate = false;
 
@@ -343,8 +323,8 @@ static uint64_t _imuUpdateCounter = 0;
 static const float _accelerometerLowPassAlpha = 0.075f;  // lower alpha = more smoothing but more lag
 static const float _gyroscopeLowPassAlpha = 0.1f;        // lower alpha = more smoothing but more lag
 
-#define MEDIAN_FILTER_WINDOW 20
-static std::array<MedianFilter<float>, 3> _gyroHistories = {
+#define MEDIAN_FILTER_WINDOW 10
+static std::array<MedianFilter<float>, 3> _accelHistories = {
     MedianFilter<float>(MEDIAN_FILTER_WINDOW),
     MedianFilter<float>(MEDIAN_FILTER_WINDOW),
     MedianFilter<float>(MEDIAN_FILTER_WINDOW)};
@@ -364,79 +344,65 @@ static void _receivedIMUUpdate(imu_update_t update)
   const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
   _previousMicros = micros();
 
-  FusionVector gyroscope = {update.gyro_x, update.gyro_y, update.gyro_z};
-  FusionVector accelerometer = {update.accel_x, update.accel_y, update.accel_z};
+  Vector3f gyroscope = {update.gyro_x, update.gyro_y, update.gyro_z};
+  Vector3f accelerometer = {update.accel_x, update.accel_y, update.accel_z};
+  Vector3f mag = {_magValues.x, _magValues.y, _magValues.z};
 
-  gyroscope = FusionCalibrationInertial(gyroscope, gyroscopeMisalignment, gyroscopeSensitivity, gyroscopeOffset);
-  accelerometer = FusionCalibrationInertial(
-      accelerometer,
-      accelerometerMisalignment,
-      accelerometerSensitivity,
-      accelerometerOffset);
+  _accelHistories[0].addValue(accelerometer.x);
+  accelerometer.x = _accelHistories[0].getMedian();
+  _accelHistories[1].addValue(accelerometer.y);
+  accelerometer.y = _accelHistories[1].getMedian();
+  _accelHistories[2].addValue(accelerometer.z);
+  accelerometer.z = _accelHistories[2].getMedian();
 
-  _gyroHistories[0].addValue(gyroscope.axis.x);
-  gyroscope.axis.x = _gyroHistories[0].getMedian();
-  _gyroHistories[1].addValue(gyroscope.axis.y);
-  gyroscope.axis.y = _gyroHistories[1].getMedian();
-  _gyroHistories[2].addValue(gyroscope.axis.z);
-  gyroscope.axis.z = _gyroHistories[2].getMedian();
+  accelerometer.x = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[0]) +
+                    (_accelerometerLowPassAlpha * accelerometer.x);
+  accelerometer.y = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[1]) +
+                    (_accelerometerLowPassAlpha * accelerometer.y);
+  accelerometer.z = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[2]) +
+                    (_accelerometerLowPassAlpha * accelerometer.z);
+  gyroscope.x =
+      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[0]) + (_gyroscopeLowPassAlpha * gyroscope.x);
+  gyroscope.y =
+      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[1]) + (_gyroscopeLowPassAlpha * gyroscope.y);
+  gyroscope.z =
+      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[2]) + (_gyroscopeLowPassAlpha * gyroscope.z);
 
-  accelerometer.axis.x = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[0]) +
-                         (_accelerometerLowPassAlpha * accelerometer.axis.x);
-  accelerometer.axis.y = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[1]) +
-                         (_accelerometerLowPassAlpha * accelerometer.axis.y);
-  accelerometer.axis.z = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[2]) +
-                         (_accelerometerLowPassAlpha * accelerometer.axis.z);
-  gyroscope.axis.x =
-      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[0]) + (_gyroscopeLowPassAlpha * gyroscope.axis.x);
-  gyroscope.axis.y =
-      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[1]) + (_gyroscopeLowPassAlpha * gyroscope.axis.y);
-  gyroscope.axis.z =
-      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[2]) + (_gyroscopeLowPassAlpha * gyroscope.axis.z);
+  _previousFilteredGyroValues[0] = gyroscope.x;
+  _previousFilteredGyroValues[1] = gyroscope.y;
+  _previousFilteredGyroValues[2] = gyroscope.z;
+  _previousFilteredAccelValues[0] = accelerometer.x;
+  _previousFilteredAccelValues[1] = accelerometer.y;
+  _previousFilteredAccelValues[2] = accelerometer.z;
 
-  _previousFilteredGyroValues[0] = gyroscope.axis.x;
-  _previousFilteredGyroValues[1] = gyroscope.axis.y;
-  _previousFilteredGyroValues[2] = gyroscope.axis.z;
-  _previousFilteredAccelValues[0] = accelerometer.axis.x;
-  _previousFilteredAccelValues[1] = accelerometer.axis.y;
-  _previousFilteredAccelValues[2] = accelerometer.axis.z;
-
-  // Apply Kalman filter to accelerometer data
-  accelerometer.axis.x = _accelKalmanFilters[0].applyFilter(accelerometer.axis.x);
-  accelerometer.axis.y = _accelKalmanFilters[1].applyFilter(accelerometer.axis.y);
-  accelerometer.axis.z = _accelKalmanFilters[2].applyFilter(accelerometer.axis.z);
-
-  gyroscope.axis.x = _gyroKalmanFilters[0].applyFilter(gyroscope.axis.x);
-  gyroscope.axis.y = _gyroKalmanFilters[1].applyFilter(gyroscope.axis.y);
-  gyroscope.axis.z = _gyroKalmanFilters[2].applyFilter(gyroscope.axis.z);
-
-  // Update gyroscope AHRS algorithm
-  FusionAhrsUpdateExternalHeading(&_fusion, gyroscope, accelerometer, _magValues.heading, deltaTimeSeconds);
-  _euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&_fusion));
+  ahrs.update(gyroscope, accelerometer, mag, deltaTimeSeconds);
+  float y, p, r;
+  ahrs.getYawPitchRoll(y, p, r);
+  _euler = {.yaw = y, .pitch = p, .roll = r};
 
   _imuValues = {
-      .gyroOutput = {gyroscope.axis.x, gyroscope.axis.y,   gyroscope.axis.z },
-      .yawPitchRollDegrees = {_euler.angle.yaw, _euler.angle.pitch, _euler.angle.roll}
+      .gyroOutput = {gyroscope.x, gyroscope.y,  gyroscope.z},
+      .yawPitchRollDegrees = {_euler.yaw,  _euler.pitch, _euler.roll}
   };
 
   _receivedImuUpdate = true;
   _gotFirstIMUUpdate = true;
 
-  _helper->accelFiltered[0] = accelerometer.axis.x;
-  _helper->accelFiltered[1] = accelerometer.axis.y;
-  _helper->accelFiltered[2] = accelerometer.axis.z;
+  _helper->accelFiltered[0] = accelerometer.x;
+  _helper->accelFiltered[1] = accelerometer.y;
+  _helper->accelFiltered[2] = accelerometer.z;
   _helper->accelRaw[0] = update.accel_x;
   _helper->accelRaw[1] = update.accel_y;
   _helper->accelRaw[2] = update.accel_z;
-  _helper->gyroFiltered[0] = gyroscope.axis.x;
-  _helper->gyroFiltered[1] = gyroscope.axis.y;
-  _helper->gyroFiltered[2] = gyroscope.axis.z;
+  _helper->gyroFiltered[0] = gyroscope.x;
+  _helper->gyroFiltered[1] = gyroscope.y;
+  _helper->gyroFiltered[2] = gyroscope.z;
   _helper->gyroRaw[0] = update.gyro_x;
   _helper->gyroRaw[1] = update.gyro_y;
   _helper->gyroRaw[2] = update.gyro_z;
-  _helper->ypr[0] = _euler.angle.yaw;
-  _helper->ypr[1] = _euler.angle.pitch;
-  _helper->ypr[2] = _euler.angle.roll;
+  _helper->ypr[0] = _euler.yaw;
+  _helper->ypr[1] = _euler.pitch;
+  _helper->ypr[2] = _euler.roll;
   _helper->magValues[0] = _magValues.x;
   _helper->magValues[1] = _magValues.y;
   _helper->magValues[2] = _magValues.z;
@@ -554,16 +520,8 @@ void setup()
   _updateArmStatus();
 
   LOG_INFO("Initializing attitude & heading reference system");
-  // FusionOffsetInitialise(&_offset, 4000);
-  FusionAhrsInitialise(&_fusion);
-
-  const FusionAhrsSettings settings = {
-      .convention = FusionConventionNwu,
-      .gain = 0.5f,
-      .accelerationRejection = 10.0f,
-      .recoveryTriggerPeriod = 5000, /* 5 seconds */
-  };
-  FusionAhrsSetSettings(&_fusion, &settings);
+  ahrs.setGyroMisalignment(_misalignmentMatrix);
+  ahrs.setAccelMisalignment(_misalignmentMatrix);
 
   LOG_INFO("Initializing IMU");
   bool setupSuccess = false;
@@ -608,7 +566,7 @@ static void sendTelemData()
       NUM_MOTORS * sizeof(float));
 
   if (_gotFirstIMUUpdate) {
-    _telemetryController->updateTelemetryEvent(TelemetryEvent::EulerYawPitchRoll, &_euler.angle, sizeof(float) * 3);
+    _telemetryController->updateTelemetryEvent(TelemetryEvent::EulerYawPitchRoll, &_euler, sizeof(float) * 3);
   }
 
   multi_heap_info_t info;
