@@ -84,7 +84,7 @@ public class QuadStatus : ObservableObject {
       print("ERROR: Received invalid \(type) update")
       return nil
     }
-    return YawPitchRoll(yaw: values[2], pitch: values[1], roll: values[0])
+    return YawPitchRoll(yaw: values[0], pitch: values[1], roll: values[2])
   }
 
   public func updateTelemetry(withData data : Data) {

@@ -155,7 +155,7 @@ static void _updateArmStatus(void)
     LOG_INFO("Setting up motor outputs");
     for (int i = 0; i < NUM_MOTORS; i++) {
       LOG_INFO("Attaching motor %i to pin %i", i, MOTOR_PINS[i]);
-      MotorController *controller = new MotorController(i, MOTOR_PINS[i], MOTOR_TELEM_PINS[i], i == 0);
+      MotorController *controller = new MotorController(MOTOR_PINS[i], MOTOR_TELEM_PINS[i], false);
       _speedControllers.push_back(controller);
     }
     _completedFirstArm = true;
@@ -659,16 +659,15 @@ void loop()
   }
 
 #ifdef ENABLE_EMERGENCY_MODE
-  // // Check if we need to enter into emergency mode
-  // if (!_enteredEmergencyMode && (fabs(_euler.angle.pitch) > 80.0f || fabs(_euler.angle.roll) > 80.0f)) {
-  //   // The drone has entered into an unacceptable orientation - this kills
-  //   // the motors
-  //   _enteredEmergencyMode = true;
-  //   _armed = false;
-  //   _updateArmStatus();
-  //   LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.angle.pitch,
-  //   _euler.angle.roll);
-  // }
+  // Check if we need to enter into emergency mode
+  if (!_enteredEmergencyMode && (fabs(_euler.pitch) > 80.0f || fabs(_euler.roll) > 80.0f)) {
+    // The drone has entered into an unacceptable orientation - this kills
+    // the motors
+    _enteredEmergencyMode = true;
+    _armed = false;
+    _updateArmStatus();
+    LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.pitch, _euler.roll);
+  }
 #endif
 
   if (_enteredEmergencyMode) {
