@@ -65,6 +65,11 @@ class QuadcopterController
   quadcopter_config_t _config;
   DebugHelper *_debugHelper;
   unsigned long _startTime;
+  double _yawSetPointDegrees;
+  bool _initializedYawSetPointDegrees = false;
+  unsigned long _lastYawUpdateTimeMicros = 0;
+  void _yawUpdate(
+      unsigned long currentTimeMicros, const controller_values_t &controllerValues, const imu_output_t &imuValues);
 };
 
 #endif

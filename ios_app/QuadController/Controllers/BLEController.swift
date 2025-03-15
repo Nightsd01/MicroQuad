@@ -263,8 +263,9 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     // 32 bytes: mag values[4]
     // 8 bytes: throttle
     // 8 bytes: voltage
+    // 32 bytes: set points[3]
     var result = ""
-    let valuesPerPacket = 32
+    let valuesPerPacket = 35
     let byteCount = data.count / 8
     for i in 0..<byteCount {
       let value = data.withUnsafeBytes { buffer in

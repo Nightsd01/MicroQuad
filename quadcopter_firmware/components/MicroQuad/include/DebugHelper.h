@@ -21,6 +21,7 @@ class DebugHelper
   double throttle;
   double inputTimescale;
   double voltage;
+  double setPoints[3];
   void saveValues(unsigned long timestamp);
   DebugDataManager dataManager;
 };

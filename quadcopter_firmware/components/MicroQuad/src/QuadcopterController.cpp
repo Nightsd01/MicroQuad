@@ -21,13 +21,48 @@
 
 // Public functions
 QuadcopterController::QuadcopterController(
-    quadcopter_config_t config, DebugHelper *debugHelper, unsigned long timeMicros)
+    quadcopter_config_t config, DebugHelper* debugHelper, unsigned long timeMicros)
 {
   _debugHelper = debugHelper;
   _config = config;
   for (int i = 0; i < 3; i++) {
     _angleControllers[i] = std::make_unique<PIDController>(config.angleGains[i], debugHelper);
     _rateControllers[i] = std::make_unique<PIDController>(config.rateGains[i], debugHelper);
+  }
+}
+
+void QuadcopterController::_yawUpdate(
+    unsigned long currentTimeMicros, const controller_values_t& controllerValues, const imu_output_t& imuValues)
+{
+  // On the first call, just initialize the timestamp and return.
+  if (_lastYawUpdateTimeMicros == 0) {
+    _lastYawUpdateTimeMicros = currentTimeMicros;
+    return;
+  }
+
+  // Calculate elapsed time in seconds.
+  double dt = static_cast<double>(currentTimeMicros - _lastYawUpdateTimeMicros) / 1e6;
+  _lastYawUpdateTimeMicros = currentTimeMicros;
+
+  // Convert the left stick X range (0–255) to -1.0 to +1.0 (center around 127.5).
+  // leftStickInput.x == 127.5 -> 0.0 yaw input
+  // leftStickInput.x == 0     -> approx -1.0 yaw input
+  // leftStickInput.x == 255   -> approx +1.0 yaw input
+  double yawStickNormalized = (controllerValues.leftStickInput.x - 127.5) / 127.5;
+
+  // Determine the desired yaw rate (degrees/second).
+  double yawRateDegPerSec = yawStickNormalized * MAX_YAW_RATE_DEG_PER_SEC;
+
+  // Update the yaw setpoint based on the rate and elapsed time.
+  _yawSetPointDegrees += yawRateDegPerSec * dt;
+
+  // update yaw setpoint to the shortest path from current yaw
+  if (fabsf(_yawSetPointDegrees - imuValues.yawPitchRollDegrees[0]) > 180.0) {
+    if (_yawSetPointDegrees > imuValues.yawPitchRollDegrees[0]) {
+      _yawSetPointDegrees -= 360.0;
+    } else {
+      _yawSetPointDegrees += 360.0;
+    }
   }
 }
 
@@ -42,10 +77,15 @@ motor_outputs_t QuadcopterController::calculateOutputs(
 {
   const double throttle = (double)controllerValues.leftStickInput.y;  // 0.0 to 255.0
 
-  // Gives us a value between -(INPUT_MAX_CONTROLLER_INPUT/2) and
-  // (INPUT_MAX_CONTROLLER_INPUT/2)
-  const double desiredYawDegreesDelta = controllerValues.leftStickInput.x - (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
-  const double desiredYawDegrees = imuValues.yawPitchRollDegrees[0] + desiredYawDegreesDelta;
+  if (!_initializedYawSetPointDegrees) {
+    _initializedYawSetPointDegrees = true;
+    _yawSetPointDegrees = imuValues.yawPitchRollDegrees[0];
+    LOG_INFO("Initialized yaw setpoint to %f", _yawSetPointDegrees);
+  }
+
+  _yawUpdate(timeMicros, controllerValues, imuValues);
+
+  LOG_INFO_PERIODIC_MILLIS(200, "Yaw setpoint: %f, current: %f", _yawSetPointDegrees, imuValues.yawPitchRollDegrees[0]);
 
   const double desiredPitchDelta =
       (controllerValues.rightStickInput.y - (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) / (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
@@ -55,7 +95,7 @@ motor_outputs_t QuadcopterController::calculateOutputs(
   const double desiredRollAngleDegrees = MAX_PITCH_ROLL_ANGLE_DEGREES * desiredRollDelta;
 
   // Desired yaw/pitch/roll angles in degrees
-  const double desiredAnglesDegrees[3] = {desiredYawDegrees, desiredPitchAngleDegrees, desiredRollAngleDegrees};
+  const double desiredAnglesDegrees[3] = {_yawSetPointDegrees, desiredPitchAngleDegrees, desiredRollAngleDegrees};
 
   // x, y, and z
   // for the accelerometer, at rest, Z = 1 because of gravity vector
@@ -78,10 +118,10 @@ motor_outputs_t QuadcopterController::calculateOutputs(
 
   // Axes 1
   motor_outputs_t motors = {
-      (float)(throttle + rateControllerOutputs[1] + rateControllerOutputs[2]),
-      (float)(throttle - rateControllerOutputs[1] - rateControllerOutputs[2]),
-      (float)(throttle + rateControllerOutputs[1] - rateControllerOutputs[2]),
-      (float)(throttle - rateControllerOutputs[1] + rateControllerOutputs[2])};
+      (float)(throttle + rateControllerOutputs[1] - rateControllerOutputs[2] - rateControllerOutputs[0]),
+      (float)(throttle - rateControllerOutputs[1] + rateControllerOutputs[2] - rateControllerOutputs[0]),
+      (float)(throttle - rateControllerOutputs[1] - rateControllerOutputs[2] + rateControllerOutputs[0]),
+      (float)(throttle + rateControllerOutputs[1] + rateControllerOutputs[2] + rateControllerOutputs[0])};
 
   for (int i = 0; i < NUM_MOTORS; i++) {
     // Clamp to 0 to 255
@@ -97,13 +137,13 @@ motor_outputs_t QuadcopterController::calculateOutputs(
     motors[i] = MIN(MAX(motors[i], THROTTLE_MIN), THROTTLE_MAX);
   }
 
-  LOG_INFO_PERIODIC_MILLIS(
-      100,  // log at most up to every 100 millis
-      "%8.2f, %8.2f, %8.2f, %8.2f",
-      (float)throttle,
-      (float)rateControllerOutputs[1],
-      (float)rateControllerOutputs[2],
-      (float)rateControllerOutputs[0]);
+  // LOG_INFO_PERIODIC_MILLIS(
+  //     100,  // log at most up to every 100 millis
+  //     "%8.2f, %8.2f, %8.2f, %8.2f",
+  //     (float)throttle,
+  //     (float)rateControllerOutputs[1],
+  //     (float)rateControllerOutputs[2],
+  //     (float)rateControllerOutputs[0]);
 
   if (recordData) {
     _debugHelper->angleOutputs[0] = angleControllerOutputs[0];
@@ -117,6 +157,9 @@ motor_outputs_t QuadcopterController::calculateOutputs(
     _debugHelper->motorValues[2] = motors[2];
     _debugHelper->motorValues[3] = motors[3];
     _debugHelper->throttle = throttle;
+    _debugHelper->setPoints[0] = desiredAnglesDegrees[0];
+    _debugHelper->setPoints[1] = desiredAnglesDegrees[1];
+    _debugHelper->setPoints[2] = desiredAnglesDegrees[2];
   }
 
   return motors;

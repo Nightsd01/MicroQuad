@@ -27,5 +27,6 @@ void DebugHelper::saveValues(unsigned long timestamp)
   dataManager.addDouble(magValues, 4);
   dataManager.addDouble(&throttle, 1);
   dataManager.addDouble(&voltage, 1);
+  dataManager.addDouble(setPoints, 3);
   dataManager.numSamples++;
 }
