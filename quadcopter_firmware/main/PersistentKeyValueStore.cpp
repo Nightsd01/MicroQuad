@@ -7,8 +7,8 @@
 
 #include "Logger.h"
 
-static const char *kTag = "PersistentKeyValueStore";
-static const char *kNamespaceName = "kv_storage";
+static const char* kTag = "PersistentKeyValueStore";
+static const char* kNamespaceName = "kv_storage";
 
 PersistentKeyValueStore::PersistentKeyValueStore()
 {
@@ -23,7 +23,7 @@ PersistentKeyValueStore::PersistentKeyValueStore()
   ESP_ERROR_CHECK(err);
 }
 
-std::string PersistentKeyValueStore::getStringForKey(std::string key)
+std::string PersistentKeyValueStore::getStringForKey(const std::string& key)
 {
   nvs_handle_t handle;
   esp_err_t err;
@@ -44,7 +44,7 @@ std::string PersistentKeyValueStore::getStringForKey(std::string key)
     return "";
   }
 
-  char *value = new char[required_size];
+  char* value = new char[required_size];
   err = nvs_get_str(handle, key.c_str(), value, &required_size);
   if (err != ESP_OK) {
     LOG_ERROR("Error (%s) getting string value!", esp_err_to_name(err));
@@ -59,7 +59,7 @@ std::string PersistentKeyValueStore::getStringForKey(std::string key)
   return result;
 }
 
-int PersistentKeyValueStore::getIntForKey(std::string key)
+int PersistentKeyValueStore::getIntForKey(const std::string& key)
 {
   nvs_handle_t handle;
   esp_err_t err;
@@ -83,7 +83,7 @@ int PersistentKeyValueStore::getIntForKey(std::string key)
   return value;
 }
 
-float PersistentKeyValueStore::getFloatForKey(std::string key)
+float PersistentKeyValueStore::getFloatForKey(const std::string& key)
 {
   nvs_handle_t handle;
   esp_err_t err;
@@ -105,7 +105,7 @@ float PersistentKeyValueStore::getFloatForKey(std::string key)
     return 0.0f;
   }
 
-  char *str_value = new char[required_size];
+  char* str_value = new char[required_size];
   err = nvs_get_str(handle, key.c_str(), str_value, &required_size);
   if (err != ESP_OK) {
     LOG_ERROR("Error (%s) getting float value!", esp_err_to_name(err));
@@ -120,7 +120,7 @@ float PersistentKeyValueStore::getFloatForKey(std::string key)
   return value;
 }
 
-void PersistentKeyValueStore::setStringForKey(std::string key, std::string value)
+void PersistentKeyValueStore::setStringForKey(const std::string& key, const std::string& value)
 {
   nvs_handle_t handle;
   esp_err_t err;
@@ -146,7 +146,7 @@ void PersistentKeyValueStore::setStringForKey(std::string key, std::string value
   nvs_close(handle);
 }
 
-void PersistentKeyValueStore::setIntForKey(std::string key, int value)
+void PersistentKeyValueStore::setIntForKey(const std::string& key, int value)
 {
   nvs_handle_t handle;
   esp_err_t err;
@@ -172,7 +172,7 @@ void PersistentKeyValueStore::setIntForKey(std::string key, int value)
   nvs_close(handle);
 }
 
-void PersistentKeyValueStore::setFloatForKey(std::string key, float value)
+void PersistentKeyValueStore::setFloatForKey(const std::string& key, float value)
 {
   nvs_handle_t handle;
   esp_err_t err;
@@ -201,7 +201,7 @@ void PersistentKeyValueStore::setFloatForKey(std::string key, float value)
   nvs_close(handle);
 }
 
-bool PersistentKeyValueStore::hasValueForKey(std::string key)
+bool PersistentKeyValueStore::hasValueForKey(const std::string& key)
 {
   nvs_iterator_t it = nullptr;
   esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, kNamespaceName, NVS_TYPE_ANY, &it);
@@ -230,7 +230,7 @@ bool PersistentKeyValueStore::hasValueForKey(std::string key)
   return found;
 }
 
-void PersistentKeyValueStore::removeValueForKey(std::string key)
+void PersistentKeyValueStore::removeValueForKey(const std::string& key)
 {
   nvs_handle_t handle;
   esp_err_t err;
