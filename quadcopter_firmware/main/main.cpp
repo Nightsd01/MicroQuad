@@ -101,6 +101,8 @@ static const float _misalignmentMatrix[3][3] = {
 
 MotorMagCompensationHandler *_motorMagCompensationHandler;
 
+motor_outputs_t _mostRecentMotorValues = {};
+
 // When we start recording debug data, we want the LED to flash blue
 // for RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS. This lets us align
 // any video recordings with the debug data that we're recording
@@ -142,6 +144,7 @@ static void updateMotors(motor_outputs_t outputs)
   if (!_completedFirstArm) {
     return;
   }
+  _mostRecentMotorValues = outputs;
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!_armed) {
       _speedControllers[i]->setSpeed(MIN_THROTTLE_RANGE);
@@ -176,6 +179,8 @@ static void _gotMagUpdate(mag_update_t update)
   _magValues = update;
   if (_motorMagCompensationHandler->isCalibrating) {
     _motorMagCompensationHandler->updateMagValue(update);
+  } else if (_completedFirstArm && _mostRecentMotorValues[0] > 0 && _motorMagCompensationHandler->isCalibrated) {
+    _magValues = _motorMagCompensationHandler->applyMagneticMotorCompensation(update, _mostRecentMotorValues);
   }
 }
 

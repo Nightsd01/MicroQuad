@@ -21,6 +21,21 @@ static float mapRange(float value, float inMin, float inMax, float outMin, float
   return outMin + (outMax - outMin) * ((value - inMin) / (inMax - inMin));
 }
 
+/**
+ * @brief Interpolate linearly between two mag_update_t data points.
+ * @param low   The data at step indexLow
+ * @param high  The data at step indexHigh
+ * @param ratio The fraction in [0..1] between them
+ */
+static mag_update_t interpolateMag(const mag_update_t &low, const mag_update_t &high, float ratio)
+{
+  return {
+      .x = low.x + (high.x - low.x) * ratio,
+      .y = low.y + (high.y - low.y) * ratio,
+      .z = low.z + (high.z - low.z) * ratio,
+  };
+}
+
 MotorMagCompensationHandler::MotorMagCompensationHandler(QMC5883L *magSensor, PersistentKeyValueStore *kvStore)
 {
   _magSensor = magSensor;
@@ -126,6 +141,56 @@ void MotorMagCompensationHandler::updateMagValue(mag_update_t magValues)
 
   _motorOutputCallback(motorValues);
   _currentMotorCalibrationStep++;
+}
+
+mag_update_t MotorMagCompensationHandler::applyMagneticMotorCompensation(
+    const mag_update_t &rawMagData, const motor_outputs_t &motorThrottles)
+{
+  // This will hold the sum of offsets across all motors
+  mag_update_t totalOffset = {0, 0, 0, 0};
+
+  // For each motor, figure out the throttle-based offset
+  for (int motorIndex = 0; motorIndex < NUM_MOTORS; motorIndex++) {
+    const float throttle = map(motorThrottles[motorIndex], THROTTLE_MIN, THROTTLE_MAX, 0.0f, 1.0f);
+
+    // We have 5 discrete steps: 0..4.
+    // Convert throttle [0..1] to a float index in [0..4].
+    const float scaledStep = throttle * (CALIBRATION_MOTOR_STEPS - 1);
+    int stepLow = static_cast<int>(std::floor(scaledStep));
+    int stepHigh = static_cast<int>(std::ceil(scaledStep));
+
+    // Clamp to valid range just in case
+    if (stepLow < 0) stepLow = 0;
+    if (stepHigh >= CALIBRATION_MOTOR_STEPS) stepHigh = CALIBRATION_MOTOR_STEPS - 1;
+
+    // If stepLow == stepHigh, no interpolation needed
+    float ratio = 0.0f;
+    if (stepHigh != stepLow) {
+      ratio = (scaledStep - stepLow) / (stepHigh - stepLow);
+    }
+
+    // Interpolate the offset from _perMotorCalibrationData
+    mag_update_t offsetLow = _perMotorCalibrationData[motorIndex][stepLow];
+    mag_update_t offsetHigh = _perMotorCalibrationData[motorIndex][stepHigh];
+    mag_update_t motorOffset = interpolateMag(offsetLow, offsetHigh, ratio);
+
+    // Accumulate into total offset
+    totalOffset.x += motorOffset.x;
+    totalOffset.y += motorOffset.y;
+    totalOffset.z += motorOffset.z;
+    totalOffset.heading += motorOffset.heading;
+  }
+
+  // Now subtract totalOffset from the raw reading
+  mag_update_t corrected;
+  corrected.x = rawMagData.x - totalOffset.x;
+  corrected.y = rawMagData.y - totalOffset.y;
+  corrected.z = rawMagData.z - totalOffset.z;
+
+  // If you also want to adjust heading, you'd do something like:
+  corrected.heading = rawMagData.heading - totalOffset.heading;
+
+  return corrected;
 }
 
 void MotorMagCompensationHandler::_completeCalibration(void)

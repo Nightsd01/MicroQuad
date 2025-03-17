@@ -17,11 +17,10 @@
  */
 static Vector3f applyMisalignment(const Vector3f& v, const float mat[3][3])
 {
-  Vector3f out;
-  out.x = mat[0][0] * v.x + mat[0][1] * v.y + mat[0][2] * v.z;
-  out.y = mat[1][0] * v.x + mat[1][1] * v.y + mat[1][2] * v.z;
-  out.z = mat[2][0] * v.x + mat[2][1] * v.y + mat[2][2] * v.z;
-  return out;
+  return {
+      .x = mat[0][0] * v.x + mat[0][1] * v.y + mat[0][2] * v.z,
+      .y = mat[1][0] * v.x + mat[1][1] * v.y + mat[1][2] * v.z,
+      .z = mat[2][0] * v.x + mat[2][1] * v.y + mat[2][2] * v.z};
 }
 
 //------------------------------------------------------------------------------
