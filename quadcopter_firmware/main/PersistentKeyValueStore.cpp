@@ -7,7 +7,6 @@
 
 #include "Logger.h"
 
-static const char* kTag = "PersistentKeyValueStore";
 static const char* kNamespaceName = "kv_storage";
 
 PersistentKeyValueStore::PersistentKeyValueStore()
@@ -255,3 +254,62 @@ void PersistentKeyValueStore::removeValueForKey(const std::string& key)
 
   nvs_close(handle);
 }
+
+template <typename T>
+void PersistentKeyValueStore::setVectorForKey(const std::string& key, const std::vector<T>& value)
+{
+  nvs_handle_t handle;
+  esp_err_t err;
+
+  // Open NVS namespace in write mode
+  err = nvs_open(kNamespaceName, NVS_READWRITE, &handle);
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
+    return;
+  }
+
+  err = nvs_set_blob(handle, key.c_str(), value.data(), value.size() * sizeof(T));
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) setting vector value!", esp_err_to_name(err));
+  }
+
+  // Commit changes
+  err = nvs_commit(handle);
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) committing changes!", esp_err_to_name(err));
+  }
+
+  nvs_close(handle);
+}
+
+template <typename T>
+std::vector<T> PersistentKeyValueStore::getVectorForKey(const std::string& key, size_t length)
+{
+  nvs_handle_t handle;
+  esp_err_t err;
+
+  // Open NVS namespace in read mode
+  err = nvs_open(kNamespaceName, NVS_READONLY, &handle);
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
+    return {};
+  }
+  void* buffer = (void*)malloc(length * sizeof(T));
+  if (!buffer) {
+    LOG_ERROR("Failed to allocate buffer for array");
+    return {};
+  }
+
+  size_t foundSize = length * sizeof(T);
+  std::vector<T> result = std::vector<T>(length);
+  err = nvs_get_blob(handle, key.c_str(), result.data(), &foundSize);
+  nvs_close(handle);
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) getting blob value!", esp_err_to_name(err));
+    return {};
+  }
+  return result;
+}
+
+template std::vector<float> PersistentKeyValueStore::getVectorForKey(const std::string& key, size_t length);
+template void PersistentKeyValueStore::setVectorForKey(const std::string& key, const std::vector<float>& value);
