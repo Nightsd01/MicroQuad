@@ -20,6 +20,7 @@
 #include "Logger.h"
 #include "MahonyAHRS.h"
 #include "MotorController.h"
+#include "MotorMagCompensationHandler.h"
 #include "PersistentKeyValueStore.h"
 #include "PersistentKeysCommon.h"
 #include "PinDefines.h"
@@ -98,6 +99,8 @@ static const float _misalignmentMatrix[3][3] = {
     {0.0f,    0.0f,     1.0f}
 };
 
+MotorMagCompensationHandler *_motorMagCompensationHandler;
+
 // When we start recording debug data, we want the LED to flash blue
 // for RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS. This lets us align
 // any video recordings with the debug data that we're recording
@@ -167,12 +170,18 @@ static void _updateArmStatus(void)
   }
 }
 
+static void _gotMagUpdate(mag_update_t update)
+{
+  _receivedMagUpdate = true;
+  _magValues = update;
+  if (_motorMagCompensationHandler->isCalibrating) {
+    _motorMagCompensationHandler->updateMagValue(update);
+  }
+}
+
 static void _configureMagnetometer(void)
 {
-  ESP_ERROR_CHECK(_compass.begin(Wire, [&](mag_update_t update) {
-    _receivedMagUpdate = true;
-    _magValues = update;
-  }));
+  ESP_ERROR_CHECK(_compass.begin(Wire, [&](mag_update_t update) { _gotMagUpdate(update); }));
 
   /**
    * @brief  Set declination angle on your location and fix heading
@@ -183,9 +192,9 @@ static void _configureMagnetometer(void)
    * @n      Formula: (deg + (min / 60.0)) / (180 / PI);
    */
   const float declinationAngle = (12.0 + (55.0 / 60.0)) / (180 / PI);
-  _compass.setRange(QMC5883L::Range::GAUSS_2);
+  _compass.setRange(QMC5883L::Range::GAUSS_8);
   _compass.setMeasurementMode(QMC5883L::MeasurementMode::CONTINUOUS);
-  _compass.setDataRate(QMC5883L::DataRate::HZ200);
+  _compass.setDataRate(QMC5883L::DataRate::HZ100);
   _compass.setSamples(QMC5883L::Samples::OSR64);
   _compass.setDeclinationAngle(declinationAngle);
 
@@ -287,6 +296,44 @@ static void _handleMagnetometerCalibration(CalibrationResponse response)
   }
 }
 
+static void _beginMagneticMotorInterferenceCalibration(void)
+{
+  if (!_armed) {
+    LOG_ERROR("Cannot start magnetometer-motors-compensation calibration when not armed");
+    _bluetoothController.sendCalibrationUpdate(
+        CalibrationType::MagnetometerMotorsCompensation,
+        CalibrationRequest::Failed);
+    return;
+  }
+  _motorDebugEnabled = true;
+  _motorMagCompensationHandler->beginCalibration(
+      [&](motor_outputs_t outputs) {
+        LOG_INFO(
+            "Updating motor outputs for calibration %f, %f, %f, %f",
+            outputs[0],
+            outputs[1],
+            outputs[2],
+            outputs[3]);
+        for (int i = 0; i < NUM_MOTORS; i++) {
+          _motorDebugValues[i] = outputs[i];
+        }
+      },
+      [&](bool success) {
+        // completion callback
+        _motorDebugEnabled = false;
+        if (!success) {
+          LOG_ERROR("Failed to complete magnetometer motors compensation calibration");
+          _bluetoothController.sendCalibrationUpdate(
+              CalibrationType::MagnetometerMotorsCompensation,
+              CalibrationRequest::Failed);
+          return;
+        }
+        _bluetoothController.sendCalibrationUpdate(
+            CalibrationType::MagnetometerMotorsCompensation,
+            CalibrationRequest::Complete);
+      });
+}
+
 static void _handleCalibration(CalibrationType type, CalibrationResponse response)
 {
   switch (type) {
@@ -302,6 +349,9 @@ static void _handleCalibration(CalibrationType type, CalibrationResponse respons
     case CalibrationType::Magnetometer: {
       _handleMagnetometerCalibration(response);
       break;
+    }
+    case CalibrationType::MagnetometerMotorsCompensation: {
+      _beginMagneticMotorInterferenceCalibration();
     }
   }
 }
@@ -512,10 +562,11 @@ void setup()
   _batteryController = new BatteryController(_telemetryController, &_bluetoothController, _helper);
 
   LOG_INFO("Configuring magnetometer");
-
   _configureMagnetometer();
-
   LOG_INFO("Successfully initialized magnetometer");
+
+  LOG_INFO("Initializing magnetometer motors compensation handler");
+  _motorMagCompensationHandler = new MotorMagCompensationHandler(&_compass, &_persistentKvStore);
 
   _updateArmStatus();
 

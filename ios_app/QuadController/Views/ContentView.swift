@@ -22,6 +22,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   @ObservedObject var controller = BLEController()
   @ObservedObject var accelGyroCalibrationController = CalibrationController(calibrationType: .AccelerometerGyro)
   @ObservedObject var magnetometerCalibrationController = CalibrationController(calibrationType: .Magnetometer)
+  @ObservedObject var magnetometerMotorCalibrationController = CalibrationController(calibrationType: .MagnetometerMotorsCompensation)
   @State private var showingPopover = false
   @State fileprivate var leftStickValues = PreviousControlValues(x : 0.0, y : 127.5)
   @State fileprivate var rightStickValues = PreviousControlValues(x : 127.5, y : 127.5)
@@ -58,6 +59,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
     controller.delegate = self
     accelGyroCalibrationController.provideBLEController(controller)
     magnetometerCalibrationController.provideBLEController(controller)
+    magnetometerMotorCalibrationController.provideBLEController(controller)
   }
   
   func calibrationButton(type : CalibrationType, typeLabel : String, calibrationController : CalibrationController) -> some View
@@ -151,6 +153,8 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
           calibrationButton(type: .AccelerometerGyro, typeLabel: "Accel+Gyro", calibrationController: accelGyroCalibrationController)
           Spacer()
           calibrationButton(type: .Magnetometer, typeLabel: "Magnetometer", calibrationController: magnetometerCalibrationController)
+          Spacer()
+          calibrationButton(type: .MagnetometerMotorsCompensation, typeLabel: "Mag-Motor", calibrationController: magnetometerMotorCalibrationController)
           Spacer()
           Button(recordingDebugData ? "Stop Recording" : "Start Recording") {
             recordingDebugData = !recordingDebugData

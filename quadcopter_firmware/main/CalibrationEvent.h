@@ -21,4 +21,5 @@ CROSS_PLATFORM_ENUM(uint8_t, CalibrationResponse){
     Cancel = 2,
 };
 
-CROSS_PLATFORM_ENUM(uint8_t, CalibrationType){AccelerometerGyro = 0, Magnetometer = 1};
+CROSS_PLATFORM_ENUM(uint8_t, CalibrationType){
+    AccelerometerGyro = 0, Magnetometer = 1, MagnetometerMotorsCompensation = 2};

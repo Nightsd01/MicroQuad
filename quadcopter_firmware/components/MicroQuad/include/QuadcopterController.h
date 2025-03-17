@@ -38,7 +38,7 @@ typedef struct
   stick_input_values_t rightStickInput;
 } controller_values_t;
 
-typedef std::array<float, 4> motor_outputs_t;
+typedef std::array<float, NUM_MOTORS> motor_outputs_t;
 
 typedef struct
 {  // yaw, pitch, and roll gains
