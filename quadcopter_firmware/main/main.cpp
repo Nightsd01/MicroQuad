@@ -79,7 +79,7 @@ static bool _completedFirstArm = false;
 // rebooted
 static bool _enteredEmergencyMode = false;
 
-static QMC5883L _compass;
+static QMC5883L *_compass;
 
 static mag_update_t _magValues;
 static bool _receivedMagUpdate = false;
@@ -182,11 +182,16 @@ static void _gotMagUpdate(mag_update_t update)
   } else if (_completedFirstArm && _mostRecentMotorValues[0] > 0 && _motorMagCompensationHandler->isCalibrated) {
     _magValues = _motorMagCompensationHandler->applyMagneticMotorCompensation(update, _mostRecentMotorValues);
   }
+
+  EXECUTE_PERIODIC(1000, {
+    _telemetryController->updateTelemetryEvent(TelemetryEvent::MagnetometerXYZRaw, &update, sizeof(mag_update_t));
+  });
 }
 
 static void _configureMagnetometer(void)
 {
-  ESP_ERROR_CHECK(_compass.begin(Wire, [&](mag_update_t update) { _gotMagUpdate(update); }));
+  _compass = new QMC5883L(&Wire, QMC5883_ADDRESS);
+  _compass->addObserver([&](mag_update_t update) { _gotMagUpdate(update); });
 
   /**
    * @brief  Set declination angle on your location and fix heading
@@ -197,34 +202,28 @@ static void _configureMagnetometer(void)
    * @n      Formula: (deg + (min / 60.0)) / (180 / PI);
    */
   const float declinationAngle = (12.0 + (55.0 / 60.0)) / (180 / PI);
-  _compass.setRange(QMC5883L::Range::GAUSS_8);
-  _compass.setMeasurementMode(QMC5883L::MeasurementMode::CONTINUOUS);
-  _compass.setDataRate(QMC5883L::DataRate::HZ100);
-  _compass.setSamples(QMC5883L::Samples::OSR64);
-  _compass.setDeclinationAngle(declinationAngle);
+  _compass->setRange(QMC5883_RANGE_2GA);
+  _compass->setMeasurementMode(QMC5883_CONTINOUS);
+  _compass->setDataRate(QMC5883_DATARATE_200HZ);
+  _compass->setSamples(QMC5883_SAMPLES_4);
+  _compass->setDeclinationAngle(declinationAngle);
 
-  if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSET_X)) {
-    const float xOffset = _persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_X);
-    LOG_INFO("Setting magnetometer X offset: %f", xOffset);
-    _compass.setXOffset(xOffset);
-  } else {
-    LOG_WARN("magnetometer: No X offset found in persistent storage, please calibrate the compass");
+  if (!_compass->begin()) {
+    LOG_ERROR("Failed to begin compass");
+    abort();
   }
 
-  if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSET_Y)) {
-    const float yOffset = _persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_Y);
-    LOG_INFO("Setting magnetometer Y offset: %f", yOffset);
-    _compass.setYOffset(yOffset);
-  } else {
-    LOG_WARN("magnetometer: No Y offset found in persistent storage, please calibrate the compass");
-  }
+  if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSETS)) {
+    const std::vector<float> offsets = _persistentKvStore.getVectorForKey<float>(PersistentKeysCommon::MAG_OFFSETS, 3);
 
-  if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSET_Z)) {
-    const float zOffset = _persistentKvStore.getFloatForKey(PersistentKeysCommon::MAG_OFFSET_Z);
-    LOG_INFO("Setting magnetometer Z offset: %f", zOffset);
-    _compass.setZOffset(zOffset);
+    if (offsets.size() != 3) {
+      LOG_WARN("magnetometer: Invalid calibration offsets found in persistent storage, please calibrate the compass");
+    } else {
+      LOG_INFO("Setting magnetometer offsets: %f, %f, %f", offsets[0], offsets[1], offsets[2]);
+      _compass->setCalibrationOffsets({offsets[0], offsets[1], offsets[2]});
+    }
   } else {
-    LOG_WARN("magnetometer: No Z offset found in persistent storage, please calibrate the compass");
+    LOG_WARN("magnetometer: No calibration offsets found in persistent storage, please calibrate the compass");
   }
 }
 
@@ -276,21 +275,19 @@ static void _handleMagnetometerCalibration(CalibrationResponse response)
       break;
     }
     case CalibrationResponse::Continue: {
-      mag_calibration_offsets_t calibrationData = _compass.calibrate();
-      if (calibrationData.error != ESP_OK) {
-        LOG_ERROR("Failed to calibrate compass: %d", calibrationData.error);
-        _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Failed);
-        return;
-      }
-      LOG_INFO(
-          "Successfully calibrated compass: %f, %f, %f",
-          calibrationData.x_offset,
-          calibrationData.y_offset,
-          calibrationData.z_offset);
-      _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Complete);
-      _persistentKvStore.setFloatForKey(PersistentKeysCommon::MAG_OFFSET_X, calibrationData.x_offset);
-      _persistentKvStore.setFloatForKey(PersistentKeysCommon::MAG_OFFSET_Y, calibrationData.y_offset);
-      _persistentKvStore.setFloatForKey(PersistentKeysCommon::MAG_OFFSET_Z, calibrationData.z_offset);
+      LOG_INFO("Beginning compass calibration");
+      _compass->calibrate(8.0f /* seconds */, [&](bool succeeded, xyz_vector_t offsets) {
+        LOG_INFO("Calibration %s", succeeded ? "succeeded" : "failed");
+        if (!succeeded) {
+          LOG_ERROR("Failed to calibrate compass");
+          _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Failed);
+          return;
+        }
+        LOG_INFO("Successfully calibrated compass: %f, %f, %f", offsets.x, offsets.y, offsets.z);
+        _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Complete);
+        std::vector<float> offsetsVector = {offsets.x, offsets.y, offsets.z};
+        _persistentKvStore.setVectorForKey(PersistentKeysCommon::MAG_OFFSETS, offsetsVector);
+      });
       break;
     }
     default: {
@@ -571,13 +568,9 @@ void setup()
   LOG_INFO("Successfully initialized magnetometer");
 
   LOG_INFO("Initializing magnetometer motors compensation handler");
-  _motorMagCompensationHandler = new MotorMagCompensationHandler(&_compass, &_persistentKvStore);
+  _motorMagCompensationHandler = new MotorMagCompensationHandler(&_persistentKvStore);
 
   _updateArmStatus();
-
-  LOG_INFO("Initializing attitude & heading reference system");
-  ahrs.setGyroMisalignment(_misalignmentMatrix);
-  ahrs.setAccelMisalignment(_misalignmentMatrix);
 
   LOG_INFO("Initializing IMU");
   bool setupSuccess = false;
@@ -666,7 +659,7 @@ void loop()
   });
 
   _telemetryController->loopHandler();
-  _compass.loopHandler();
+  _compass->loopHandler();
   _bluetoothController.loopHandler();
   _batteryController->loopHandler();
 

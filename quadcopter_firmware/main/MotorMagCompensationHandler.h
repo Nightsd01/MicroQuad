@@ -14,7 +14,7 @@ class PersistentKeyValueStore;
 class MotorMagCompensationHandler
 {
  public:
-  MotorMagCompensationHandler(QMC5883L *magSensor, PersistentKeyValueStore *kvStore);
+  MotorMagCompensationHandler(PersistentKeyValueStore *kvStore);
 
   bool isCalibrating;
   bool isCalibrated;
@@ -24,6 +24,8 @@ class MotorMagCompensationHandler
       std::function<void(motor_outputs_t)> motorOutputCallback, std::function<void(bool)> calibrationCompleteCallback);
 
   void updateMagValue(mag_update_t magValues);
+
+  mag_update_t applyMagneticMotorCompensation(const mag_update_t &rawMagData, const motor_outputs_t &motorThrottles);
 
  private:
   QMC5883L *_magSensor;

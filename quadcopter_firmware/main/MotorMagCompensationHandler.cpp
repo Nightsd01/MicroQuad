@@ -36,9 +36,8 @@ static mag_update_t interpolateMag(const mag_update_t &low, const mag_update_t &
   };
 }
 
-MotorMagCompensationHandler::MotorMagCompensationHandler(QMC5883L *magSensor, PersistentKeyValueStore *kvStore)
+MotorMagCompensationHandler::MotorMagCompensationHandler(PersistentKeyValueStore *kvStore)
 {
-  _magSensor = magSensor;
   _kvStore = kvStore;
   isCalibrating = false;
   isCalibrated = false;
