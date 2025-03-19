@@ -96,9 +96,10 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
         }
         HStack {
           Spacer()
-          Button("Motor Debug Menu") {
+          Button("Motor Debug") {
             showingPopover = true
-          }.popover(isPresented: $showingPopover) {
+          }
+          .popover(isPresented: $showingPopover) {
             VStack {
               HStack {
                 Text("Motor 1: ")
@@ -106,7 +107,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
                   if !editing {
                     motor1 = 0.0
                   }
-                }.onChange(of: motor1, perform: { value in
+                }.onChange(of: motor1, { oldValue, newValue in
                   updated(motor: 1, value: motor1)
                 })
               }
@@ -116,7 +117,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
                   if !editing {
                     motor2 = 0.0
                   }
-                }.onChange(of: motor2, perform: { value in
+                }.onChange(of: motor2, { oldValue, newValue in
                   updated(motor: 2, value: motor2)
                 })
               }
@@ -126,7 +127,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
                   if !editing {
                     motor3 = 0.0
                   }
-                }.onChange(of: motor3, perform: { value in
+                }.onChange(of: motor3, { oldValue, newValue in
                   updated(motor: 3, value: motor3)
                 })
               }
@@ -136,7 +137,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
                   if !editing {
                     motor4 = 0.0
                   }
-                }.onChange(of: motor4, perform: { value in
+                }.onChange(of: motor4, { oldValue, newValue in
                   updated(motor: 4, value: motor4)
                 })
               }
@@ -146,7 +147,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
               }
             }
           }
-          .onChange(of: showingPopover, perform: { value in
+          .onChange(of: showingPopover, { oldValue, newValue in
             changeMotorDebugState(editing: showingPopover)
           })
           Spacer()

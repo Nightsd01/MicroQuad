@@ -78,6 +78,16 @@ struct BLEStatusView: View {
         } else {
           Text("No IMU").bold()
         }
+        if let mag = status.magRaw {
+          HStack {
+            Text("Mag: ").bold()
+            Text(String(format: "(%.2f°) %.2f  %.2f  %.2f, %.2f Gauss", mag.heading, mag.xyz.x, mag.xyz.y, mag.xyz.z, sqrt(pow(mag.xyz.x, 2) + pow(mag.xyz.y, 2) + pow(mag.xyz.z, 2))))
+              .lineLimit(1)
+              .minimumScaleFactor(0.5)
+          }
+        } else {
+          Text("No Mag").bold()
+        }
       }
       Spacer()
     }

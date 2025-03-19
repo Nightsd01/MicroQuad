@@ -19,6 +19,11 @@ public struct YawPitchRoll {
   let roll : Float32
 }
 
+public struct MagRawValues {
+  let xyz: XYZ
+  let heading : Float32
+}
+
 public struct MemoryStatus {
   // Represents how much space (in bytes) is currently free
   let freeHeapByteCount : UInt32
@@ -42,6 +47,7 @@ public class QuadStatus : ObservableObject {
   @Published var accelFiltered : XYZ?
   @Published var gyroRaw : XYZ?
   @Published var gyroFiltered : XYZ?
+  @Published var magRaw : MagRawValues?
   @Published var memoryStatus : MemoryStatus?
   @Published var loopUpdateRateHz : UInt64?
   @Published var imuUpdateRateHz : UInt64?
@@ -162,6 +168,13 @@ public class QuadStatus : ObservableObject {
           return
         }
         self.imuUpdateRateHz = values[0]
+        break
+      case .MagnetometerXYZRaw:
+        guard let values : [Float32] = parseNumericArray(withData: payload, count: 4) else {
+          print("ERROR: Received invalid \(type) update")
+          return
+        }
+        self.magRaw = MagRawValues(xyz: XYZ(x: values[0], y: values[1], z: values[2]), heading: values[3])
         break
       default:
         print("ERROR: Received invalid \(type) update case")

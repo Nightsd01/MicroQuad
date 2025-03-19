@@ -13,4 +13,6 @@ CROSS_PLATFORM_ENUM(uint8_t, TelemetryEvent){
     MemoryStats = 7,
     MotorValues = 8,
     LoopUpdateRate = 9,
-    IMUUpdateRate = 10};
+    IMUUpdateRate = 10,
+    MagnetometerXYZRaw = 11,
+};
