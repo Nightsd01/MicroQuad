@@ -55,9 +55,9 @@ class QuadcopterController
   // Should be called at a relatively constant frequency with
   // new accel/gyro/compass readings.
   motor_outputs_t calculateOutputs(
-      quadcopter_config_t config,
-      imu_output_t imuValues,
-      controller_values_t controllerValues,
+      const quadcopter_config_t &config,
+      const imu_output_t &imuValues,
+      const controller_values_t &controllerValues,
       unsigned long timeMicros,
       bool recordData);
 

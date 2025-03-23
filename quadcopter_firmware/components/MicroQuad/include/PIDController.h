@@ -27,7 +27,7 @@ class PIDController
  public:
   PIDController(DebugHelper *helper);
 
-  double computeOutput(gains_t gains, double current, double set, double timeSeconds);
+  double computeOutput(const gains_t &gains, double current, double set, double timeSeconds);
 
  private:
   DebugHelper *_helper;

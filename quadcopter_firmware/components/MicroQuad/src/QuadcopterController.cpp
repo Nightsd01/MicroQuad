@@ -71,9 +71,9 @@ void QuadcopterController::_yawUpdate(
 // for debugging I understand degrees more intuitively, so I will leave this for
 // now
 motor_outputs_t QuadcopterController::calculateOutputs(
-    quadcopter_config_t config,
-    imu_output_t imuValues,
-    controller_values_t controllerValues,
+    const quadcopter_config_t& config,
+    const imu_output_t& imuValues,
+    const controller_values_t& controllerValues,
     unsigned long timeMicros,
     bool recordData)
 {

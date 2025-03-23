@@ -13,7 +13,7 @@ PIDController::PIDController(DebugHelper *helper)
   _firstRun = true;
 }
 
-double PIDController::computeOutput(gains_t gains, double current, double set, double timeSeconds)
+double PIDController::computeOutput(const gains_t &gains, double current, double set, double timeSeconds)
 {
   const double deltaTimeSeconds = _firstRun ? 0.00001f : timeSeconds - _previousTimeSeconds;
   _firstRun = false;
