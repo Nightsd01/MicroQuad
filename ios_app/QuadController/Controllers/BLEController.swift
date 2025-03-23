@@ -26,6 +26,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   static let motorDebugCharacteristicUUID = "dec9fad6-0cf9-11ec-82a8-0242ac130003"
   static let calibrateCharacteristicUUID = "498e876e-0dd2-11ec-82a8-0242ac130003"
   static let debugInfoCharacteristicUUID = "f0a0afee-0983-4691-adc5-02ee803f5418"
+  static let pidTuningCharacteristicUUID = "58471750-7394-4659-bc69-09331eed05a3"
   static let maxUpdateFrequencySeconds = 0.1
   
   static let terminationString = "==TERMINATE=="
@@ -42,6 +43,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   var motorDebugCharacteristic : CBCharacteristic?
   var calibrationCharacteristic : CBCharacteristic?
   var debugInfoCharacteristic : CBCharacteristic?
+  var pidTuningCharacteristic : CBCharacteristic?
 
   var lastUpdateTime : TimeInterval?
   var timer : Timer?
@@ -245,6 +247,8 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
       } else if characteristic.uuid.uuidString.lowercased() == BLEController.debugInfoCharacteristicUUID.lowercased() {
         debugInfoCharacteristic = characteristic
         device?.setNotifyValue(true, for: characteristic)
+      } else if characteristic.uuid.uuidString.lowercased() == BLEController.pidTuningCharacteristicUUID.lowercased() {
+        pidTuningCharacteristic = characteristic
       }
     }
   }
@@ -383,6 +387,39 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     }
     
     quadStatus.updateTelemetry(withData: data)
+  }
+  
+  func updatePID(axis : ControlAxis, type : PIDType, gains : PIDGains)
+  {
+    guard let characteristic = pidTuningCharacteristic else {
+      print("Error updating PIDs: No characteristic")
+      return
+    }
+    var controlAxis = axis.rawValue
+    var pidType = type.rawValue
+    var values : PIDValues
+    switch (axis) {
+    case .Yaw:
+      values = gains.yawGains
+    case .Pitch:
+      values = gains.pitchGains
+    case .Roll:
+      values = gains.rollGains
+    default:
+      fatalError("Unsupported axis \(axis)")
+    }
+    
+    var buffer = Data()
+    withUnsafeBytes(of: &controlAxis) {
+      buffer.append(contentsOf: $0)
+    }
+    withUnsafeBytes(of: &pidType) {
+      buffer.append(contentsOf: $0)
+    }
+    withUnsafeBytes(of: &values) {
+      buffer.append(contentsOf: $0)
+    }
+    device?.writeValue(buffer, for: characteristic, type: .withoutResponse)
   }
   
   private func updateDelegateState() {

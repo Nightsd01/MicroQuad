@@ -20,10 +20,12 @@ private class PreviousControlValues {
 struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   
   @ObservedObject var controller = BLEController()
+  var pidCalibrationController : PIDController!
   @ObservedObject var accelGyroCalibrationController = CalibrationController(calibrationType: .AccelerometerGyro)
   @ObservedObject var magnetometerCalibrationController = CalibrationController(calibrationType: .Magnetometer)
   @ObservedObject var magnetometerMotorCalibrationController = CalibrationController(calibrationType: .MagnetometerMotorsCompensation)
   @State private var showingPopover = false
+  @State private var showingPIDCalibrationPopover = false
   @State fileprivate var leftStickValues = PreviousControlValues(x : 0.0, y : 127.5)
   @State fileprivate var rightStickValues = PreviousControlValues(x : 127.5, y : 127.5)
   @State private var recordingDebugData = false
@@ -51,6 +53,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   }
   
   init(bleDisabled : Bool) {
+    pidCalibrationController = PIDController(controller: controller)
     leftStick.controlDelegate = self
     rightStick.controlDelegate = self
     if (!bleDisabled) {
@@ -95,6 +98,12 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
           Spacer()
         }
         HStack {
+          Button("PIDs"){
+            showingPIDCalibrationPopover = true
+          }
+          .popover(isPresented: $showingPIDCalibrationPopover) {
+            PIDAllAxisView(controller: pidCalibrationController, initialGains: pidCalibrationController.gains)
+          }
           Spacer()
           Button("Motor Debug") {
             showingPopover = true

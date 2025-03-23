@@ -24,6 +24,8 @@
 		CA9E90732D0FD26600E35D4E /* AlertModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA9E90722D0FD26600E35D4E /* AlertModels.swift */; };
 		CAC0037A2CE1A20A0008FD5A /* MemoryStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC003792CE1A20A0008FD5A /* MemoryStatusView.swift */; };
 		CAC77FB42A8322FA00E8ABA7 /* DGCharts in Frameworks */ = {isa = PBXBuildFile; productRef = CAC77FB32A8322FA00E8ABA7 /* DGCharts */; };
+		CAED1C302D8A561E001215E2 /* PIDDebuggerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAED1C2F2D8A561E001215E2 /* PIDDebuggerView.swift */; };
+		CAED1C322D8A5993001215E2 /* PIDControlller.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAED1C312D8A5993001215E2 /* PIDControlller.swift */; };
 		CAF03F7C2544D7A500D04771 /* QuadControllerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF03F7B2544D7A500D04771 /* QuadControllerApp.swift */; };
 		CAF03F7E2544D7A500D04771 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF03F7D2544D7A500D04771 /* ContentView.swift */; };
 		CAF03F802544D7A600D04771 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAF03F7F2544D7A600D04771 /* Assets.xcassets */; };
@@ -61,6 +63,8 @@
 		CA9E90722D0FD26600E35D4E /* AlertModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertModels.swift; sourceTree = "<group>"; };
 		CAC003762CE0483E0008FD5A /* QuadController-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "QuadController-Bridging-Header.h"; sourceTree = "<group>"; };
 		CAC003792CE1A20A0008FD5A /* MemoryStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStatusView.swift; sourceTree = "<group>"; };
+		CAED1C2F2D8A561E001215E2 /* PIDDebuggerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PIDDebuggerView.swift; sourceTree = "<group>"; };
+		CAED1C312D8A5993001215E2 /* PIDControlller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PIDControlller.swift; sourceTree = "<group>"; };
 		CAF03F782544D7A500D04771 /* QuadController.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuadController.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CAF03F7B2544D7A500D04771 /* QuadControllerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuadControllerApp.swift; sourceTree = "<group>"; };
 		CAF03F7D2544D7A500D04771 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -87,6 +91,7 @@
 				CA524550255225B500537AD4 /* BLEController.swift */,
 				CA011B0F2CF976A2006E5C74 /* CameraController.swift */,
 				CA011B132CFBF729006E5C74 /* CalibrationController.swift */,
+				CAED1C312D8A5993001215E2 /* PIDControlller.swift */,
 			);
 			path = Controllers;
 			sourceTree = "<group>";
@@ -102,6 +107,7 @@
 				CA2C3D8D25C78E15007BAF1F /* BatteryStatusView.swift */,
 				CA62A17126E5984400FFE119 /* DebuggerView.swift */,
 				CA011B112CFAA159006E5C74 /* CameraPreview.swift */,
+				CAED1C2F2D8A561E001215E2 /* PIDDebuggerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -251,10 +257,12 @@
 				CA8BF34F25BD035D007B3440 /* BLEStatusView.swift in Sources */,
 				CAF03F7E2544D7A500D04771 /* ContentView.swift in Sources */,
 				CA524551255225B500537AD4 /* BLEController.swift in Sources */,
+				CAED1C322D8A5993001215E2 /* PIDControlller.swift in Sources */,
 				CA9E90712D07DD4F00E35D4E /* WeakReference.swift in Sources */,
 				CA62E3D42546186A008C511B /* HelperExtensions.swift in Sources */,
 				CA62E3DE25462FB2008C511B /* StickConfiguration.swift in Sources */,
 				CA011B122CFAA159006E5C74 /* CameraPreview.swift in Sources */,
+				CAED1C302D8A561E001215E2 /* PIDDebuggerView.swift in Sources */,
 				CAF03F7C2544D7A500D04771 /* QuadControllerApp.swift in Sources */,
 				CA011B102CF976A2006E5C74 /* CameraController.swift in Sources */,
 				CA2C3D8E25C78E15007BAF1F /* BatteryStatusView.swift in Sources */,
