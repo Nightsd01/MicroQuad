@@ -21,6 +21,7 @@
 #include "MahonyAHRS.h"
 #include "MotorController.h"
 #include "MotorMagCompensationHandler.h"
+#include "PIDPreferences.h"
 #include "PersistentKeyValueStore.h"
 #include "PersistentKeysCommon.h"
 #include "PinDefines.h"
@@ -90,6 +91,8 @@ static IMU *_imu = NULL;
 static imu_output_t _imuValues;
 
 static volatile bool _calibrate = false;
+
+static PIDPreferences *_pidPreferences;
 
 MahonyAHRS ahrs;
 EulerAngle _euler;
@@ -511,8 +514,6 @@ void setup()
 
   _helper = new DebugHelper();
 
-  initController();
-
   // Wait for serial to become available
   while (!Serial);
 
@@ -556,6 +557,12 @@ void setup()
 
   // Setup BLE Server
   _bluetoothController.beginBluetooth();
+
+  LOG_INFO("Initializing PID preferences");
+  _pidPreferences = new PIDPreferences(&_bluetoothController, &_persistentKvStore);
+
+  LOG_INFO("Initializing quadcopter controller");
+  initController();
 
   LOG_INFO("Initializing telemetry controller");
   _telemetryController = new TelemetryController(&_bluetoothController);

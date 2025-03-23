@@ -18,4 +18,6 @@ const std::string GYRO_OFFSET_Z = "GYRO_OFFSET_Z";
 
 const std::string MAG_COMPENSATION_OFFSET_PREFIX = "MAGC_";
 
+const std::string PID_CONSTANTS_PREFIX = "PID_CONSTANTS_";
+
 };  // namespace PersistentKeysCommon
