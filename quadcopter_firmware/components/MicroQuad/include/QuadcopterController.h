@@ -50,19 +50,22 @@ class QuadcopterController
 {
  public:
   // Call this in arduino setup()
-  QuadcopterController(quadcopter_config_t config, DebugHelper *debugHelper, unsigned long timeMicros);
+  QuadcopterController(DebugHelper *debugHelper, unsigned long timeMicros);
 
   // Should be called at a relatively constant frequency with
   // new accel/gyro/compass readings.
   motor_outputs_t calculateOutputs(
-      imu_output_t imuValues, controller_values_t controllerValues, unsigned long timeMicros, bool recordData);
+      quadcopter_config_t config,
+      imu_output_t imuValues,
+      controller_values_t controllerValues,
+      unsigned long timeMicros,
+      bool recordData);
 
  private:
   std::array<std::unique_ptr<PIDController>, 3> _angleControllers;
   std::array<std::unique_ptr<PIDController>, 3> _rateControllers;
   double _throttle;
   double _previousUpdateMicros;
-  quadcopter_config_t _config;
   DebugHelper *_debugHelper;
   unsigned long _startTime;
   double _yawSetPointDegrees;

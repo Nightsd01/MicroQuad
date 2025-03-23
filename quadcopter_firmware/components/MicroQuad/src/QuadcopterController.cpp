@@ -20,14 +20,12 @@
 */
 
 // Public functions
-QuadcopterController::QuadcopterController(
-    quadcopter_config_t config, DebugHelper* debugHelper, unsigned long timeMicros)
+QuadcopterController::QuadcopterController(DebugHelper* debugHelper, unsigned long timeMicros)
 {
   _debugHelper = debugHelper;
-  _config = config;
   for (int i = 0; i < 3; i++) {
-    _angleControllers[i] = std::make_unique<PIDController>(config.angleGains[i], debugHelper);
-    _rateControllers[i] = std::make_unique<PIDController>(config.rateGains[i], debugHelper);
+    _angleControllers[i] = std::make_unique<PIDController>(debugHelper);
+    _rateControllers[i] = std::make_unique<PIDController>(debugHelper);
   }
 }
 
@@ -73,7 +71,11 @@ void QuadcopterController::_yawUpdate(
 // for debugging I understand degrees more intuitively, so I will leave this for
 // now
 motor_outputs_t QuadcopterController::calculateOutputs(
-    imu_output_t imuValues, controller_values_t controllerValues, unsigned long timeMicros, bool recordData)
+    quadcopter_config_t config,
+    imu_output_t imuValues,
+    controller_values_t controllerValues,
+    unsigned long timeMicros,
+    bool recordData)
 {
   const double throttle = (double)controllerValues.leftStickInput.y;  // 0.0 to 255.0
 
@@ -84,8 +86,6 @@ motor_outputs_t QuadcopterController::calculateOutputs(
   }
 
   _yawUpdate(timeMicros, controllerValues, imuValues);
-
-  LOG_INFO_PERIODIC_MILLIS(200, "Yaw setpoint: %f, current: %f", _yawSetPointDegrees, imuValues.yawPitchRollDegrees[0]);
 
   const double desiredPitchDelta =
       (controllerValues.rightStickInput.y - (INPUT_MAX_CONTROLLER_INPUT / 2.0f)) / (INPUT_MAX_CONTROLLER_INPUT / 2.0f);
@@ -107,13 +107,17 @@ motor_outputs_t QuadcopterController::calculateOutputs(
     // yaw/pitch/roll rate We then feed this into the rate controller to get the
     // desired motor output
     angleControllerOutputs[i] = _angleControllers[i]->computeOutput(
+        config.angleGains[i],
         DEG_TO_RAD(imuValues.yawPitchRollDegrees[i]),
         DEG_TO_RAD(desiredAnglesDegrees[i]),
         timeSeconds);
 
     // Calculate the rate controller result
-    rateControllerOutputs[i] =
-        _rateControllers[i]->computeOutput(DEG_TO_RAD(imuValues.gyroOutput[i]), angleControllerOutputs[i], timeSeconds);
+    rateControllerOutputs[i] = _rateControllers[i]->computeOutput(
+        config.rateGains[i],
+        DEG_TO_RAD(imuValues.gyroOutput[i]),
+        angleControllerOutputs[i],
+        timeSeconds);
   }
 
   // Axes 1

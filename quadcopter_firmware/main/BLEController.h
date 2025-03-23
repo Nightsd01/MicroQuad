@@ -2,6 +2,7 @@
 #define BLECONTROLLER_H
 
 #include <Arduino.h>
+#include <PIDController.h>
 
 #include <functional>
 #include <string>
@@ -11,6 +12,7 @@
 #include "BLEDevice.h"
 #include "BLEServer.h"
 #include "CalibrationEvent.h"
+#include "CrossPlatformEnum.h"
 #include "IMU.h"
 
 // Bluetooth constants
@@ -22,6 +24,7 @@
 #define MOTOR_DEBUG_CHARACTERISTIC_UUID "dec9fad6-0cf9-11ec-82a8-0242ac130003"
 #define CALIBRATION_CHARACTERISTIC_UUID "498e876e-0dd2-11ec-82a8-0242ac130003"
 #define DEBUG_CHARACTERISTIC_UUID "f0a0afee-0983-4691-adc5-02ee803f5418"
+#define PID_CONSTANTS_CHARACTERISTIC_UUID "58471750-7394-4659-bc69-09331eed05a3"
 
 #define DEVINFO_UUID (uint16_t)0x180a
 #define DEVINFO_MANUFACTURER_UUID (uint16_t)0x2a29
@@ -74,6 +77,8 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   void setCalibrationUpdateHandler(std::function<void(CalibrationType, CalibrationResponse)> calibrationUpdateHandler);
   void setDebugDataUpdateHandler(std::function<void(debug_recording_update_t)> debugDataUpdateHandler);
   void setTelemetryTransmissionCompleteHandler(std::function<void()> telemetryTransmissionCompleteHandler);
+  void setPIDConstantsUpdateHandler(
+      std::function<void(ControlAxis, PIDType, gains_t)> pidConstantsUpdateHandler);  // axis, angle + rate PIDs
 
   // Override methods from BLEServerCallbacks
   void onConnect(BLEServer *pServer) override;
@@ -94,6 +99,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   BLECharacteristic *_motorDebugCharacteristic;
   BLECharacteristic *_calibrationCharacteristic;
   BLECharacteristic *_debugCharacteristic;
+  BLECharacteristic *_pidConstantsCharacteristic;
 
   std::function<void(controls_update_t)> _controlsUpdateHandler;
   std::function<void(bool)> _armStatusUpdateHandler;
@@ -103,6 +109,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   std::function<void(CalibrationType, CalibrationResponse)> _calibrationUpdateHandler;
   std::function<void(debug_recording_update_t)> _debugDataUpdateHandler;
   std::function<void()> _telemetryTransmissionCompleteHandler;
+  std::function<void(ControlAxis, PIDType, gains_t)> _pidConstantsUpdateHandler;
 
   uint8_t *_debugData;
   size_t _debugDataSize;

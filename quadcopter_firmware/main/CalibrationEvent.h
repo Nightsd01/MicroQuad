@@ -23,3 +23,7 @@ CROSS_PLATFORM_ENUM(uint8_t, CalibrationResponse){
 
 CROSS_PLATFORM_ENUM(uint8_t, CalibrationType){
     AccelerometerGyro = 0, Magnetometer = 1, MagnetometerMotorsCompensation = 2};
+
+CROSS_PLATFORM_ENUM(uint8_t, ControlAxis){Yaw = 0, Pitch = 1, Roll = 2};
+
+CROSS_PLATFORM_ENUM(uint8_t, PIDType){Angle = 0, Rate = 1};

@@ -17,21 +17,20 @@ enum PIDAxis
 
 typedef struct gains_t
 {
-  double kP; // Kp
-  double kI; // Ki
-  double kD; // Kd
+  double kP;  // Kp
+  double kI;  // Ki
+  double kD;  // Kd
 } gains_t;
 
 class PIDController
 {
-public:
-  PIDController(gains_t gains, DebugHelper *helper);
+ public:
+  PIDController(DebugHelper *helper);
 
-  double computeOutput(double current, double set, double timeSeconds);
+  double computeOutput(gains_t gains, double current, double set, double timeSeconds);
 
-private:
+ private:
   DebugHelper *_helper;
-  gains_t _gains;
   double _previousError;
   double _integral;
   double _previousTimeSeconds;

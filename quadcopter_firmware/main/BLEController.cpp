@@ -131,6 +131,13 @@ void BLEController::beginBluetooth(void)
   _debugCharacteristic->setCallbacks(this);
   _debugCharacteristic->addDescriptor(new BLE2902());
 
+  _pidConstantsCharacteristic = _service->createCharacteristic(
+      PID_CONSTANTS_CHARACTERISTIC_UUID,
+      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+  _pidConstantsCharacteristic->setCallbacks(this);
+  _pidConstantsCharacteristic->addDescriptor(new BLE2902());
+  _pidConstantsCharacteristic->setWriteNoResponseProperty(true);
+
   // Set the MTU size
   esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
   if (status != ESP_OK) {
@@ -313,6 +320,34 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
     if (_debugDataUpdateHandler) {
       _debugDataUpdateHandler(debugDataUpdate);
     }
+  } else if (characteristic->getUUID().equals(_pidConstantsCharacteristic->getUUID())) {
+    LOG_INFO_ASYNC_ON_MAIN("Received PID constants update");
+    uint8_t *pidConstants = characteristic->getData();
+    if (characteristic->getLength() != 14) {
+      LOG_ERROR_ASYNC_ON_MAIN("Incorrect PID constants packet size %i", characteristic->getLength());
+      return;
+    }
+    // Assumes the following packet structure:
+    // byte 0 - axis enum
+    // byte 1 - PID type enum
+    // bytes 2 to 14 - angle gains (kp, ki, kd)
+    ControlAxis axis = (ControlAxis)pidConstants[0];
+    PIDType type = (PIDType)pidConstants[1];
+    gains_t gains = {
+        .kP = *((float *)&pidConstants[2]),
+        .kI = *((float *)&pidConstants[6]),
+        .kD = *((float *)&pidConstants[10]),
+    };
+    if (_pidConstantsUpdateHandler) {
+      // _pidConstantsUpdateHandler(axis, type, gains);
+      LOG_INFO_ASYNC_ON_MAIN(
+          "Updating PID constants for axis %d, type %d, p = %f, i = %f, d = %f",
+          axis,
+          type,
+          gains.kP,
+          gains.kI,
+          gains.kD);
+    }
   }
   // TODO: switch this to a mutex
   isProcessingBluetoothTransaction = false;
@@ -481,4 +516,10 @@ void BLEController::setTelemetryTransmissionCompleteHandler(std::function<void()
     return;
   }
   _telemetryTransmissionCompleteHandler = telemetryTransmissionCompleteHandler;
+}
+
+void BLEController::setPIDConstantsUpdateHandler(
+    std::function<void(ControlAxis, PIDType, gains_t)> pidConstantsUpdateHandler)
+{
+  _pidConstantsUpdateHandler = pidConstantsUpdateHandler;
 }

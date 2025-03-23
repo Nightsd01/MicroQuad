@@ -187,7 +187,8 @@ static void _gotMagUpdate(mag_update_t update)
   }
 
   EXECUTE_PERIODIC(1000, {
-    _telemetryController->updateTelemetryEvent(TelemetryEvent::MagnetometerXYZRaw, &update, sizeof(mag_update_t));
+    LOG_INFO("Sending mag update with heading %f, from update %f", _magValues.heading, update.heading);
+    _telemetryController->updateTelemetryEvent(TelemetryEvent::MagnetometerXYZRaw, &_magValues, sizeof(mag_update_t));
   });
 }
 
@@ -236,37 +237,7 @@ static DebugHelper *_helper;
 static void initController()
 {
   delete _controller;
-  _controller = new QuadcopterController(
-      {
-          .angleGains =
-              {{// yaw
-                .kP = 9.0f,
-                .kI = 0.01f,
-                .kD = 0.0f},
-                           {// pitch
-                .kP = 6.0f,
-                .kI = 0.0075f,
-                .kD = 0.1f},
-                           {// roll
-                .kP = 6.0f,
-                .kI = 0.0075f,
-                .kD = 0.1f}  },
-          .rateGains =
-              {{// yaw
-                .kP = 3.1f,
-                .kI = 0.01f,
-                .kD = 0.0005f},
-                           {// pitch
-                .kP = 5.0f,
-                .kI = 0.02f,
-                .kD = 0.003f},
-                           {// roll
-                .kP = 5.0f,
-                .kI = 0.02f,
-                .kD = 0.003f}}
-  },
-      _helper,
-      micros());
+  _controller = new QuadcopterController(_helper, micros());
 }
 
 static void _handleMagnetometerCalibration(CalibrationResponse response)
@@ -366,6 +337,14 @@ static controller_values_t _controllerValues = {
     .rightStickInput = {.x = INPUT_MAX_CONTROLLER_INPUT / 2.0, .y = INPUT_MAX_CONTROLLER_INPUT / 2.0}
 };
 
+static Vector3f _applyMisalignment(const Vector3f &v, const float mat[3][3])
+{
+  return {
+      .x = mat[0][0] * v.x + mat[0][1] * v.y + mat[0][2] * v.z,
+      .y = mat[1][0] * v.x + mat[1][1] * v.y + mat[1][2] * v.z,
+      .z = mat[2][0] * v.x + mat[2][1] * v.y + mat[2][2] * v.z};
+}
+
 static uint64_t _previousMicros = 0;
 static bool _receivedImuUpdate = false;
 static bool _gotFirstIMUUpdate = false;
@@ -403,6 +382,10 @@ static void _receivedIMUUpdate(imu_update_t update)
   Vector3f accelerometer = {update.accel_x, update.accel_y, update.accel_z};
   Vector3f mag = {_magValues.x, _magValues.y, _magValues.z};
 
+  gyroscope = _applyMisalignment(gyroscope, _misalignmentMatrix);
+  accelerometer = _applyMisalignment(accelerometer, _misalignmentMatrix);
+  mag = _applyMisalignment(mag, _misalignmentMatrix);
+
   _accelHistories[0].addValue(accelerometer.x);
   accelerometer.x = _accelHistories[0].getMedian();
   _accelHistories[1].addValue(accelerometer.y);
@@ -436,7 +419,7 @@ static void _receivedIMUUpdate(imu_update_t update)
   _euler = {.yaw = y, .pitch = p, .roll = r};
 
   _imuValues = {
-      .gyroOutput = {gyroscope.x, gyroscope.y,  gyroscope.z},
+      .gyroOutput = {gyroscope.z, gyroscope.y,  gyroscope.x},
       .yawPitchRollDegrees = {_euler.yaw,  _euler.pitch, _euler.roll}
   };
 
@@ -468,32 +451,26 @@ static void _receivedIMUUpdate(imu_update_t update)
   const int pg = digitalRead(BATTERY_PG_PIN);
 
   LOG_INFO_PERIODIC_MILLIS(
-      100,  // log at most up to every 100 millis
-      "%8ld, %i, %i, %i, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %8.2f, %6d, %6d, %6d, "
-      "%8.2f, %f, %f, %f",
-      millis(),
-      stat1,
-      stat2,
-      pg,
-      _euler.angle.yaw,
-      _euler.angle.pitch,
-      _euler.angle.roll,
-      update.accel_raw_x,
-      update.accel_raw_y,
-      update.accel_raw_z,
-      update.accel_x,
-      update.accel_y,
-      update.accel_z,
-      update.gyro_x,
-      update.gyro_y,
-      update.gyro_z,
-      (int)update.gyro_raw_x,
-      (int)update.gyro_raw_y,
-      (int)update.gyro_raw_z,
-      _magValues.heading,
-      update.gyro_dps_x,
-      update.gyro_dps_y,
-      update.gyro_dps_z);
+      100,
+      "YPR = %.2f, %.2f, %.2f, gyro = %.2f, %.2f, %.2f",
+      _euler.yaw,
+      _euler.pitch,
+      _euler.roll,
+      gyroscope.x,
+      gyroscope.y,
+      gyroscope.z);
+
+  // LOG_INFO_PERIODIC_MILLIS(
+  //     100,
+  //     "%i, %i, %i, %f, %f, %f, %f, %f Gauss",
+  //     stat1,
+  //     stat2,
+  //     pg,
+  //     _magValues.x,
+  //     _magValues.y,
+  //     _magValues.z,
+  //     _magValues.heading,
+  //     sqrt(pow(_magValues.x, 2) + pow(_magValues.y, 2) + pow(_magValues.z, 2)));
 
   _imuUpdateCounter++;
   EXECUTE_PERIODIC(1000, {
@@ -715,15 +692,15 @@ void loop()
   }
 
 #ifdef ENABLE_EMERGENCY_MODE
-  // Check if we need to enter into emergency mode
-  if (!_enteredEmergencyMode && (fabs(_euler.pitch) > 80.0f || fabs(_euler.roll) > 80.0f)) {
-    // The drone has entered into an unacceptable orientation - this kills
-    // the motors
-    _enteredEmergencyMode = true;
-    _armed = false;
-    _updateArmStatus();
-    LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.pitch, _euler.roll);
-  }
+  // // Check if we need to enter into emergency mode
+  // if (!_enteredEmergencyMode && (fabs(_euler.pitch) > 80.0f || fabs(_euler.roll) > 80.0f)) {
+  //   // The drone has entered into an unacceptable orientation - this kills
+  //   // the motors
+  //   _enteredEmergencyMode = true;
+  //   _armed = false;
+  //   _updateArmStatus();
+  //   LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.pitch, _euler.roll);
+  // }
 #endif
 
   if (_enteredEmergencyMode) {
@@ -765,7 +742,8 @@ void loop()
     beganRun = true;
   }
 
-  motor_outputs_t outputs = _controller->calculateOutputs(_imuValues, _controllerValues, micros(), _recordDebugData);
+  motor_outputs_t outputs =
+      _controller->calculateOutputs(_pidPreferences->gains, _imuValues, _controllerValues, micros(), _recordDebugData);
 
   _previousMotorOutputs = outputs;
 
