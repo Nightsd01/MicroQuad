@@ -479,6 +479,19 @@ static void _receivedIMUUpdate(imu_update_t update)
   });
 }
 
+static void _armProcedure(bool arm)
+{
+  if (arm) {
+    _imu->beginQuickGyroCalibration();
+    AsyncController::main.executeAfter(1000, []() {
+      _imu->completeQuickGyroCalibration();
+      _armed = true;
+    });
+    return;
+  }
+  _armed = false;
+}
+
 // Initial setup
 void setup()
 {
@@ -503,7 +516,7 @@ void setup()
     };
   });
 
-  _bluetoothController.setArmStatusUpdateHandler([&](bool armStatus) { _armed = armStatus; });
+  _bluetoothController.setArmStatusUpdateHandler([&](bool armStatus) { _armProcedure(armStatus); });
 
   _bluetoothController.setResetStatusUpdateHandler([&]() { _resetFlag = true; });
 
@@ -676,6 +689,16 @@ void loop()
   }
 
   _imu->loopHandler();
+
+  if (_motorDebugEnabled) {
+    LOG_INFO_PERIODIC_MILLIS(1000, "Motor debug mode enabled");
+    motor_outputs_t motors = {_motorDebugValues[0], _motorDebugValues[1], _motorDebugValues[2], _motorDebugValues[3]};
+    updateMotors(motors);
+    if (_recordDebugData) {
+      _helper->saveValues(micros());
+    }
+    return;
+  }
 
   if (!_receivedImuUpdate || !_receivedMagUpdate) {
     // Wait until we have both an IMU and magnetometer read before

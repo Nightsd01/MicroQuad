@@ -65,6 +65,11 @@ class IMU
   std::map<CalibrationResponse, std::function<void(void)>> calibrationHandlers(
       std::function<void(CalibrationRequest)> requestHandler);
 
+  // Called right after arming the quadcopter, and will do a short gyro calibration
+  // Assumes the quadcopter is sitting stationary when called
+  void beginQuickGyroCalibration(void);
+  void completeQuickGyroCalibration(void);
+
  private:
   SPIClass _spi;
   ICM42688 *_imu;
@@ -76,6 +81,10 @@ class IMU
   calib_data_t _accelCalibrationData;
   void _continueCalibration(imu_update_t update);
   PersistentKeyValueStore *_persistentKvStore;
+  bool _quickGyroCalibration = false;
+  int64_t _startedQuickGyroCalibrationTimeMillis = 0;
+  std::array<int64_t, 3> _quickCalibrationGyroSums;  // x, y, z
+  int64_t _numQuickGyroCalibrationSamples = 0;
 };
 
 #endif

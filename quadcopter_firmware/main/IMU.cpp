@@ -149,6 +149,13 @@ void IMU::loopHandler(void)
     update.gyro_dps_y = gyroDPS(update.gyro_y);
     update.gyro_dps_z = gyroDPS(update.gyro_z);
 
+    if (_quickGyroCalibration) {
+      _quickCalibrationGyroSums[0] += update.gyro_raw_x;
+      _quickCalibrationGyroSums[1] += update.gyro_raw_y;
+      _quickCalibrationGyroSums[2] += update.gyro_raw_z;
+      _numQuickGyroCalibrationSamples++;
+    }
+
     _updateHandler(update);
 
     _mostRecentUpdate = update;
@@ -160,6 +167,29 @@ void IMU::loopHandler(void)
       _continueCalibration(update);
     }
   }
+}
+
+void IMU::beginQuickGyroCalibration(void)
+{
+  _quickGyroCalibration = true;
+  _startedQuickGyroCalibrationTimeMillis = millis();
+  _quickCalibrationGyroSums = {0, 0, 0};
+}
+void IMU::completeQuickGyroCalibration(void)
+{
+  _quickGyroCalibration = false;
+  if (_numQuickGyroCalibrationSamples == 0) {
+    LOG_ERROR("No samples taken for quick gyro calibration");
+    return;
+  }
+  int16_t averages[3] = {
+      (int16_t)(_quickCalibrationGyroSums[0] / _numQuickGyroCalibrationSamples),
+      (int16_t)(_quickCalibrationGyroSums[1] / _numQuickGyroCalibrationSamples),
+      (int16_t)(_quickCalibrationGyroSums[2] / _numQuickGyroCalibrationSamples),
+  };
+  _imu->setGyrXOffset(averages[0]);
+  _imu->setGyrYOffset(averages[1]);
+  _imu->setGyrZOffset(averages[2]);
 }
 
 void IMU::_continueCalibration(imu_update_t update)
