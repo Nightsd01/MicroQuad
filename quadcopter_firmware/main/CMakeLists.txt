@@ -38,6 +38,7 @@ idf_component_register(
     REQUIRES ESP32Servo
     REQUIRES DShot
     REQUIRES nvs_flash
+    REQUIRES Adafruit_BME280
 )
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DENABLE_EMERGENCY_MODE")

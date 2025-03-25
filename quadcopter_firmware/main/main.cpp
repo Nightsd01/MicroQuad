@@ -12,6 +12,7 @@
 
 #include "AsyncController.h"
 #include "BLEController.h"
+#include "Barometer.h"
 #include "BatteryController.h"
 #include "Filters/KalmanFilter.h"
 #include "Filters/MedianFilter.h"
@@ -101,6 +102,10 @@ static const float _misalignmentMatrix[3][3] = {
     {0.7071f, 0.7071f,  0.0f},
     {0.0f,    0.0f,     1.0f}
 };
+
+static Barometer _barometer;
+static bool _receivedAltitudeUpdate = false;
+static float _relativeAltitudeMeters = 0.0f;
 
 MotorMagCompensationHandler *_motorMagCompensationHandler;
 
@@ -548,6 +553,15 @@ void setup()
   // Setup BLE Server
   _bluetoothController.beginBluetooth();
 
+  LOG_INFO("Initializing barometric sensor");
+  _barometer.begin(
+      [](float relativeAltMeters) {
+        _receivedAltitudeUpdate = true;
+        _relativeAltitudeMeters = relativeAltMeters;
+      },
+      0x76,
+      &Wire);
+
   LOG_INFO("Initializing PID preferences");
   _pidPreferences = new PIDPreferences(&_bluetoothController, &_persistentKvStore);
 
@@ -659,6 +673,11 @@ void loop()
   _compass->loopHandler();
   _bluetoothController.loopHandler();
   _batteryController->loopHandler();
+  _barometer.loopHandler();
+
+  if (_receivedAltitudeUpdate) {
+    LOG_INFO_PERIODIC_MILLIS(1000, "Altitude: %fm", _relativeAltitudeMeters);
+  }
 
   if (_armed != _previousArmStatus) {
     LOG_INFO("Updating arm LED");
