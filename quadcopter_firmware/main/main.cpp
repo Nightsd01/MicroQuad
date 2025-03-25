@@ -715,15 +715,15 @@ void loop()
   }
 
 #ifdef ENABLE_EMERGENCY_MODE
-  // // Check if we need to enter into emergency mode
-  // if (!_enteredEmergencyMode && (fabs(_euler.pitch) > 80.0f || fabs(_euler.roll) > 80.0f)) {
-  //   // The drone has entered into an unacceptable orientation - this kills
-  //   // the motors
-  //   _enteredEmergencyMode = true;
-  //   _armed = false;
-  //   _updateArmStatus();
-  //   LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.pitch, _euler.roll);
-  // }
+  // Check if we need to enter into emergency mode
+  if (!_enteredEmergencyMode && (fabs(_euler.pitch) > 80.0f || fabs(_euler.roll) > 80.0f)) {
+    // The drone has entered into an unacceptable orientation - this kills
+    // the motors
+    _enteredEmergencyMode = true;
+    _armed = false;
+    _updateArmStatus();
+    LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.pitch, _euler.roll);
+  }
 #endif
 
   if (_enteredEmergencyMode) {
@@ -743,15 +743,6 @@ void loop()
       }
       lightOn = !lightOn;
     });
-    return;
-  }
-
-  if (_motorDebugEnabled) {
-    motor_outputs_t motors = {_motorDebugValues[0], _motorDebugValues[1], _motorDebugValues[2], _motorDebugValues[3]};
-    updateMotors(motors);
-    if (_recordDebugData) {
-      _helper->saveValues(micros());
-    }
     return;
   }
 
