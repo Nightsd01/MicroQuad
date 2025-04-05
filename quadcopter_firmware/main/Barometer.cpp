@@ -2,14 +2,19 @@
 
 #include <Adafruit_BME280.h>
 #include <Arduino.h>
+#include <AsyncController.h>
 #include <Logger.h>
 #include <Wire.h>
+
+#include "TelemetryController.h"
+#include "TelemetryEvent.h"
 
 static float _altMeters(const float pressureHpa) { return 44330.0f * (1.0f - powf((pressureHpa / 1013.25f), 0.1903f)); }
 
 Barometer::Barometer() : _isInitialized(false), _referenceAltitude(0.0f) {}
 
-bool Barometer::begin(std::function<void(float)> altitudeHandler, uint8_t address, TwoWire *theWire)
+bool Barometer::begin(
+    std::function<void(float)> altitudeHandler, TelemetryController *telemController, uint8_t address, TwoWire *theWire)
 {
   if (!_bme.begin(address, theWire)) {
     LOG_ERROR("Could not find a valid BME280 sensor, check wiring!");
@@ -17,6 +22,7 @@ bool Barometer::begin(std::function<void(float)> altitudeHandler, uint8_t addres
   }
 
   _altitudeHandler = altitudeHandler;
+  _telemController = telemController;
 
   LOG_INFO("Connected to barometer - BME280 sensor");
 
@@ -40,7 +46,7 @@ void Barometer::loopHandler(void)
 
   const float pressureHpa = _bme.readPressure() / 100.0f;
   // Current altitude
-  const float currentAltMeters = _altMeters(pressureHpa);
+  float currentAltMeters = _altMeters(pressureHpa);
   // Return difference from reference altitude
   const float deltaAltMeters = (currentAltMeters - _referenceAltitude);
 
@@ -51,6 +57,10 @@ void Barometer::loopHandler(void)
     _numReferenceSamples++;
     _referenceAltitude = _referenceAltitudeMedianFilter.getMedian();
   }
+
+  EXECUTE_PERIODIC(100, {
+    _telemController->updateTelemetryEvent(TelemetryEvent::BarometricAltitudeUpdate, &currentAltMeters, sizeof(float));
+  });
 
   if (_altitudeHandler) {
     _altitudeHandler(_medianFilter.getMedian());

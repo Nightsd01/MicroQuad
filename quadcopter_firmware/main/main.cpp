@@ -559,6 +559,7 @@ void setup()
         _receivedAltitudeUpdate = true;
         _relativeAltitudeMeters = relativeAltMeters;
       },
+      _telemetryController,
       0x76,
       &Wire);
 

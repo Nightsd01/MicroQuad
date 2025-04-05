@@ -9,6 +9,7 @@
 #include "MedianFilter.h"
 
 class Adafruit_BME280;
+class TelemetryController;
 
 #define DATA_UPDATE_RATE_HZ 100.0f
 
@@ -20,11 +21,16 @@ class Barometer
 {
  public:
   Barometer();
-  bool begin(std::function<void(float)> altitudeHandler, uint8_t address = 0x76, TwoWire *theWire = &Wire);
+  bool begin(
+      std::function<void(float)> altitudeHandler,
+      TelemetryController *telemController,
+      uint8_t address = 0x76,
+      TwoWire *theWire = &Wire);
   void loopHandler(void);
 
  private:
   Adafruit_BME280 _bme;
+  TelemetryController *_telemController;
   MedianFilter<float> _medianFilter = MedianFilter<float>(MEDIAN_FILTER_SIZE);
   MedianFilter<float> _referenceAltitudeMedianFilter = MedianFilter<float>(MEDIAN_FILTER_SIZE);
   int _numReferenceSamples;
