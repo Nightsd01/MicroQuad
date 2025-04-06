@@ -38,8 +38,11 @@ idf_component_register(
     REQUIRES ESP32Servo
     REQUIRES DShot
     REQUIRES nvs_flash
+    REQUIRES Matrix
     REQUIRES Adafruit_BME280
+    REQUIRES esp-dsp
     REQUIRES VL53L1X
 )
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DENABLE_EMERGENCY_MODE")
+target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DUSE_ACCELERATION")

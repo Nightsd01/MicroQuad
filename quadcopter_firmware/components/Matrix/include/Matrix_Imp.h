@@ -4,6 +4,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "Matrix_AccelerationImp.h"
+
 template <typename T, size_t ROWS, size_t COLS>
 Matrix<T, ROWS, COLS>::Matrix(void)
 {
@@ -348,6 +350,14 @@ template <typename T, size_t R, size_t C, size_t K>
 Matrix<T, R, K> operator*(const Matrix<T, R, C>& A, const Matrix<T, C, K>& B)
 {
   Matrix<T, R, K> result;
+
+#ifdef USE_ACCELERATION
+  if constexpr (std::is_same_v<T, float> || std::is_same_v<T, int16_t>) {
+    performMultiplication<T, R, C, K>(A.data, B.data, result.data);
+    return result;
+  }
+#endif  // USE_ACCELERATION
+
   for (size_t i = 0; i < R; i++) {
     for (size_t j = 0; j < K; j++) {
       T sum = 0.0f;
