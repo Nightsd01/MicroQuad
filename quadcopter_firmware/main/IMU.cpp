@@ -149,11 +149,15 @@ void IMU::loopHandler(void)
     update.gyro_dps_y = gyroDPS(update.gyro_y);
     update.gyro_dps_z = gyroDPS(update.gyro_z);
 
-    if (_quickGyroCalibration) {
+    if (isQuickGyroCalibrationInProgress) {
       _quickCalibrationGyroSums[0] += update.gyro_raw_x;
       _quickCalibrationGyroSums[1] += update.gyro_raw_y;
       _quickCalibrationGyroSums[2] += update.gyro_raw_z;
       _numQuickGyroCalibrationSamples++;
+
+      if (millis() - _startedQuickGyroCalibrationTimeMillis >= QUICK_GYRO_CALIBRATION_DURATION_MILLIS) {
+        completeQuickGyroCalibration();
+      }
     }
 
     _updateHandler(update);
@@ -171,25 +175,40 @@ void IMU::loopHandler(void)
 
 void IMU::beginQuickGyroCalibration(void)
 {
-  _quickGyroCalibration = true;
+  isQuickGyroCalibrationInProgress = true;
   _startedQuickGyroCalibrationTimeMillis = millis();
   _quickCalibrationGyroSums = {0, 0, 0};
 }
+
+void IMU::cancelQuickGyroCalibration(void)
+{
+  isQuickGyroCalibrationInProgress = false;
+  _numQuickGyroCalibrationSamples = 0;
+  _quickCalibrationGyroSums = {0, 0, 0};
+  LOG_INFO("Quick gyro calibration cancelled");
+}
+
 void IMU::completeQuickGyroCalibration(void)
 {
-  _quickGyroCalibration = false;
+  isQuickGyroCalibrationInProgress = false;
   if (_numQuickGyroCalibrationSamples == 0) {
     LOG_ERROR("No samples taken for quick gyro calibration");
     return;
   }
+  float xOffset = _quickCalibrationGyroSums[0] / _numQuickGyroCalibrationSamples;
+  float yOffset = _quickCalibrationGyroSums[1] / _numQuickGyroCalibrationSamples;
+  float zOffset = _quickCalibrationGyroSums[2] / _numQuickGyroCalibrationSamples;
+
+  LOG_INFO("Quick gyro calibration complete! %.2f, %.2f, %.2f", xOffset, yOffset, zOffset);
   int16_t averages[3] = {
-      (int16_t)(_quickCalibrationGyroSums[0] / _numQuickGyroCalibrationSamples),
-      (int16_t)(_quickCalibrationGyroSums[1] / _numQuickGyroCalibrationSamples),
-      (int16_t)(_quickCalibrationGyroSums[2] / _numQuickGyroCalibrationSamples),
+      (int16_t)(xOffset),
+      (int16_t)(yOffset),
+      (int16_t)(zOffset),
   };
   _imu->setGyrXOffset(averages[0]);
   _imu->setGyrYOffset(averages[1]);
   _imu->setGyrZOffset(averages[2]);
+  completedQuickCalibration = true;
 }
 
 void IMU::_continueCalibration(imu_update_t update)

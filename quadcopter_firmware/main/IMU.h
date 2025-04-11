@@ -15,6 +15,7 @@
 
 #define NUM_CALIBRATION_SAMPLES_PER_AXIS 5000
 #define CALIB_MEDIAN_FILTER_WINDOW 20
+#define QUICK_GYRO_CALIBRATION_DURATION_MILLIS 2000
 
 struct calib_data_t
 {
@@ -64,11 +65,14 @@ class IMU
   void loopHandler(void);
   std::map<CalibrationResponse, std::function<void(void)>> calibrationHandlers(
       std::function<void(CalibrationRequest)> requestHandler);
+  bool completedQuickCalibration = false;
 
   // Called right after arming the quadcopter, and will do a short gyro calibration
   // Assumes the quadcopter is sitting stationary when called
   void beginQuickGyroCalibration(void);
+  void cancelQuickGyroCalibration(void);
   void completeQuickGyroCalibration(void);
+  bool isQuickGyroCalibrationInProgress = false;
 
  private:
   SPIClass _spi;
