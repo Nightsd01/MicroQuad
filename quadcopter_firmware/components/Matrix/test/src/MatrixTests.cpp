@@ -686,7 +686,7 @@ TEST(MatrixDotFloatTests, VectorCaseGeneral)
 // == MATRIX SUBMATRIX TESTS (INTEGER) - CORRECTED EXPECT_THROW ==
 // ========================================================================
 
-TEST(MatrixSubmatrixIntTests, ExtractMiddle)
+TEST(MatrixSliceIntTests, ExtractMiddle)
 {
   const Matrix<int, 3, 4> A = {
       {1, 2,  3,  4 },
@@ -697,11 +697,11 @@ TEST(MatrixSubmatrixIntTests, ExtractMiddle)
       {6,  7 },
       {10, 11}
   };
-  auto result = A.submatrix<2, 2>(1, 1);
+  auto result = A.slice<2, 2>(1, 1);
   EXPECT_EQ(result, expected);
 }
 
-TEST(MatrixSubmatrixIntTests, ExtractTopLeft)
+TEST(MatrixSliceIntTests, ExtractTopLeft)
 {
   const Matrix<int, 3, 4> A = {
       {1, 2,  3,  4 },
@@ -712,11 +712,11 @@ TEST(MatrixSubmatrixIntTests, ExtractTopLeft)
       {1, 2, 3},
       {5, 6, 7}
   };
-  auto result = A.submatrix<2, 3>(0, 0);
+  auto result = A.slice<2, 3>(0, 0);
   EXPECT_EQ(result, expected);
 }
 
-TEST(MatrixSubmatrixIntTests, ExtractBottomRight)
+TEST(MatrixSliceIntTests, ExtractBottomRight)
 {
   const Matrix<int, 3, 4> A = {
       {1, 2,  3,  4 },
@@ -727,11 +727,11 @@ TEST(MatrixSubmatrixIntTests, ExtractBottomRight)
       {7,  8 },
       {11, 12}
   };
-  auto result = A.submatrix<2, 2>(1, 2);
+  auto result = A.slice<2, 2>(1, 2);
   EXPECT_EQ(result, expected);
 }
 
-TEST(MatrixSubmatrixIntTests, ExtractRow)
+TEST(MatrixSliceIntTests, ExtractRow)
 {
   const Matrix<int, 3, 4> A = {
       {1, 2,  3,  4 },
@@ -741,11 +741,11 @@ TEST(MatrixSubmatrixIntTests, ExtractRow)
   Matrix<int, 1, 4> expected = {
       {5, 6, 7, 8}
   };
-  auto result = A.submatrix<1, 4>(1, 0);
+  auto result = A.slice<1, 4>(1, 0);
   EXPECT_EQ(result, expected);
 }
 
-TEST(MatrixSubmatrixIntTests, ExtractColumn)
+TEST(MatrixSliceIntTests, ExtractColumn)
 {
   const Matrix<int, 3, 4> A = {
       {1, 2,  3,  4 },
@@ -753,11 +753,11 @@ TEST(MatrixSubmatrixIntTests, ExtractColumn)
       {9, 10, 11, 12}
   };
   Matrix<int, 3, 1> expected = {{3}, {7}, {11}};
-  auto result = A.submatrix<3, 1>(0, 2);
+  auto result = A.slice<3, 1>(0, 2);
   EXPECT_EQ(result, expected);
 }
 
-TEST(MatrixSubmatrixIntTests, ExtractElement)
+TEST(MatrixSliceIntTests, ExtractElement)
 {
   const Matrix<int, 3, 4> A = {
       {1, 2,  3,  4 },
@@ -765,11 +765,11 @@ TEST(MatrixSubmatrixIntTests, ExtractElement)
       {9, 10, 11, 12}
   };
   Matrix<int, 1, 1> expected = {{10}};
-  auto result = A.submatrix<1, 1>(2, 1);
+  auto result = A.slice<1, 1>(2, 1);
   EXPECT_EQ(result, expected);
 }
 
-TEST(MatrixSubmatrixIntTests, ExtractFullMatrix)
+TEST(MatrixSliceIntTests, ExtractFullMatrix)
 {
   const Matrix<int, 3, 4> A = {
       {1, 2,  3,  4 },
@@ -777,41 +777,39 @@ TEST(MatrixSubmatrixIntTests, ExtractFullMatrix)
       {9, 10, 11, 12}
   };
   Matrix<int, 3, 4> expected = A;
-  auto result = A.submatrix<3, 4>(0, 0);
+  auto result = A.slice<3, 4>(0, 0);
   EXPECT_EQ(result, expected);
 }
 
 // --- Bounds Checking Tests (Integer) ---
 
-TEST(MatrixSubmatrixIntTests, BoundsCheckRow)
+TEST(MatrixSliceIntTests, BoundsCheckRow)
 {
   const Matrix<int, 3, 4> A = {
       {1, 2,  3,  4 },
       {5, 6,  7,  8 },
       {9, 10, 11, 12}
   };
-  // CORRECTED: Added extra parentheses around A.submatrix<...>(...)
-  EXPECT_THROW((A.submatrix<2, 2>(2, 0)), std::out_of_range)
-      << "Submatrix starting row + subrows exceeds original rows";
+  // CORRECTED: Added extra parentheses around A.slice<...>(...)
+  EXPECT_THROW((A.slice<2, 2>(2, 0)), std::out_of_range) << "Slice starting row + subrows exceeds original rows";
 }
 
-TEST(MatrixSubmatrixIntTests, BoundsCheckCol)
+TEST(MatrixSliceIntTests, BoundsCheckCol)
 {
   const Matrix<int, 3, 4> A = {
       {1, 2,  3,  4 },
       {5, 6,  7,  8 },
       {9, 10, 11, 12}
   };
-  // CORRECTED: Added extra parentheses around A.submatrix<...>(...)
-  EXPECT_THROW((A.submatrix<2, 3>(0, 2)), std::out_of_range)
-      << "Submatrix starting col + subcols exceeds original cols";
+  // CORRECTED: Added extra parentheses around A.slice<...>(...)
+  EXPECT_THROW((A.slice<2, 3>(0, 2)), std::out_of_range) << "Slice starting col + subcols exceeds original cols";
 }
 
 // ========================================================================
 // == MATRIX SUBMATRIX TESTS (FLOAT) - CORRECTED EXPECT_THROW ==
 // ========================================================================
 
-TEST(MatrixSubmatrixFloatTests, ExtractMiddle)
+TEST(MatrixSliceFloatTests, ExtractMiddle)
 {
   const Matrix<float, 3, 3> A = {
       {1.1f, 1.2f, 1.3f}, // Non-const due to helper
@@ -822,11 +820,11 @@ TEST(MatrixSubmatrixFloatTests, ExtractMiddle)
       {2.2f, 2.3f},
       {3.2f, 3.3f}
   };
-  auto result = A.submatrix<2, 2>(1, 1);
+  auto result = A.slice<2, 2>(1, 1);
   _assertRoughlyEqual(result, expected);
 }
 
-TEST(MatrixSubmatrixFloatTests, ExtractColumn)
+TEST(MatrixSliceFloatTests, ExtractColumn)
 {
   const Matrix<float, 3, 3> A = {
       {1.1f, 1.2f, 1.3f}, // Non-const due to helper
@@ -834,52 +832,52 @@ TEST(MatrixSubmatrixFloatTests, ExtractColumn)
       {3.1f, 3.2f, 3.3f}
   };
   Matrix<float, 3, 1> expected = {{1.3f}, {2.3f}, {3.3f}};  // Corrected: Extract Col 2
-  auto result = A.submatrix<3, 1>(0, 2);                    // Corrected: Start at col 2
+  auto result = A.slice<3, 1>(0, 2);                        // Corrected: Start at col 2
   _assertRoughlyEqual(result, expected);
 }
 
-TEST(MatrixSubmatrixFloatTests, ExtractFullMatrix)
+TEST(MatrixSliceFloatTests, ExtractFullMatrix)
 {
   const Matrix<float, 2, 2> A = {
       {1.0f,  -1.0f}, // Non-const due to helper
       {-2.0f, 2.0f }
   };
   Matrix<float, 2, 2> expected = A;
-  auto result = A.submatrix<2, 2>(0, 0);
+  auto result = A.slice<2, 2>(0, 0);
   _assertRoughlyEqual(result, expected);
 }
 
 // --- Bounds Checking Tests (Float) ---
 
-TEST(MatrixSubmatrixFloatTests, BoundsCheckRowAndCol)
+TEST(MatrixSliceFloatTests, BoundsCheckRowAndCol)
 {
   const Matrix<float, 3, 3> A = {
       {1.1f, 1.2f, 1.3f},
       {2.1f, 2.2f, 2.3f},
       {3.1f, 3.2f, 3.3f}
   };
-  // CORRECTED: Added extra parentheses around A.submatrix<...>(...)
-  EXPECT_THROW((A.submatrix<2, 2>(2, 2)), std::out_of_range) << "Submatrix dimensions exceed bounds starting at (2, 2)";
+  // CORRECTED: Added extra parentheses around A.slice<...>(...)
+  EXPECT_THROW((A.slice<2, 2>(2, 2)), std::out_of_range) << "Slice dimensions exceed bounds starting at (2, 2)";
 }
 
-TEST(MatrixSubmatrixFloatTests, BoundsCheckStartOutOfBounds)
+TEST(MatrixSliceFloatTests, BoundsCheckStartOutOfBounds)
 {
   const Matrix<float, 3, 3> A = {
       {1.1f, 1.2f, 1.3f},
       {2.1f, 2.2f, 2.3f},
       {3.1f, 3.2f, 3.3f}
   };
-  // CORRECTED: Added extra parentheses around A.submatrix<...>(...)
-  EXPECT_THROW((A.submatrix<1, 1>(3, 0)), std::out_of_range) << "Submatrix starting row is out of bounds";
-  // CORRECTED: Added extra parentheses around A.submatrix<...>(...)
-  EXPECT_THROW((A.submatrix<1, 1>(0, 3)), std::out_of_range) << "Submatrix starting col is out of bounds";
+  // CORRECTED: Added extra parentheses around A.slice<...>(...)
+  EXPECT_THROW((A.slice<1, 1>(3, 0)), std::out_of_range) << "Slice starting row is out of bounds";
+  // CORRECTED: Added extra parentheses around A.slice<...>(...)
+  EXPECT_THROW((A.slice<1, 1>(0, 3)), std::out_of_range) << "Slice starting col is out of bounds";
 }
 
 // ========================================================================
 // == MATRIX SETSUBMATRIX TESTS (INTEGER) ==
 // ========================================================================
 
-TEST(MatrixSetSubmatrixIntTests, SetMiddle)
+TEST(MatrixSetSliceIntTests, SetMiddle)
 {
   // Target matrix (MUST be non-const as it will be modified)
   Matrix<int, 3, 4> A = {
@@ -888,7 +886,7 @@ TEST(MatrixSetSubmatrixIntTests, SetMiddle)
       {0, 0, 0, 0}
   };
 
-  // Submatrix to insert (can be const)
+  // Slice to insert (can be const)
   const Matrix<int, 2, 2> sub = {
       {9, 8},
       {7, 6}
@@ -903,13 +901,13 @@ TEST(MatrixSetSubmatrixIntTests, SetMiddle)
   };
 
   // Perform the operation
-  A.setSubmatrix<2, 2>(1, 1, sub);  // Set 2x2 starting at (1, 1)
+  A.setSlice<2, 2>(1, 1, sub);  // Set 2x2 starting at (1, 1)
 
   // Assert that A now matches the expected state
   EXPECT_EQ(A, expected);
 }
 
-TEST(MatrixSetSubmatrixIntTests, SetTopLeftOverwriting)
+TEST(MatrixSetSliceIntTests, SetTopLeftOverwriting)
 {
   // Start with non-zero data to test overwriting
   Matrix<int, 3, 3> A = {
@@ -926,11 +924,11 @@ TEST(MatrixSetSubmatrixIntTests, SetTopLeftOverwriting)
       {3, 4, 9},
       {9, 9, 9}
   };
-  A.setSubmatrix<2, 2>(0, 0, sub);  // Set 2x2 starting at (0, 0)
+  A.setSlice<2, 2>(0, 0, sub);  // Set 2x2 starting at (0, 0)
   EXPECT_EQ(A, expected);
 }
 
-TEST(MatrixSetSubmatrixIntTests, SetBottomRight)
+TEST(MatrixSetSliceIntTests, SetBottomRight)
 {
   Matrix<int, 3, 3> A = {
       {0, 0, 0},
@@ -946,11 +944,11 @@ TEST(MatrixSetSubmatrixIntTests, SetBottomRight)
       {0, 1, 2},
       {0, 3, 4}
   };
-  A.setSubmatrix<2, 2>(1, 1, sub);  // Set 2x2 starting at (1, 1)
+  A.setSlice<2, 2>(1, 1, sub);  // Set 2x2 starting at (1, 1)
   EXPECT_EQ(A, expected);
 }
 
-TEST(MatrixSetSubmatrixIntTests, SetRow)
+TEST(MatrixSetSliceIntTests, SetRow)
 {
   Matrix<int, 3, 4> A = {
       {1, 1, 1, 1},
@@ -965,11 +963,11 @@ TEST(MatrixSetSubmatrixIntTests, SetRow)
       {5, 6, 7, 8}, // Row 1 should be replaced
       {1, 1, 1, 1}
   };
-  A.setSubmatrix<1, 4>(1, 0, subRow);  // Set row 1 starting at (1,0)
+  A.setSlice<1, 4>(1, 0, subRow);  // Set row 1 starting at (1,0)
   EXPECT_EQ(A, expected);
 }
 
-TEST(MatrixSetSubmatrixIntTests, SetColumn)
+TEST(MatrixSetSliceIntTests, SetColumn)
 {
   Matrix<int, 3, 4> A = {
       {1, 1, 1, 1},
@@ -982,11 +980,11 @@ TEST(MatrixSetSubmatrixIntTests, SetColumn)
       {1, 20, 1, 1}, // Column 1 should be replaced
       {1, 30, 1, 1}
   };
-  A.setSubmatrix<3, 1>(0, 1, subCol);  // Set column 1 starting at (0,1)
+  A.setSlice<3, 1>(0, 1, subCol);  // Set column 1 starting at (0,1)
   EXPECT_EQ(A, expected);
 }
 
-TEST(MatrixSetSubmatrixIntTests, SetElement)
+TEST(MatrixSetSliceIntTests, SetElement)
 {
   Matrix<int, 2, 2> A = {
       {1, 2},
@@ -997,11 +995,11 @@ TEST(MatrixSetSubmatrixIntTests, SetElement)
       {1,  2},
       {-9, 4}
   };
-  A.setSubmatrix<1, 1>(1, 0, subElement);  // Set element at (1,0)
+  A.setSlice<1, 1>(1, 0, subElement);  // Set element at (1,0)
   EXPECT_EQ(A, expected);
 }
 
-TEST(MatrixSetSubmatrixIntTests, SetFullMatrix)
+TEST(MatrixSetSliceIntTests, SetFullMatrix)
 {
   Matrix<int, 2, 3> A = {
       {0, 0, 0},
@@ -1012,26 +1010,26 @@ TEST(MatrixSetSubmatrixIntTests, SetFullMatrix)
       {4, 5, 6}
   };
   Matrix<int, 2, 3> expected = subFull;  // Expect A to become identical to sub
-  A.setSubmatrix<2, 3>(0, 0, subFull);   // Set 2x3 starting at (0,0)
+  A.setSlice<2, 3>(0, 0, subFull);       // Set 2x3 starting at (0,0)
   EXPECT_EQ(A, expected);
 }
 
 // --- Bounds Checking Tests (Integer) ---
 
-TEST(MatrixSetSubmatrixIntTests, BoundsCheckRow)
+TEST(MatrixSetSliceIntTests, BoundsCheckRow)
 {
   Matrix<int, 3, 3> A;  // Target matrix (non-const)
   const Matrix<int, 2, 2> sub = {
       {1, 1},
       {1, 1}
-  };  // Submatrix to insert
+  };  // Slice to insert
   // Attempt to set 2x2 starting at row 2 (needs rows 2, 3; A only has 0, 1, 2)
   // Remember extra parentheses for EXPECT_THROW argument!
-  EXPECT_THROW((A.setSubmatrix<2, 2>(2, 0, sub)), std::out_of_range)
-      << "setSubmatrix starting row + subrows exceeds original rows";
+  EXPECT_THROW((A.setSlice<2, 2>(2, 0, sub)), std::out_of_range)
+      << "setSlice starting row + subrows exceeds original rows";
 }
 
-TEST(MatrixSetSubmatrixIntTests, BoundsCheckCol)
+TEST(MatrixSetSliceIntTests, BoundsCheckCol)
 {
   Matrix<int, 3, 3> A;
   const Matrix<int, 2, 2> sub = {
@@ -1039,24 +1037,24 @@ TEST(MatrixSetSubmatrixIntTests, BoundsCheckCol)
       {1, 1}
   };
   // Attempt to set 2x2 starting at col 2 (needs cols 2, 3; A only has 0, 1, 2)
-  EXPECT_THROW((A.setSubmatrix<2, 2>(0, 2, sub)), std::out_of_range)
-      << "setSubmatrix starting col + subcols exceeds original cols";
+  EXPECT_THROW((A.setSlice<2, 2>(0, 2, sub)), std::out_of_range)
+      << "setSlice starting col + subcols exceeds original cols";
 }
 
-TEST(MatrixSetSubmatrixIntTests, BoundsCheckStartOutOfBounds)
+TEST(MatrixSetSliceIntTests, BoundsCheckStartOutOfBounds)
 {
   Matrix<int, 3, 3> A;
   const Matrix<int, 1, 1> sub = {{1}};
   // Attempt to start placement outside the matrix bounds
-  EXPECT_THROW((A.setSubmatrix<1, 1>(3, 0, sub)), std::out_of_range) << "setSubmatrix starting row is out of bounds";
-  EXPECT_THROW((A.setSubmatrix<1, 1>(0, 3, sub)), std::out_of_range) << "setSubmatrix starting col is out of bounds";
+  EXPECT_THROW((A.setSlice<1, 1>(3, 0, sub)), std::out_of_range) << "setSlice starting row is out of bounds";
+  EXPECT_THROW((A.setSlice<1, 1>(0, 3, sub)), std::out_of_range) << "setSlice starting col is out of bounds";
 }
 
 // ========================================================================
 // == MATRIX SETSUBMATRIX TESTS (FLOAT) ==
 // ========================================================================
 
-TEST(MatrixSetSubmatrixFloatTests, SetMiddle)
+TEST(MatrixSetSliceFloatTests, SetMiddle)
 {
   // Target matrix (non-const)
   Matrix<float, 3, 3> A = {
@@ -1074,11 +1072,11 @@ TEST(MatrixSetSubmatrixFloatTests, SetMiddle)
       {9.9f, 2.1f, 2.2f},
       {9.9f, 9.9f, 9.9f}
   };
-  A.setSubmatrix<2, 2>(0, 1, sub);  // Set 2x2 starting at (0, 1)
+  A.setSlice<2, 2>(0, 1, sub);  // Set 2x2 starting at (0, 1)
   _assertRoughlyEqual(A, expected);
 }
 
-TEST(MatrixSetSubmatrixFloatTests, SetFullMatrix)
+TEST(MatrixSetSliceFloatTests, SetFullMatrix)
 {
   Matrix<float, 2, 2> A = {
       {0.0f, 0.0f},
@@ -1089,11 +1087,11 @@ TEST(MatrixSetSubmatrixFloatTests, SetFullMatrix)
       {-2.5f, 2.5f }
   };
   Matrix<float, 2, 2> expected = sub;  // Make a copy for the helper
-  A.setSubmatrix<2, 2>(0, 0, sub);
+  A.setSlice<2, 2>(0, 0, sub);
   _assertRoughlyEqual(A, expected);
 }
 
-TEST(MatrixSetSubmatrixFloatTests, SetRow)
+TEST(MatrixSetSliceFloatTests, SetRow)
 {
   Matrix<float, 2, 3> A = {
       {1.0f, 2.0f, 3.0f},
@@ -1106,29 +1104,29 @@ TEST(MatrixSetSubmatrixFloatTests, SetRow)
       {9.1f, 9.2f, 9.3f}, // Row 0 replaced
       {4.0f, 5.0f, 6.0f}
   };
-  A.setSubmatrix<1, 3>(0, 0, sub);  // Set row 0
+  A.setSlice<1, 3>(0, 0, sub);  // Set row 0
   _assertRoughlyEqual(A, expected);
 }
 
 // --- Bounds Checking Tests (Float) ---
 
-TEST(MatrixSetSubmatrixFloatTests, BoundsCheckRowAndCol)
+TEST(MatrixSetSliceFloatTests, BoundsCheckRowAndCol)
 {
   Matrix<float, 3, 3> A;  // Target
   const Matrix<float, 2, 2> sub = {
       {1.f, 1.f},
       {1.f, 1.f}
-  };  // Submatrix
+  };  // Slice
   // Attempt to set 2x2 starting at (2, 2) - needs rows 2,3 and cols 2,3
-  EXPECT_THROW((A.setSubmatrix<2, 2>(2, 2, sub)), std::out_of_range)
-      << "setSubmatrix dimensions exceed bounds starting at (2, 2)";
+  EXPECT_THROW((A.setSlice<2, 2>(2, 2, sub)), std::out_of_range)
+      << "setSlice dimensions exceed bounds starting at (2, 2)";
 }
 
-TEST(MatrixSetSubmatrixFloatTests, BoundsCheckStartOutOfBounds)
+TEST(MatrixSetSliceFloatTests, BoundsCheckStartOutOfBounds)
 {
   Matrix<float, 3, 3> A;
   const Matrix<float, 1, 1> sub = {{1.f}};
   // Attempt to start placement outside the matrix bounds
-  EXPECT_THROW((A.setSubmatrix<1, 1>(3, 0, sub)), std::out_of_range) << "setSubmatrix starting row is out of bounds";
-  EXPECT_THROW((A.setSubmatrix<1, 1>(0, 3, sub)), std::out_of_range) << "setSubmatrix starting col is out of bounds";
+  EXPECT_THROW((A.setSlice<1, 1>(3, 0, sub)), std::out_of_range) << "setSlice starting row is out of bounds";
+  EXPECT_THROW((A.setSlice<1, 1>(0, 3, sub)), std::out_of_range) << "setSlice starting col is out of bounds";
 }

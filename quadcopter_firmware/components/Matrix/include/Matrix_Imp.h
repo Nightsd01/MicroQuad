@@ -209,15 +209,15 @@ Matrix<T, ROWS, COLS> Matrix<T, ROWS, COLS>::invert(void) const
 
 template <typename T, size_t ROWS, size_t COLS>
 template <size_t SUBROWS, size_t SUBCOLS>
-Matrix<T, SUBROWS, SUBCOLS> Matrix<T, ROWS, COLS>::submatrix(size_t row, size_t col) const
+Matrix<T, SUBROWS, SUBCOLS> Matrix<T, ROWS, COLS>::slice(size_t row, size_t col) const
 {
-  static_assert(SUBROWS <= ROWS, "Submatrix rows exceed original matrix rows");
-  static_assert(SUBCOLS <= COLS, "Submatrix columns exceed original matrix columns");
-  static_assert(SUBROWS > 0, "Submatrix rows must be greater than zero");
-  static_assert(SUBCOLS > 0, "Submatrix columns must be greater than zero");
+  static_assert(SUBROWS <= ROWS, "Slice rows exceed original matrix rows");
+  static_assert(SUBCOLS <= COLS, "Slice columns exceed original matrix columns");
+  static_assert(SUBROWS > 0, "Slice rows must be greater than zero");
+  static_assert(SUBCOLS > 0, "Slice columns must be greater than zero");
   Matrix<T, SUBROWS, SUBCOLS> subMatrix;
   if (row + SUBROWS > ROWS || col + SUBCOLS > COLS) {
-    throw std::out_of_range("Submatrix exceeds original matrix bounds");
+    throw std::out_of_range("Slice exceeds original matrix bounds");
   }
   for (size_t i = 0; i < SUBROWS; i++) {
     for (size_t j = 0; j < SUBCOLS; j++) {
@@ -229,14 +229,14 @@ Matrix<T, SUBROWS, SUBCOLS> Matrix<T, ROWS, COLS>::submatrix(size_t row, size_t 
 
 template <typename T, size_t ROWS, size_t COLS>
 template <size_t SUBROWS, size_t SUBCOLS>
-void Matrix<T, ROWS, COLS>::setSubmatrix(size_t row, size_t col, Matrix<T, SUBROWS, SUBCOLS> sub)
+void Matrix<T, ROWS, COLS>::setSlice(size_t row, size_t col, Matrix<T, SUBROWS, SUBCOLS> sub)
 {
-  static_assert(SUBROWS <= ROWS, "Submatrix rows exceed original matrix rows");
-  static_assert(SUBCOLS <= COLS, "Submatrix columns exceed original matrix columns");
-  static_assert(SUBROWS > 0, "Submatrix rows must be greater than zero");
-  static_assert(SUBCOLS > 0, "Submatrix columns must be greater than zero");
+  static_assert(SUBROWS <= ROWS, "Slice rows exceed original matrix rows");
+  static_assert(SUBCOLS <= COLS, "Slice columns exceed original matrix columns");
+  static_assert(SUBROWS > 0, "Slice rows must be greater than zero");
+  static_assert(SUBCOLS > 0, "Slice columns must be greater than zero");
   if (row + SUBROWS > ROWS || col + SUBCOLS > COLS) {
-    throw std::out_of_range("Submatrix exceeds original matrix bounds");
+    throw std::out_of_range("Slice exceeds original matrix bounds");
   }
   for (size_t i = 0; i < SUBROWS; i++) {
     for (size_t j = 0; j < SUBCOLS; j++) {

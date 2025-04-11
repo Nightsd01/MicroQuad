@@ -58,11 +58,11 @@ class Matrix
 
   // Access sub-matrix copy (row, col)
   template <size_t SUBROWS, size_t SUBCOLS>
-  inline Matrix<T, SUBROWS, SUBCOLS> submatrix(size_t row, size_t col) const __attribute__((always_inline));
+  inline Matrix<T, SUBROWS, SUBCOLS> slice(size_t row, size_t col) const __attribute__((always_inline));
 
   // Access sub-matrix copy (row, col)
   template <size_t SUBROWS, size_t SUBCOLS>
-  inline void setSubmatrix(size_t row, size_t col, Matrix<T, SUBROWS, SUBCOLS> sub) __attribute__((always_inline));
+  inline void setSlice(size_t row, size_t col, Matrix<T, SUBROWS, SUBCOLS> sub) __attribute__((always_inline));
 };
 
 // -----------------------------------------------------------------------------
