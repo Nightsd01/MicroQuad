@@ -10,6 +10,8 @@
 #include <QMC5883L.h>
 #include <esp_partition.h>
 
+#include <algorithm>
+
 #include "AsyncController.h"
 #include "BLEController.h"
 #include "Barometer.h"
@@ -20,6 +22,7 @@
 #include "LEDController.h"
 #include "Logger.h"
 #include "MahonyAHRS.h"
+#include "MotionDetector.h"
 #include "MotorController.h"
 #include "MotorMagCompensationHandler.h"
 #include "PIDPreferences.h"
@@ -94,6 +97,10 @@ static imu_output_t _imuValues;
 static volatile bool _calibrate = false;
 
 static PIDPreferences *_pidPreferences;
+
+// Used at startup so we can determine when the quadcopter is not in motion, in order to
+// perform a quick gyro calibration
+static MotionDetector _motionDetector;
 
 MahonyAHRS ahrs;
 EulerAngle _euler;
@@ -351,7 +358,7 @@ static Vector3f _applyMisalignment(const Vector3f &v, const float mat[3][3])
 }
 
 static uint64_t _previousMicros = 0;
-static bool _receivedImuUpdate = false;
+static bool _receivedFirstImuUpdate = false;
 static bool _gotFirstIMUUpdate = false;
 
 static float _previousFilteredAccelValues[3] = {0.0f, 0.0f, 1.0f};
@@ -418,6 +425,10 @@ static void _receivedIMUUpdate(imu_update_t update)
   _previousFilteredAccelValues[1] = accelerometer.y;
   _previousFilteredAccelValues[2] = accelerometer.z;
 
+  if (!_imu->completedQuickCalibration) {
+    _motionDetector.imuUpdate(update, micros());
+  }
+
   ahrs.update(gyroscope, accelerometer, mag, deltaTimeSeconds);
   float y, p, r;
   ahrs.getYawPitchRoll(y, p, r);
@@ -428,7 +439,7 @@ static void _receivedIMUUpdate(imu_update_t update)
       .yawPitchRollDegrees = {_euler.yaw,  _euler.pitch, _euler.roll}
   };
 
-  _receivedImuUpdate = true;
+  _receivedFirstImuUpdate = true;
   _gotFirstIMUUpdate = true;
 
   _helper->accelFiltered[0] = accelerometer.x;
@@ -484,18 +495,9 @@ static void _receivedIMUUpdate(imu_update_t update)
   });
 }
 
-static void _armProcedure(bool arm)
-{
-  if (arm) {
-    _imu->beginQuickGyroCalibration();
-    AsyncController::main.executeAfter(1000, []() {
-      _imu->completeQuickGyroCalibration();
-      _armed = true;
-    });
-    return;
-  }
-  _armed = false;
-}
+static void _armProcedure(bool arm) { _armed = arm; }
+
+static uint64_t _firstStageSetupCompletionTimeMillis = 0;
 
 // Initial setup
 void setup()
@@ -608,7 +610,9 @@ void setup()
   LOG_INFO("Initializing Arming Signal LED");
   _updateLED(0, 255, 0);
 
-  LOG_INFO("SETUP COMPLETE AFTER %lu ms", millis() - initializationTime);
+  LOG_INFO("SETUP FIRST STAGE COMPLETE AFTER %lu ms", millis() - initializationTime);
+
+  _firstStageSetupCompletionTimeMillis = millis();
 }
 
 static void uploadDebugData()
@@ -654,6 +658,85 @@ static void updateClientTelemetryIfNeeded()
 
 static uint64_t _loopCounter = 1;
 
+static bool _previouslyUpright = false;
+#define FIRST_STAGE_ARM_LED_BLINK_INTERVAL_MILLIS 100
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846f
+#endif
+
+static constexpr uint32_t _kPulsePeriodMs = 2000;
+static constexpr uint8_t _kMaxWhiteBrightness = 255;  // Use less than 255 if full brightness is too intense
+static constexpr uint8_t _kMinWhiteBrightness = 5;
+static constexpr float _kBrightnessRange = (float)_kMaxWhiteBrightness - (float)_kMinWhiteBrightness;
+static constexpr float _kBrightnessScale = _kBrightnessRange / 2.0f;
+static constexpr float _kBrightnessMidpoint = (float)_kMinWhiteBrightness + _kBrightnessScale;
+static constexpr float _kRadsPerMs = (2.0f * M_PI) / (float)_kPulsePeriodMs;
+static bool _previousQuickGyroCalibrationState = false;
+// How many milliseconds after startup should we wait before we allow gyro quick calibration to occur
+static constexpr uint64_t _kMinMillisAfterFirstStage = 2000;
+
+// If quick gyro calibration is in progress and the user moves the device,
+// we will cancel the calibration and blink the LED red to signify that
+// the calibration was interrupted
+static constexpr uint64_t _quickGyroCalibrationInterruptedLEDFlashIntervalMillis = 100;
+static constexpr uint64_t _quickGyroCalibrationInterruptedLEDFlashDurationMillis = 2000;
+static uint64_t _quickGyroCalibrationInterruptedTimeMillis = INT64_MIN;
+static uint64_t _quickGyroCalibrationInterruptedLEDUpdateTimeMillis = 0;
+static bool _quickGyroCalibrationInterruptionLEDState = false;
+
+static void _handleFirstStagePreCalibrationIfNeeded(void)
+{
+  const uint64_t currentMillis = millis();
+  // If we already completed quick calibration, there's no need to proceed any further
+  if (_imu->completedQuickCalibration) {
+    if (!_previousQuickGyroCalibrationState) {
+      _previousQuickGyroCalibrationState = true;
+      LOG_INFO("Completed quick gyro calibration");
+      _updateLED(0, 255, 0);  // unarmed green LED
+    }
+    return;
+  }
+
+  // If this code passes it means the quick calibration was interrupted,
+  // we should flash the LED red to let the user know
+  if (currentMillis - _quickGyroCalibrationInterruptedTimeMillis <
+      _quickGyroCalibrationInterruptedLEDFlashDurationMillis) {
+    if (currentMillis - _quickGyroCalibrationInterruptedLEDUpdateTimeMillis >
+        _quickGyroCalibrationInterruptedLEDFlashIntervalMillis) {
+      _quickGyroCalibrationInterruptedLEDUpdateTimeMillis = currentMillis;
+      _updateLED(_quickGyroCalibrationInterruptionLEDState ? 255 : 20, 0, 0);
+      _quickGyroCalibrationInterruptionLEDState = !_quickGyroCalibrationInterruptionLEDState;
+    }
+    return;
+  }
+
+  /*
+    If this check passes, it means that several conditions have been met and we can proceed
+    with a 'quick gyro calibration':
+      1. The device has been stationary
+      2. The device is upright
+      3. It has been at least _kMinMillisAfterFirstStage since the first stage setup completed
+      4. The quick gyro calibration is not already in progress
+  */
+  if (!_imu->isQuickGyroCalibrationInProgress && !_motionDetector.isInMotion && _motionDetector.isUpright &&
+      _receivedFirstImuUpdate && _firstStageSetupCompletionTimeMillis > _kMinMillisAfterFirstStage) {
+    _imu->beginQuickGyroCalibration();
+    LOG_INFO("Beginning quick gyro calibration");
+  }  // check if we need to cancel an ongoing quick calib due to device movement
+  else if (_imu->isQuickGyroCalibrationInProgress && (_motionDetector.isInMotion || !_motionDetector.isUpright)) {
+    LOG_WARN("Quick gyro calibration interrupted");
+    _imu->cancelQuickGyroCalibration();
+    _quickGyroCalibrationInterruptedTimeMillis = currentMillis;
+  }  // quick gyro calibration is needed, signified by gently flashing white LED
+  else {
+    const float whiteValue = _kBrightnessMidpoint + (sinf((float)currentMillis * _kRadsPerMs) * _kBrightnessScale);
+    // Keep within the min and max brightness range
+    const float clampedwhiteValue = std::clamp(whiteValue, (float)_kMinWhiteBrightness, (float)_kMaxWhiteBrightness);
+    _updateLED(clampedwhiteValue, clampedwhiteValue, clampedwhiteValue);
+  }
+}
+
 void loop()
 {
   TIMERG0.wdtwprotect.val = 0x50D83AA1;
@@ -675,6 +758,7 @@ void loop()
   _bluetoothController.loopHandler();
   _batteryController->loopHandler();
   _barometer.loopHandler();
+  _handleFirstStagePreCalibrationIfNeeded();
 
   if (_receivedAltitudeUpdate) {
     LOG_INFO_PERIODIC_MILLIS(1000, "Altitude: %fm", _relativeAltitudeMeters);
@@ -720,12 +804,11 @@ void loop()
     return;
   }
 
-  if (!_receivedImuUpdate || !_receivedMagUpdate) {
+  if (!_receivedFirstImuUpdate || !_receivedMagUpdate) {
     // Wait until we have both an IMU and magnetometer read before
     // proceeding
     return;
   }
-  _receivedImuUpdate = false;
 
   if (!_startMonitoringPid) {
     if (_recordDebugData) {
