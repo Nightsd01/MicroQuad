@@ -394,3 +394,184 @@ TEST(MatrixMatrixMultiplicationFloatTests, RectangularMatrices)
   // Using the provided helper function (tolerance is 1e-8f inside)
   _assertRoughlyEqual(result, expected);
 }
+
+#include <gtest/gtest.h>
+
+#include <cmath>   // For std::numeric_limits<float>::infinity(), ::quiet_NaN(), std::isnan
+#include <limits>  // For std::numeric_limits
+
+#include "Matrix.h"  // Include your Matrix class header
+
+// Assume _assertRoughlyEqual is defined elsewhere, e.g.:
+// template <typename T, size_t R, size_t C>
+// void _assertRoughlyEqual(const Matrix<T, R, C>& A, const Matrix<T, R, C>& B, T tolerance = 1e-6f);
+// NOTE: We will add explicit NaN checks as _assertRoughlyEqual might fail for NaN.
+
+// --- Test Suite for Integer Negation ---
+TEST(MatrixNegationIntTests, NegateMixedSigns)
+{
+  Matrix<int, 2, 2> A = {
+      {1,  -2},
+      {-3, 4 }
+  };
+  Matrix<int, 2, 2> result = -A;
+  Matrix<int, 2, 2> expected = {
+      {-1, 2 },
+      {3,  -4}
+  };
+  EXPECT_EQ(result, expected);  // Exact comparison for integers
+}
+
+TEST(MatrixNegationIntTests, NegateZeros)
+{
+  Matrix<int, 2, 3> A = {
+      {1, 0,  -2},
+      {0, -0, 0 }  // Integer -0 is just 0
+  };
+  Matrix<int, 2, 3> result = -A;
+  Matrix<int, 2, 3> expected = {
+      {-1, 0, 2},
+      {0,  0, 0}
+  };
+  EXPECT_EQ(result, expected);
+}
+
+TEST(MatrixNegationIntTests, NegatePositiveOnly)
+{
+  Matrix<int, 1, 4> A = {
+      {10, 20, 30, 40}
+  };
+  Matrix<int, 1, 4> result = -A;
+  Matrix<int, 1, 4> expected = {
+      {-10, -20, -30, -40}
+  };
+  EXPECT_EQ(result, expected);
+}
+
+TEST(MatrixNegationIntTests, NegateNegativeOnly)
+{
+  Matrix<int, 3, 1> A = {{-5}, {-15}, {-25}};
+  Matrix<int, 3, 1> result = -A;
+  Matrix<int, 3, 1> expected = {{5}, {15}, {25}};
+  EXPECT_EQ(result, expected);
+}
+
+TEST(MatrixNegationIntTests, NegateIntMinMax)
+{
+  // Test with INT_MAX and INT_MIN
+  // Note: Negating INT_MIN in standard C++ is technically undefined behavior
+  // for signed integers if representation is two's complement and no padding bits,
+  // as it cannot be represented as a positive int.
+  // However, element-wise negation T b = -a; usually works as expected by the hardware
+  // (often resulting in INT_MIN again due to wrap-around/representation).
+  // We test the *expected behavior* based on typical implementations.
+  int int_max = std::numeric_limits<int>::max();
+  int int_min = std::numeric_limits<int>::min();
+
+  Matrix<int, 2, 2> A = {
+      {int_max, int_min},
+      {0,       1      }
+  };
+  Matrix<int, 2, 2> result = -A;
+
+  // Expected: -INT_MAX is representable. -INT_MIN often results in INT_MIN.
+  Matrix<int, 2, 2> expected = {
+      {-int_max, int_min}, // Assuming -INT_MIN yields INT_MIN
+      {0,        -1     }
+  };
+  // If your system behaves differently for -INT_MIN (e.g., traps or wraps differently), adjust 'expected'.
+  EXPECT_EQ(result, expected);
+}
+
+TEST(MatrixNegationFloatTests, NegateMixedSigns)
+{
+  Matrix<float, 2, 2> A = {
+      {1.5f,  -2.5f},
+      {-3.0f, 4.0f }
+  };
+  Matrix<float, 2, 2> result = -A;
+  Matrix<float, 2, 2> expected = {
+      {-1.5f, 2.5f },
+      {3.0f,  -4.0f}
+  };
+  _assertRoughlyEqual(result, expected);  // Use your existing helper
+}
+
+TEST(MatrixNegationFloatTests, NegateZeros)
+{
+  Matrix<float, 2, 2> A = {
+      {1.0f,  0.0f },
+      {-0.0f, -2.0f}  // Include negative zero
+  };
+  Matrix<float, 2, 2> result = -A;
+  Matrix<float, 2, 2> expected = {
+      {-1.0f, -0.0f}, // Negating 0.0f gives -0.0f
+      {0.0f,  2.0f }  // Negating -0.0f gives 0.0f
+  };
+  _assertRoughlyEqual(result, expected);
+  // Optionally, add specific checks for the sign of zero if critical
+  EXPECT_EQ(std::signbit(result(0, 1)), true);   // Expect -0.0f
+  EXPECT_EQ(std::signbit(result(1, 0)), false);  // Expect +0.0f
+}
+
+TEST(MatrixNegationFloatTests, NegatePositiveOnly)
+{
+  Matrix<float, 1, 3> A = {
+      {1.1f, 2.2f, 3.3f}
+  };
+  Matrix<float, 1, 3> result = -A;
+  Matrix<float, 1, 3> expected = {
+      {-1.1f, -2.2f, -3.3f}
+  };
+  _assertRoughlyEqual(result, expected);
+}
+
+TEST(MatrixNegationFloatTests, NegateNegativeOnly)
+{
+  Matrix<float, 3, 1> A = {{-0.5f}, {-1.5f}, {-2.5f}};
+  Matrix<float, 3, 1> result = -A;
+  Matrix<float, 3, 1> expected = {{0.5f}, {1.5f}, {2.5f}};
+  _assertRoughlyEqual(result, expected);
+}
+
+TEST(MatrixNegationFloatTests, NegateInfinities)
+{
+  float pinf = std::numeric_limits<float>::infinity();
+  float ninf = -pinf;
+  Matrix<float, 2, 2> A = {
+      {pinf, ninf},
+      {1.0f, 0.0f}
+  };
+  Matrix<float, 2, 2> result = -A;
+  Matrix<float, 2, 2> expected = {
+      {ninf,  pinf },
+      {-1.0f, -0.0f}  // Note: -(-0.0f) is 0.0f, -0.0f remains -0.0f
+  };
+  // Use the improved helper function
+  assertFloatMatrixEqualWithNaN(result, expected, 1e-5f);  // Adjust tolerance if needed
+}
+
+TEST(MatrixNegationFloatTests, NegateNaN)
+{
+  float nan = std::numeric_limits<float>::quiet_NaN();
+  Matrix<float, 2, 3> A = {
+      {1.0f, nan,   -2.0f},
+      {nan,  -3.0f, 0.0f }
+  };
+  Matrix<float, 2, 3> result = -A;
+  Matrix<float, 2, 3> expected = {
+      {-1.0f, nan,  2.0f },
+      {nan,   3.0f, -0.0f}
+  };
+
+  // Use the improved helper function
+  assertFloatMatrixEqualWithNaN(result, expected);
+}
+
+TEST(MatrixNegationFloatTests, NegateDifferentDims)
+{
+  Matrix<float, 2, 1> A = {{10.0f}, {-20.0f}};
+  Matrix<float, 2, 1> result = -A;
+  Matrix<float, 2, 1> expected = {{-10.0f}, {20.0f}};
+  _assertRoughlyEqual(result, expected);
+}

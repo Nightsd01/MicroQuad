@@ -88,6 +88,10 @@ inline Matrix<T, R, C> operator+(const T& A, const Matrix<T, R, C>& B) __attribu
 template <typename T, size_t R, size_t C>
 inline Matrix<T, R, C> operator-(const Matrix<T, R, C>& A, const Matrix<T, R, C>& B) __attribute__((always_inline));
 
+// Matrix negation
+template <typename T, size_t R, size_t C>
+inline Matrix<T, R, C> operator-(const Matrix<T, R, C>& A) __attribute__((always_inline));
+
 // Matrix - Scalar
 template <typename T, size_t R, size_t C>
 inline Matrix<T, R, C> operator-(const Matrix<T, R, C>& A, const T& B) __attribute__((always_inline));
@@ -97,7 +101,7 @@ template <typename T, size_t R, size_t C>
 inline Matrix<T, R, C> operator-(const T& A, const Matrix<T, R, C>& B) __attribute__((always_inline));
 
 // Multiplication
-// IMPORTANT NOTE: The following two functions are elementwise multiplication (aka Hadamard product)
+// IMPORTANT NOTE: The following two functions are elementwise multiplication
 template <typename T, size_t R, size_t C>
 inline Matrix<T, R, C> operator*(T scalar, const Matrix<T, R, C>& A) __attribute__((always_inline));
 

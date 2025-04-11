@@ -308,6 +308,17 @@ Matrix<T, R, C> operator-(const Matrix<T, R, C>& A, const Matrix<T, R, C>& B)
   return result;
 }
 
+// Matrix negation
+template <typename T, size_t R, size_t C>
+Matrix<T, R, C> operator-(const Matrix<T, R, C>& A)
+{
+  Matrix<T, R, C> result;
+  for (size_t i = 0; i < R * C; i++) {
+    result.data[i] = -A.data[i];
+  }
+  return result;
+}
+
 // Matrix - Scalar
 template <typename T, size_t R, size_t C>
 Matrix<T, R, C> operator-(const Matrix<T, R, C>& A, const T& B)
