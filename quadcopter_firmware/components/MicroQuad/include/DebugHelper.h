@@ -22,6 +22,10 @@ class DebugHelper
   double inputTimescale;
   double voltage;
   double setPoints[3];
+  double ekfQuaternion[4];
+  double ekfYawPitchRoll[3];
+  double ekfAltitude;
+  double ekfVerticalVelocity;
   void saveValues(unsigned long timestamp);
   DebugDataManager dataManager;
 };

@@ -7,6 +7,7 @@
 #include <string>
 
 // Magnetometer
+#include <Matrix.h>
 #include <QMC5883L.h>
 #include <esp_partition.h>
 
@@ -16,12 +17,12 @@
 #include "BLEController.h"
 #include "Barometer.h"
 #include "BatteryController.h"
+#include "EKFAttitudeAltitude.h"
 #include "Filters/KalmanFilter.h"
 #include "Filters/MedianFilter.h"
 #include "IMU.h"
 #include "LEDController.h"
 #include "Logger.h"
-#include "MahonyAHRS.h"
 #include "MotionDetector.h"
 #include "MotorController.h"
 #include "MotorMagCompensationHandler.h"
@@ -102,13 +103,34 @@ static PIDPreferences *_pidPreferences;
 // perform a quick gyro calibration
 static MotionDetector _motionDetector;
 
-MahonyAHRS ahrs;
 EulerAngle _euler;
-static const float _misalignmentMatrix[3][3] = {
-    {0.7071f, -0.7071f, 0.0f},
-    {0.7071f, 0.7071f,  0.0f},
-    {0.0f,    0.0f,     1.0f}
+
+static EKFAttitudeAltitude::Config _ekfConfig = {
+    // Initial state uncertainty (variances for diagonal of P0)
+    .initial_quat_uncertainty = 0.1f,
+    .initial_alt_uncertainty = 1.0f,
+    .initial_velz_uncertainty = 0.1f,
+    .initial_gyro_bias_uncertainty = 0.01f,
+    .initial_baro_bias_uncertainty = 0.5f,
+
+    // Process noise spectral densities (variances added per second)
+    .gyro_noise_density = 0.001f, // (rad/s)^2 / Hz -> Variance = density * dt
+    .gyro_bias_random_walk = 1e-7f, // (rad/s^2)^2 / Hz -> Variance = density * dt
+    .velz_Process_noise = 0.1f, // (m/s^2)^2 / Hz -> Variance = density * dt (Simplified model)
+    .baro_bias_random_walk = 1e-5f, // (m/s)^2 / Hz -> Variance = density * dt
+
+    // Measurement noise variances (scalar)
+    .accel_noise_variance = 0.05f, // (m/s^2)^2
+    .mag_noise_variance = 0.01f, // (normalized units)^2
+    .baro_noise_variance = 1.0f, // m^2
+    .range_noise_variance = 0.01f, // m^2
+
+    // Other constants
+    .gravity_magnitude = 9.81f,
+    .mag_reference_vector = {{1.0f}, {0.0f}, {0.0f}}  // Example: Normalized North vector if aligned
 };
+
+static EKFAttitudeAltitude _extendedKalmanFilter(_ekfConfig);
 
 static Barometer _barometer;
 static bool _receivedAltitudeUpdate = false;
@@ -172,19 +194,26 @@ static void updateMotors(motor_outputs_t outputs)
 
 static void _updateArmStatus(void)
 {
+  if (_speedControllers.size() == 0) {
+    return;
+  }
   if (_armed && !_completedFirstArm) {
-    LOG_INFO("Setting up motor outputs");
-    for (int i = 0; i < NUM_MOTORS; i++) {
-      LOG_INFO("Attaching motor %i to pin %i", i, MOTOR_PINS[i]);
-      MotorController *controller = new MotorController(MOTOR_PINS[i], MOTOR_TELEM_PINS[i], false);
-      _speedControllers.push_back(controller);
-    }
     _completedFirstArm = true;
     updateMotors({1000.0f, 1000.0f, 1000.0f, 1000.0f});
   }
   _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange, &_armed, sizeof(bool));
   if (!_enteredEmergencyMode) {
     _updateLED(_armed ? 255 : 0, _armed ? 0 : 255, 0);
+  }
+}
+
+void _setupMotors(void)
+{
+  LOG_INFO("Setting up motor outputs");
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    LOG_INFO("Attaching motor %i to pin %i", i, MOTOR_PINS[i]);
+    MotorController *controller = new MotorController(MOTOR_PINS[i], MOTOR_TELEM_PINS[i], false);
+    _speedControllers.push_back(controller);
   }
 }
 
@@ -196,6 +225,10 @@ static void _gotMagUpdate(mag_update_t update)
     _motorMagCompensationHandler->updateMagValue(update);
   } else if (_completedFirstArm && _mostRecentMotorValues[0] > 0 && _motorMagCompensationHandler->isCalibrated) {
     _magValues = _motorMagCompensationHandler->applyMagneticMotorCompensation(update, _mostRecentMotorValues);
+  }
+  if (_imu->completedQuickCalibration) {
+    // TODO: Commented out for debugging
+    // _extendedKalmanFilter.updateMagnetometer(_magValues.x, _magValues.y, _magValues.z);
   }
 
   EXECUTE_PERIODIC(1000, {
@@ -349,46 +382,33 @@ static controller_values_t _controllerValues = {
     .rightStickInput = {.x = INPUT_MAX_CONTROLLER_INPUT / 2.0, .y = INPUT_MAX_CONTROLLER_INPUT / 2.0}
 };
 
-static Vector3f _applyMisalignment(const Vector3f &v, const float mat[3][3])
+static const Matrix<float, 3, 3> _misalignmentMatrix = {
+    {0.7071f, -0.7071f, 0.0f},
+    {0.7071f, 0.7071f,  0.0f},
+    {0.0f,    0.0f,     1.0f}
+};
+
+static Vector3f _applyMisalignment(const Vector3f &v, const Matrix<float, 3, 3> &mat)
 {
   return {
-      .x = mat[0][0] * v.x + mat[0][1] * v.y + mat[0][2] * v.z,
-      .y = mat[1][0] * v.x + mat[1][1] * v.y + mat[1][2] * v.z,
-      .z = mat[2][0] * v.x + mat[2][1] * v.y + mat[2][2] * v.z};
+      .x = mat(0, 0) * v.x + mat(0, 1) * v.y + mat(0, 2) * v.z,
+      .y = mat(1, 0) * v.x + mat(1, 1) * v.y + mat(1, 2) * v.z,
+      .z = mat(2, 0) * v.x + mat(2, 1) * v.y + mat(2, 2) * v.z};
 }
 
 static uint64_t _previousMicros = 0;
 static bool _receivedFirstImuUpdate = false;
-static bool _gotFirstIMUUpdate = false;
-
-static float _previousFilteredAccelValues[3] = {0.0f, 0.0f, 1.0f};
-static float _previousFilteredGyroValues[3] = {0.0f, 0.0f, 0.0f};
+static bool _computedEuler = false;
 
 static uint64_t _imuUpdateCounter = 0;
 
-static const float _accelerometerLowPassAlpha = 0.075f;  // lower alpha = more smoothing but more lag
-static const float _gyroscopeLowPassAlpha = 0.1f;        // lower alpha = more smoothing but more lag
-
-#define MEDIAN_FILTER_WINDOW 10
-static std::array<MedianFilter<float>, 3> _accelHistories = {
-    MedianFilter<float>(MEDIAN_FILTER_WINDOW),
-    MedianFilter<float>(MEDIAN_FILTER_WINDOW),
-    MedianFilter<float>(MEDIAN_FILTER_WINDOW)};
-
-static std::array<KalmanFilter<float>, 3> _accelKalmanFilters = {
-    KalmanFilter<float>(0.01f, 1.0f, 0.0f, 1.0f, 0.0f),
-    KalmanFilter<float>(0.01f, 1.0f, 0.0f, 1.0f, 0.0f),
-    KalmanFilter<float>(0.01f, 1.0f, 0.0f, 1.0f, 0.0f)};
-
-static std::array<KalmanFilter<float>, 3> _gyroKalmanFilters = {
-    KalmanFilter<float>(0.01f, 1.5f, 0.0f, 1.0f, 0.0f),
-    KalmanFilter<float>(0.01f, 1.5f, 0.0f, 1.0f, 0.0f),
-    KalmanFilter<float>(0.01f, 1.5f, 0.0f, 1.0f, 0.0f)};
+constexpr float STANDARD_GRAVITY = 9.81f;  // or 9.80665f for higher precision
 
 static void _receivedIMUUpdate(imu_update_t update)
 {
   const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
   _previousMicros = micros();
+  _receivedFirstImuUpdate = true;
 
   Vector3f gyroscope = {update.gyro_x, update.gyro_y, update.gyro_z};
   Vector3f accelerometer = {update.accel_x, update.accel_y, update.accel_z};
@@ -398,49 +418,31 @@ static void _receivedIMUUpdate(imu_update_t update)
   accelerometer = _applyMisalignment(accelerometer, _misalignmentMatrix);
   mag = _applyMisalignment(mag, _misalignmentMatrix);
 
-  _accelHistories[0].addValue(accelerometer.x);
-  accelerometer.x = _accelHistories[0].getMedian();
-  _accelHistories[1].addValue(accelerometer.y);
-  accelerometer.y = _accelHistories[1].getMedian();
-  _accelHistories[2].addValue(accelerometer.z);
-  accelerometer.z = _accelHistories[2].getMedian();
-
-  accelerometer.x = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[0]) +
-                    (_accelerometerLowPassAlpha * accelerometer.x);
-  accelerometer.y = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[1]) +
-                    (_accelerometerLowPassAlpha * accelerometer.y);
-  accelerometer.z = ((1.0f - _accelerometerLowPassAlpha) * _previousFilteredAccelValues[2]) +
-                    (_accelerometerLowPassAlpha * accelerometer.z);
-  gyroscope.x =
-      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[0]) + (_gyroscopeLowPassAlpha * gyroscope.x);
-  gyroscope.y =
-      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[1]) + (_gyroscopeLowPassAlpha * gyroscope.y);
-  gyroscope.z =
-      ((1.0f - _gyroscopeLowPassAlpha) * _previousFilteredGyroValues[2]) + (_gyroscopeLowPassAlpha * gyroscope.z);
-
-  _previousFilteredGyroValues[0] = gyroscope.x;
-  _previousFilteredGyroValues[1] = gyroscope.y;
-  _previousFilteredGyroValues[2] = gyroscope.z;
-  _previousFilteredAccelValues[0] = accelerometer.x;
-  _previousFilteredAccelValues[1] = accelerometer.y;
-  _previousFilteredAccelValues[2] = accelerometer.z;
-
   if (!_imu->completedQuickCalibration) {
     _motionDetector.imuUpdate(update, micros());
+    return;
   }
+  _extendedKalmanFilter.predict(gyroscope.x, gyroscope.y, gyroscope.z, deltaTimeSeconds);
 
-  ahrs.update(gyroscope, accelerometer, mag, deltaTimeSeconds);
-  float y, p, r;
-  ahrs.getYawPitchRoll(y, p, r);
-  _euler = {.yaw = y, .pitch = p, .roll = r};
+  _extendedKalmanFilter.updateAccelerometer(
+      accelerometer.x * STANDARD_GRAVITY,
+      accelerometer.y * STANDARD_GRAVITY,
+      accelerometer.z * STANDARD_GRAVITY);
+
+  const auto ekfAttitudeQuaternion = _extendedKalmanFilter.getAttitudeQuaternion();
+  const auto ekfYawPitchRoll = _extendedKalmanFilter.getYawPitchRollDegrees();
+  const auto ekfAltitude = _extendedKalmanFilter.getAltitude();
+  const auto ekfVerticalVelocity = _extendedKalmanFilter.getVerticalVelocity();
+
+  _euler = {.yaw = ekfYawPitchRoll(0, 0), .pitch = ekfYawPitchRoll(1, 0), .roll = ekfYawPitchRoll(2, 0)};
 
   _imuValues = {
       .gyroOutput = {gyroscope.z, gyroscope.y,  gyroscope.x},
       .yawPitchRollDegrees = {_euler.yaw,  _euler.pitch, _euler.roll}
   };
 
-  _receivedFirstImuUpdate = true;
-  _gotFirstIMUUpdate = true;
+
+  _computedEuler = true;
 
   _helper->accelFiltered[0] = accelerometer.x;
   _helper->accelFiltered[1] = accelerometer.y;
@@ -461,32 +463,19 @@ static void _receivedIMUUpdate(imu_update_t update)
   _helper->magValues[1] = _magValues.y;
   _helper->magValues[2] = _magValues.z;
   _helper->magValues[3] = _magValues.heading;
+  _helper->ekfQuaternion[0] = ekfAttitudeQuaternion(0, 0);
+  _helper->ekfQuaternion[1] = ekfAttitudeQuaternion(1, 0);
+  _helper->ekfQuaternion[2] = ekfAttitudeQuaternion(2, 0);
+  _helper->ekfQuaternion[3] = ekfAttitudeQuaternion(3, 0);
+  _helper->ekfYawPitchRoll[0] = ekfYawPitchRoll(0, 0);
+  _helper->ekfYawPitchRoll[1] = ekfYawPitchRoll(1, 0);
+  _helper->ekfYawPitchRoll[2] = ekfYawPitchRoll(2, 0);
+  _helper->ekfAltitude = ekfAltitude;
+  _helper->ekfVerticalVelocity = ekfVerticalVelocity;
 
   const int stat1 = digitalRead(BATTERY_STAT1_PIN);
   const int stat2 = digitalRead(BATTERY_STAT2_PIN);
   const int pg = digitalRead(BATTERY_PG_PIN);
-
-  LOG_INFO_PERIODIC_MILLIS(
-      100,
-      "YPR = %.2f, %.2f, %.2f, gyro = %.2f, %.2f, %.2f",
-      _euler.yaw,
-      _euler.pitch,
-      _euler.roll,
-      gyroscope.x,
-      gyroscope.y,
-      gyroscope.z);
-
-  // LOG_INFO_PERIODIC_MILLIS(
-  //     100,
-  //     "%i, %i, %i, %f, %f, %f, %f, %f Gauss",
-  //     stat1,
-  //     stat2,
-  //     pg,
-  //     _magValues.x,
-  //     _magValues.y,
-  //     _magValues.z,
-  //     _magValues.heading,
-  //     sqrt(pow(_magValues.x, 2) + pow(_magValues.y, 2) + pow(_magValues.z, 2)));
 
   _imuUpdateCounter++;
   EXECUTE_PERIODIC(1000, {
@@ -555,16 +544,6 @@ void setup()
   // Setup BLE Server
   _bluetoothController.beginBluetooth();
 
-  LOG_INFO("Initializing barometric sensor");
-  _barometer.begin(
-      [](float relativeAltMeters) {
-        _receivedAltitudeUpdate = true;
-        _relativeAltitudeMeters = relativeAltMeters;
-      },
-      _telemetryController,
-      0x76,
-      &Wire);
-
   LOG_INFO("Initializing PID preferences");
   _pidPreferences = new PIDPreferences(&_bluetoothController, &_persistentKvStore);
 
@@ -573,6 +552,21 @@ void setup()
 
   LOG_INFO("Initializing telemetry controller");
   _telemetryController = new TelemetryController(&_bluetoothController);
+
+  LOG_INFO("Initializing barometric sensor");
+  _barometer.begin(
+      [](float relativeAltMeters) {
+        _receivedAltitudeUpdate = true;
+        _relativeAltitudeMeters = relativeAltMeters;
+        if (std::isfinite(_relativeAltitudeMeters) && _relativeAltitudeMeters >= 0.0f &&
+            _imu->completedQuickCalibration) {
+          _extendedKalmanFilter.updateBarometer(relativeAltMeters);
+        }
+      },
+      _telemetryController,
+      0x76,
+      &Wire);
+
 
   LOG_INFO("Initializing battery controller");
   _batteryController = new BatteryController(_telemetryController, &_bluetoothController, _helper);
@@ -583,8 +577,6 @@ void setup()
 
   LOG_INFO("Initializing magnetometer motors compensation handler");
   _motorMagCompensationHandler = new MotorMagCompensationHandler(&_persistentKvStore);
-
-  _updateArmStatus();
 
   LOG_INFO("Initializing IMU");
   bool setupSuccess = false;
@@ -630,7 +622,7 @@ static void sendTelemData()
       _previousMotorOutputs.data(),
       NUM_MOTORS * sizeof(float));
 
-  if (_gotFirstIMUUpdate) {
+  if (_computedEuler) {
     _telemetryController->updateTelemetryEvent(TelemetryEvent::EulerYawPitchRoll, &_euler, sizeof(float) * 3);
   }
 
@@ -658,7 +650,6 @@ static void updateClientTelemetryIfNeeded()
 
 static uint64_t _loopCounter = 1;
 
-static bool _previouslyUpright = false;
 #define FIRST_STAGE_ARM_LED_BLINK_INTERVAL_MILLIS 100
 
 #ifndef M_PI
@@ -693,7 +684,16 @@ static void _handleFirstStagePreCalibrationIfNeeded(void)
     if (!_previousQuickGyroCalibrationState) {
       _previousQuickGyroCalibrationState = true;
       LOG_INFO("Completed quick gyro calibration");
-      _updateLED(0, 255, 0);  // unarmed green LED
+
+      // show green LED
+      _ledController.showRGB(0, 255, 0);
+      // Give the LED a bit of time to display the color
+      AsyncController::main.executeAfter(10, []() {
+        _ledController.disconnectRMT();
+        // Since the first ESC shares the RMT channel with the RGB LED, time to set up the motors now
+        _setupMotors();
+        _updateArmStatus();
+      });
     }
     return;
   }
@@ -705,7 +705,7 @@ static void _handleFirstStagePreCalibrationIfNeeded(void)
     if (currentMillis - _quickGyroCalibrationInterruptedLEDUpdateTimeMillis >
         _quickGyroCalibrationInterruptedLEDFlashIntervalMillis) {
       _quickGyroCalibrationInterruptedLEDUpdateTimeMillis = currentMillis;
-      _updateLED(_quickGyroCalibrationInterruptionLEDState ? 255 : 20, 0, 0);
+      _ledController.showRGB(_quickGyroCalibrationInterruptionLEDState ? 255 : 20, 0, 0);
       _quickGyroCalibrationInterruptionLEDState = !_quickGyroCalibrationInterruptionLEDState;
     }
     return;
@@ -728,12 +728,12 @@ static void _handleFirstStagePreCalibrationIfNeeded(void)
     LOG_WARN("Quick gyro calibration interrupted");
     _imu->cancelQuickGyroCalibration();
     _quickGyroCalibrationInterruptedTimeMillis = currentMillis;
-  }  // quick gyro calibration is needed, signified by gently flashing white LED
-  else {
+  } else {
+    // While we are waiting for quick gyro calibration - gently flash the white LED
     const float whiteValue = _kBrightnessMidpoint + (sinf((float)currentMillis * _kRadsPerMs) * _kBrightnessScale);
     // Keep within the min and max brightness range
     const float clampedwhiteValue = std::clamp(whiteValue, (float)_kMinWhiteBrightness, (float)_kMaxWhiteBrightness);
-    _updateLED(clampedwhiteValue, clampedwhiteValue, clampedwhiteValue);
+    _ledController.showRGB(clampedwhiteValue, clampedwhiteValue, clampedwhiteValue);
   }
 }
 

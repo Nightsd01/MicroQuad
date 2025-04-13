@@ -28,5 +28,9 @@ void DebugHelper::saveValues(unsigned long timestamp)
   dataManager.addDouble(&throttle, 1);
   dataManager.addDouble(&voltage, 1);
   dataManager.addDouble(setPoints, 3);
+  dataManager.addDouble(ekfQuaternion, 4);
+  dataManager.addDouble(ekfYawPitchRoll, 3);
+  dataManager.addDouble(&ekfAltitude, 1);
+  dataManager.addDouble(&ekfVerticalVelocity, 1);
   dataManager.numSamples++;
 }

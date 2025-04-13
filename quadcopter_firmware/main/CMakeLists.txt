@@ -46,3 +46,4 @@ idf_component_register(
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DENABLE_EMERGENCY_MODE")
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DUSE_ACCELERATION")
+target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DDEBUG_EKF")

@@ -83,26 +83,26 @@ IMU::IMU(
     setAnyOffset = true;
   }
 
-  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_X)) {
-    const int16_t xOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_X);
-    LOG_INFO("Setting X gyro offset: %d", xOffset);
-    _imu->setGyrXOffset(xOffset);
-    setAnyOffset = true;
-  }
+  // if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_X)) {
+  //   const int16_t xOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_X);
+  //   LOG_INFO("Setting X gyro offset: %d", xOffset);
+  //   _imu->setGyrXOffset(xOffset);
+  //   setAnyOffset = true;
+  // }
 
-  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Y)) {
-    const int16_t yOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Y);
-    LOG_INFO("Setting Y gyro offset: %d", yOffset);
-    _imu->setGyrYOffset(yOffset);
-    setAnyOffset = true;
-  }
+  // if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Y)) {
+  //   const int16_t yOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Y);
+  //   LOG_INFO("Setting Y gyro offset: %d", yOffset);
+  //   _imu->setGyrYOffset(yOffset);
+  //   setAnyOffset = true;
+  // }
 
-  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Z)) {
-    const int16_t zOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Z);
-    LOG_INFO("Setting Z gyro offset: %d", zOffset);
-    _imu->setGyrZOffset(zOffset);
-    setAnyOffset = true;
-  }
+  // if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Z)) {
+  //   const int16_t zOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Z);
+  //   LOG_INFO("Setting Z gyro offset: %d", zOffset);
+  //   _imu->setGyrZOffset(zOffset);
+  //   setAnyOffset = true;
+  // }
 
   if (!setAnyOffset) {
     LOG_WARN("No IMU offsets found in persistent storage, please calibrate the device");
@@ -195,15 +195,20 @@ void IMU::completeQuickGyroCalibration(void)
     LOG_ERROR("No samples taken for quick gyro calibration");
     return;
   }
-  float xOffset = _quickCalibrationGyroSums[0] / _numQuickGyroCalibrationSamples;
-  float yOffset = _quickCalibrationGyroSums[1] / _numQuickGyroCalibrationSamples;
-  float zOffset = _quickCalibrationGyroSums[2] / _numQuickGyroCalibrationSamples;
+  float xOffset = (float)_quickCalibrationGyroSums[0] / (float)_numQuickGyroCalibrationSamples;
+  float yOffset = (float)_quickCalibrationGyroSums[1] / (float)_numQuickGyroCalibrationSamples;
+  float zOffset = (float)_quickCalibrationGyroSums[2] / (float)_numQuickGyroCalibrationSamples;
 
-  LOG_INFO("Quick gyro calibration complete! %.2f, %.2f, %.2f", xOffset, yOffset, zOffset);
+  LOG_INFO(
+      "Quick gyro calibration complete! %i samples, %.2f, %.2f, %.2f",
+      (int)_numQuickGyroCalibrationSamples,
+      xOffset,
+      yOffset,
+      zOffset);
   int16_t averages[3] = {
-      (int16_t)(xOffset),
-      (int16_t)(yOffset),
-      (int16_t)(zOffset),
+      (int16_t)(roundf(xOffset)),
+      (int16_t)(roundf(yOffset)),
+      (int16_t)(roundf(zOffset)),
   };
   _imu->setGyrXOffset(averages[0]);
   _imu->setGyrYOffset(averages[1]);

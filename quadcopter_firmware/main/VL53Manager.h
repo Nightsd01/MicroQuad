@@ -5,7 +5,7 @@
 
 #include <functional>
 
-#include "MahonyAHRS.h"
+#include "EKFAttitudeAltitude.h"
 
 class TelemetryController;
 
