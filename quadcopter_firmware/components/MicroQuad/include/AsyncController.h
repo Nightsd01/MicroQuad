@@ -21,6 +21,17 @@
     }                                                       \
   } while (0)
 
+#define _EXECUTE_ONCE_IMPL(flagVarName, ...)  \
+  do {                                        \
+    static std::once_flag flagVarName;        \
+    std::call_once(flagVarName, __VA_ARGS__); \
+  } while (0)
+
+#define EXECUTE_ONCE(...)                                         \
+  do {                                                            \
+    _EXECUTE_ONCE_IMPL(_UNIQUE_VAR_NAME(onceFlag_), __VA_ARGS__); \
+  } while (0)
+
 // Execute the given code at most once every periodMillis
 // This isn't a timer, but it lets you limit how often code can execute
 #define EXECUTE_PERIODIC(periodMillis, code)                                       \

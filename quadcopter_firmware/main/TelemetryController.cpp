@@ -23,6 +23,8 @@ static const char *_eventTypeToString(TelemetryEvent event)
       return "MemoryStats";
     case MotorValues:
       return "MotorValues";
+    case BarometricAltitudeUpdate:
+      return "BarometricAltitudeUpdate";
     default: {
       LOG_ERROR_PERIODIC_MILLIS(500, "Unknown telemetry event %i", event);
       return "Unknown";
