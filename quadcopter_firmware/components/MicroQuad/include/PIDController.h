@@ -3,8 +3,14 @@
 
 #include "DebugHelper.h"
 
+#ifndef RAD_TO_DEG
 #define RAD_TO_DEG 57.295779513082320876798154814105
+#endif  // RAD_TO_DEG
+
+#ifndef DEG_TO_RAD
 #define DEG_TO_RAD 0.017453292519943295769236907684886
+#endif  // DEG_TO_RAD
+
 #define ERROR_LEN 11
 #define INTEGRAL_MAX 10.0f
 
