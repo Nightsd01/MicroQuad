@@ -32,6 +32,7 @@
 #include "PinDefines.h"
 #include "SPI.h"
 #include "TelemetryController.h"
+#include "VL53Manager.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -98,6 +99,8 @@ static imu_output_t _imuValues;
 static volatile bool _calibrate = false;
 
 static PIDPreferences *_pidPreferences;
+
+static VL53Manager _vl53Manager;
 
 // Used at startup so we can determine when the quadcopter is not in motion, in order to
 // perform a quick gyro calibration
@@ -441,6 +444,7 @@ static void _receivedIMUUpdate(imu_update_t update)
       .yawPitchRollDegrees = {_euler.yaw,  _euler.pitch, _euler.roll}
   };
 
+  _vl53Manager.updatedAttitude(_euler);
 
   _computedEuler = true;
 
@@ -567,6 +571,12 @@ void setup()
       0x76,
       &Wire);
 
+  LOG_INFO("Initializing VL53L1X sensor");
+  _vl53Manager.begin(
+      [&](float distance) { LOG_INFO("VL53L1X distance: %fm", distance); },
+      _telemetryController,
+      0x29 /* i2c bus address */,
+      &Wire);
 
   LOG_INFO("Initializing battery controller");
   _batteryController = new BatteryController(_telemetryController, &_bluetoothController, _helper);
@@ -758,6 +768,8 @@ void loop()
   _bluetoothController.loopHandler();
   _batteryController->loopHandler();
   _barometer.loopHandler();
+  _vl53Manager.loopHandler();
+
   _handleFirstStagePreCalibrationIfNeeded();
 
   if (_receivedAltitudeUpdate) {
