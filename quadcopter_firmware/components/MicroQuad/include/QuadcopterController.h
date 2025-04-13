@@ -11,8 +11,8 @@
 
 #define THROTTLE_MIN 1000.0f
 #define THROTTLE_MAX 2000.0f
-#define MAX_YAW_RATE_DEG_PER_SEC 50.0f
-#define MAX_PITCH_ROLL_ANGLE_DEGREES 40.0f
+#define MAX_YAW_RATE_DEG_PER_SEC 75.0f
+#define MAX_PITCH_ROLL_ANGLE_DEGREES 60.0f
 
 // Defines the range of the controller inputs starting from 0.0f
 #define INPUT_MAX_CONTROLLER_INPUT 255.0f
