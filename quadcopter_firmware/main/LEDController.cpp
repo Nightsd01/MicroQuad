@@ -60,7 +60,9 @@ void LEDController::disconnectRMT(void)
 
 void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
 {
-  _connectRMT();
+  if (!_connectedRMT) {
+    _connectRMT();
+  }
   rmt_symbol_word_t items[25];  // 24 items for bits, 1 for reset
   uint32_t grb = ((uint32_t)green << 16) | ((uint32_t)red << 8) | blue;
 
