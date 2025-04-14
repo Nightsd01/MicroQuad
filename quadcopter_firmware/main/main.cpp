@@ -108,30 +108,7 @@ static MotionDetector _motionDetector;
 
 EulerAngle _euler;
 
-static EKFAttitudeAltitude::Config _ekfConfig = {
-    // Initial state uncertainty (variances for diagonal of P0)
-    .initial_quat_uncertainty = 0.1f,
-    .initial_alt_uncertainty = 1.0f,
-    .initial_velz_uncertainty = 0.1f,
-    .initial_gyro_bias_uncertainty = 0.01f,
-    .initial_baro_bias_uncertainty = 0.5f,
-
-    // Process noise spectral densities (variances added per second)
-    .gyro_noise_density = 0.001f, // (rad/s)^2 / Hz -> Variance = density * dt
-    .gyro_bias_random_walk = 1e-7f, // (rad/s^2)^2 / Hz -> Variance = density * dt
-    .velz_Process_noise = 0.1f, // (m/s^2)^2 / Hz -> Variance = density * dt (Simplified model)
-    .baro_bias_random_walk = 1e-5f, // (m/s)^2 / Hz -> Variance = density * dt
-
-    // Measurement noise variances (scalar)
-    .accel_noise_variance = 0.05f, // (m/s^2)^2
-    .mag_noise_variance = 0.01f, // (normalized units)^2
-    .baro_noise_variance = 1.0f, // m^2
-    .range_noise_variance = 0.01f, // m^2
-
-    // Other constants
-    .gravity_magnitude = 9.81f,
-    .mag_reference_vector = {{1.0f}, {0.0f}, {0.0f}}  // Example: Normalized North vector if aligned
-};
+static EKFAttitudeAltitude::Config _ekfConfig;
 
 static EKFAttitudeAltitude _extendedKalmanFilter(_ekfConfig);
 
