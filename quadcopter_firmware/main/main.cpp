@@ -39,6 +39,14 @@
 #include "soc/timer_group_reg.h"
 #include "soc/timer_group_struct.h"
 
+#ifndef MAX
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#endif  // MAX
+
+#ifndef MIN
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#endif  // MIN
+
 static std::vector<MotorController *> _speedControllers;
 
 BatteryController *_batteryController;
@@ -411,8 +419,8 @@ static void _receivedIMUUpdate(imu_update_t update)
 
   const auto ekfAttitudeQuaternion = _extendedKalmanFilter.getAttitudeQuaternion();
   const auto ekfYawPitchRoll = _extendedKalmanFilter.getYawPitchRollDegrees();
-  const auto ekfAltitude = _extendedKalmanFilter.getAltitude();
-  const auto ekfVerticalVelocity = _extendedKalmanFilter.getVerticalVelocity();
+  auto ekfAltitude = MAX(_extendedKalmanFilter.getAltitude(), 0.0f);
+  auto ekfVerticalVelocity = _extendedKalmanFilter.getVerticalVelocity();
 
   _euler = {.yaw = ekfYawPitchRoll(0, 0), .pitch = ekfYawPitchRoll(1, 0), .roll = ekfYawPitchRoll(2, 0)};
 
@@ -461,6 +469,11 @@ static void _receivedIMUUpdate(imu_update_t update)
   _imuUpdateCounter++;
   EXECUTE_PERIODIC(1000, {
     _telemetryController->updateTelemetryEvent(TelemetryEvent::IMUUpdateRate, &_imuUpdateCounter, sizeof(uint64_t));
+    _telemetryController->updateTelemetryEvent(TelemetryEvent::EKFAltitudeEstimate, &ekfAltitude, sizeof(float));
+    _telemetryController->updateTelemetryEvent(
+        TelemetryEvent::EKFVerticalVelocityEstimate,
+        &ekfVerticalVelocity,
+        sizeof(float));
     _imuUpdateCounter = 0;
   });
 }
@@ -550,7 +563,12 @@ void setup()
 
   LOG_INFO("Initializing VL53L1X sensor");
   _vl53Manager.begin(
-      [&](float distance) { LOG_INFO("VL53L1X distance: %fm", distance); },
+      [&](float distance) {
+        LOG_INFO("VL53L1X distance: %fm", distance);
+        if (_imu->completedQuickCalibration) {
+          _extendedKalmanFilter.updateRangefinder(distance);
+        }
+      },
       _telemetryController,
       0x29 /* i2c bus address */,
       &Wire);

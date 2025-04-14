@@ -58,10 +58,6 @@ void Barometer::loopHandler(void)
     _referenceAltitude = _referenceAltitudeMedianFilter.getMedian();
   }
 
-  EXECUTE_PERIODIC(100, {
-    _telemController->updateTelemetryEvent(TelemetryEvent::BarometricAltitudeUpdate, &currentAltMeters, sizeof(float));
-  });
-
   if (_altitudeHandler) {
     _altitudeHandler(_medianFilter.getMedian());
   }

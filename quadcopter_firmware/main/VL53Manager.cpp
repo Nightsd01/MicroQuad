@@ -126,10 +126,10 @@ void VL53Manager::loopHandler(void)
   }
 
   // Convert to meters
-  const float rangingDistanceMeters = static_cast<float>(_vl53l1x.ranging_data.range_mm) / 1000.0f;
+  float rangingDistanceMeters = static_cast<float>(_vl53l1x.ranging_data.range_mm) / 1000.0f;
 
   // correct for attitude of the platform
-  const float distanceMeters = _getAltitudeMetersCorrectedForAttitude(rangingDistanceMeters, _yawPitchRoll);
+  float distanceMeters = _getAltitudeMetersCorrectedForAttitude(rangingDistanceMeters, _yawPitchRoll);
 
   if (std::isnan(distanceMeters)) {
     LOG_WARN("Got an invalid distance reading: %f", rangingDistanceMeters);
@@ -138,6 +138,14 @@ void VL53Manager::loopHandler(void)
 
   // Call the altitude handler with the distance
   _altitudeHandler(distanceMeters);
+
+  EXECUTE_PERIODIC(250, {
+    _telemController->updateTelemetryEvent(TelemetryEvent::VL53L1XRawDistance, &rangingDistanceMeters, sizeof(float));
+    _telemController->updateTelemetryEvent(
+        TelemetryEvent::VL53L1XEstimatedAltitudeUpdate,
+        &distanceMeters,
+        sizeof(float));
+  });
 }
 
 void VL53Manager::updatedAttitude(const EulerAngle &yawPitchRoll)

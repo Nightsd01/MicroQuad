@@ -48,6 +48,10 @@ public class QuadStatus : ObservableObject {
   @Published var gyroRaw : XYZ?
   @Published var gyroFiltered : XYZ?
   @Published var magRaw : MagRawValues?
+  @Published var altitudeEstimate : Double?
+  @Published var verticalVelocityEstimate : Double?
+  @Published var rangefinderRawDistanceEstimate : Double?
+  @Published var rangefinderAltitudeEstimate : Double?
   @Published var memoryStatus : MemoryStatus?
   @Published var loopUpdateRateHz : UInt64?
   @Published var imuUpdateRateHz : UInt64?
@@ -175,6 +179,34 @@ public class QuadStatus : ObservableObject {
           return
         }
         self.magRaw = MagRawValues(xyz: XYZ(x: values[0], y: values[1], z: values[2]), heading: values[3])
+        break
+      case .VL53L1XRawDistance:
+        guard let values : [Float32] = parseNumericArray(withData: payload, count: 1) else {
+          print("ERROR: Received invalid \(type) update")
+          return
+        }
+        self.rangefinderRawDistanceEstimate = Double(values[0])
+        break
+      case .VL53L1XEstimatedAltitudeUpdate:
+        guard let values : [Float32] = parseNumericArray(withData: payload, count: 1) else {
+          print("ERROR: Received invalid \(type) update")
+          return
+        }
+        self.rangefinderAltitudeEstimate = Double(values[0])
+        break
+      case .EKFAltitudeEstimate:
+        guard let values : [Float32] = parseNumericArray(withData: payload, count: 1) else {
+          print("ERROR: Received invalid \(type) update")
+          return
+        }
+        self.altitudeEstimate = Double(values[0])
+        break
+      case .EKFVerticalVelocityEstimate:
+        guard let values : [Float32] = parseNumericArray(withData: payload, count: 1) else {
+          print("ERROR: Received invalid \(type) update")
+          return
+        }
+        self.verticalVelocityEstimate = Double(values[0])
         break
       default:
         print("ERROR: Received invalid \(type) update case")

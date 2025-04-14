@@ -15,7 +15,8 @@ CROSS_PLATFORM_ENUM(uint8_t, TelemetryEvent){
     LoopUpdateRate = 9,
     IMUUpdateRate = 10,
     MagnetometerXYZRaw = 11,
-    BarometricAltitudeUpdate = 12,
-    VL53L1XRawDistance = 13,
-    VL53L1XEstimatedAltitudeUpdate = 14,
+    VL53L1XRawDistance = 12,
+    VL53L1XEstimatedAltitudeUpdate = 13,
+    EKFAltitudeEstimate = 14,
+    EKFVerticalVelocityEstimate = 15,
 };

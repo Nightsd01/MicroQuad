@@ -71,7 +71,12 @@ struct BLEStatusView: View {
         if let euler = status.euler {
           HStack {
             Text("IMU: ").bold()
-            Text(String(format: "%.2f°  %.2f°  %.2f°  \(status.imuUpdateRateHz ?? 0)Hz", euler.yaw, euler.pitch, euler.roll))
+            Text(String(format: "%.2f°  %.2f°  %.2f°  %.2fm ⇅%.2fm/s \(status.imuUpdateRateHz ?? 0)Hz",
+                        euler.yaw,
+                        euler.pitch,
+                        euler.roll,
+                        status.altitudeEstimate ?? 0.0,
+                        status.verticalVelocityEstimate ?? 0.0))
               .lineLimit(1)
               .minimumScaleFactor(0.5)
           }
