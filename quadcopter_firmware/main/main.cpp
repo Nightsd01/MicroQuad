@@ -17,7 +17,7 @@
 #include "BLEController.h"
 #include "Barometer.h"
 #include "BatteryController.h"
-#include "EKFAttitudeAltitude.h"
+#include "ExtendedKalmanFilter.h"
 #include "Filters/KalmanFilter.h"
 #include "Filters/MedianFilter.h"
 #include "IMU.h"
@@ -116,9 +116,9 @@ static MotionDetector _motionDetector;
 
 EulerAngle _euler;
 
-static EKFAttitudeAltitude::Config _ekfConfig;
+static ExtendedKalmanFilter::Config _ekfConfig;
 
-static EKFAttitudeAltitude _extendedKalmanFilter(_ekfConfig);
+static ExtendedKalmanFilter _extendedKalmanFilter(_ekfConfig);
 
 static Barometer _barometer;
 static bool _receivedAltitudeUpdate = false;

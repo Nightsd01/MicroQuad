@@ -1,4 +1,4 @@
-#include "EKFAttitudeAltitude.h"
+#include "ExtendedKalmanFilter.h"
 
 #include <Logger.h>
 
@@ -152,7 +152,7 @@ Matrix<float, 3, 1> rotateVectorByQuaternion(const Matrix<float, 3, 1>& v, const
 
 // EKF Implementation
 
-EKFAttitudeAltitude::EKFAttitudeAltitude(const Config& config) : _config(config)
+ExtendedKalmanFilter::ExtendedKalmanFilter(const Config& config) : _config(config)
 {
   // Initialize state vector _x
   _x.zeros();
@@ -199,7 +199,7 @@ EKFAttitudeAltitude::EKFAttitudeAltitude(const Config& config) : _config(config)
   _gravity_world(2, 0) = _config.gravity_magnitude;
 }
 
-void EKFAttitudeAltitude::predict(float gyro_x_deg_s, float gyro_y_deg_s, float gyro_z_deg_s, float dt)
+void ExtendedKalmanFilter::predict(float gyro_x_deg_s, float gyro_y_deg_s, float gyro_z_deg_s, float dt)
 {
   // --- EKF Prediction Step ---
 
@@ -332,7 +332,7 @@ void EKFAttitudeAltitude::predict(float gyro_x_deg_s, float gyro_y_deg_s, float 
 #endif  // DEBUG_EKF
 }
 
-Matrix<float, STATE_DIM, STATE_DIM> EKFAttitudeAltitude::_calculateF(
+Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateF(
     const Matrix<float, 4, 1>& q,
     float omega_x,
     float omega_y,
@@ -391,7 +391,7 @@ Matrix<float, STATE_DIM, STATE_DIM> EKFAttitudeAltitude::_calculateF(
   return F_term;
 }
 
-Matrix<float, STATE_DIM, STATE_DIM> EKFAttitudeAltitude::_calculateQ(
+Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateQ(
     const Matrix<float, 4, 1>& q,  // Current quaternion estimate needed for Qqq
     float dt)
 {
@@ -489,14 +489,14 @@ Matrix<float, STATE_DIM, STATE_DIM> EKFAttitudeAltitude::_calculateQ(
   return Q;
 }
 
-void EKFAttitudeAltitude::updateAccelerometer(float accel_x, float accel_y, float accel_z)
+void ExtendedKalmanFilter::updateAccelerometer(float accel_x, float accel_y, float accel_z)
 {
   // --- EKF Update Step using Accelerometer ---
 
   float accel_norm = std::sqrt(accel_x * accel_x + accel_y * accel_y + accel_z * accel_z);
   float expected_gravity = _config.gravity_magnitude;
   float accel_error = std::fabs(accel_norm - expected_gravity);
-  if (accel_error > 0.5f) {  // Tune threshold (e.g., 0.5 m/s^2)
+  if (accel_error > 1.5f) {  // Tune threshold (e.g., 1.5 m/s^2)
     LOG_ERROR("Skipping accel update due to high acceleration: %.2f", accel_error);
     return;
   }
@@ -609,7 +609,7 @@ void EKFAttitudeAltitude::updateAccelerometer(float accel_x, float accel_y, floa
   _x.setSlice<4, 1>(Q0_IDX, 0, q_normalized);  // Set the normalized values back into _x
 }
 
-void EKFAttitudeAltitude::updateMagnetometer(float mag_x, float mag_y, float mag_z)
+void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float mag_z)
 {
   // --- EKF Update Step using Magnetometer ---
 
@@ -731,7 +731,7 @@ void EKFAttitudeAltitude::updateMagnetometer(float mag_x, float mag_y, float mag
   _x.setSlice<4, 1>(Q0_IDX, 0, q_normalized);
 }
 
-void EKFAttitudeAltitude::updateBarometer(float alt_baro)
+void ExtendedKalmanFilter::updateBarometer(float alt_baro)
 {
   Matrix<float, 1, STATE_DIM> H_baro;  // 1x10
   H_baro(0, ALT_IDX) = 1.0f;
@@ -765,7 +765,7 @@ void EKFAttitudeAltitude::updateBarometer(float alt_baro)
   _x.setSlice<4, 1>(Q0_IDX, 0, q);
 }
 
-void EKFAttitudeAltitude::updateRangefinder(float range_reading)
+void ExtendedKalmanFilter::updateRangefinder(float range_reading)
 {
   Matrix<float, 1, STATE_DIM> H_range;  // 1x10
   H_range(0, ALT_IDX) = 1.0f;
@@ -800,22 +800,22 @@ void EKFAttitudeAltitude::updateRangefinder(float range_reading)
 
 // Getters Implementation
 
-Matrix<float, 3, 1> EKFAttitudeAltitude::getYawPitchRollDegrees(void)
+Matrix<float, 3, 1> ExtendedKalmanFilter::getYawPitchRollDegrees(void)
 {
   auto quaternions = getAttitudeQuaternion();
   return getYawPitchRollDegreesFromQuaternion(quaternions);
 }
 
-Matrix<float, 4, 1> EKFAttitudeAltitude::getAttitudeQuaternion()
+Matrix<float, 4, 1> ExtendedKalmanFilter::getAttitudeQuaternion()
 {
   auto subMatrix = _x.slice<4, 1>(Q0_IDX, 0);
   return subMatrix;
 }
 
-float EKFAttitudeAltitude::getAltitude() const { return _x(ALT_IDX, 0); }
+float ExtendedKalmanFilter::getAltitude() const { return _x(ALT_IDX, 0); }
 
-float EKFAttitudeAltitude::getVerticalVelocity() const { return _x(VELZ_IDX, 0); }
+float ExtendedKalmanFilter::getVerticalVelocity() const { return _x(VELZ_IDX, 0); }
 
-Matrix<float, 3, 1> EKFAttitudeAltitude::getGyroBias() { return _x.slice<3, 1>(BG_XIDX, 0); }
+Matrix<float, 3, 1> ExtendedKalmanFilter::getGyroBias() { return _x.slice<3, 1>(BG_XIDX, 0); }
 
-float EKFAttitudeAltitude::getBarometerBias() const { return _x(BBARO_IDX, 0); }
+float ExtendedKalmanFilter::getBarometerBias() const { return _x(BBARO_IDX, 0); }

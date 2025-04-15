@@ -46,7 +46,7 @@ Matrix<float, 4, 1> normalizeQuaternion(Matrix<float, 4, 1>& q);
 Matrix<float, 3, 3> quaternionToRotationMatrix(const Matrix<float, 4, 1>& q);
 Matrix<float, 3, 1> getYawPitchRollDegreesFromQuaternion(const Matrix<float, 4, 1>& q);
 
-class EKFAttitudeAltitude
+class ExtendedKalmanFilter
 {
  public:
   // Structure to hold configuration parameters
@@ -73,10 +73,11 @@ class EKFAttitudeAltitude
 
     // Other constants
     float gravity_magnitude = 9.81f;
-    Matrix<float, 3, 1> mag_reference_vector = {{0.446f}, {0.116f}, {0.887f}};
+    Matrix<float, 3, 1> mag_reference_vector = {
+        {0.446f}, {0.116f}, {0.887f}};  // adjust for location, this is for Foster City, CA
   };
 
-  EKFAttitudeAltitude(const Config& config);
+  ExtendedKalmanFilter(const Config& config);
 
   // Prediction step based on gyro (mandatory) and dt
   // Gyro values in degrees per second
