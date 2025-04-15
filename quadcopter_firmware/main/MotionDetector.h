@@ -20,7 +20,7 @@ class MotionDetector
     size_t median_filter_window_size = 5;
 
     // Motion Detection Thresholds (apply to filtered data)
-    float gyro_motion_threshold_dps = 1.5f;         // Rotation rate threshold
+    float gyro_motion_threshold_dps = 10.5f;        // Rotation rate threshold
     float accel_stationary_magnitude_g = 1.0f;      // Expected gravity
     float accel_mag_deviation_threshold_g = 0.05f;  // Allowed deviation from 1G when stationary
 

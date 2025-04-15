@@ -1,5 +1,7 @@
 #include "MotionDetector.h"
 
+#include <Logger.h>
+
 #include <cmath>  // For std::sqrt, std::fabs
 
 // --- Constructor Implementations ---
@@ -37,7 +39,6 @@ MotionDetector::MotionDetector() : MotionDetector(Config())
 
 bool MotionDetector::checkMotionCondition(float gx, float gy, float gz, float ax, float ay, float az)
 {
-  // ... (implementation is unchanged) ...
   float gyro_mag_sq = (gx * gx) + (gy * gy) + (gz * gz);
   bool high_gyro = (gyro_mag_sq > _gyro_motion_threshold_dps_sq);
 
@@ -81,6 +82,7 @@ void MotionDetector::imuUpdate(const imu_update_t& data, uint64_t current_micros
   }
 
   if (!_filters_initialized) {
+    LOG_ERROR_PERIODIC_MILLIS(1000, "MotionDetector: Filters not initialized yet");
     return;
   }
 
