@@ -5,7 +5,7 @@
 
 #include <functional>
 
-#include "EKFAttitudeAltitude.h"
+#include "ExtendedKalmanFilter.h"
 
 class TelemetryController;
 

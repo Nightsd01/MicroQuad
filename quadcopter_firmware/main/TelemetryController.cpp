@@ -23,8 +23,20 @@ static const char *_eventTypeToString(TelemetryEvent event)
       return "MemoryStats";
     case MotorValues:
       return "MotorValues";
-    case BarometricAltitudeUpdate:
-      return "BarometricAltitudeUpdate";
+    case LoopUpdateRate:
+      return "LoopUpdateRate";
+    case IMUUpdateRate:
+      return "IMUUpdateRate";
+    case MagnetometerXYZRaw:
+      return "MagnetometerXYZRaw";
+    case VL53L1XRawDistance:
+      return "VL53L1XRawDistance";
+    case VL53L1XEstimatedAltitudeUpdate:
+      return "VL53L1XEstimatedAltitudeUpdate";
+    case EKFAltitudeEstimate:
+      return "EKFAltitudeEstimate";
+    case EKFVerticalVelocityEstimate:
+      return "EKFVerticalVelocityEstimate";
     default: {
       LOG_ERROR_PERIODIC_MILLIS(500, "Unknown telemetry event %i", event);
       return "Unknown";
