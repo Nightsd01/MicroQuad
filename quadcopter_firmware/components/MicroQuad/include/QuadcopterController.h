@@ -13,6 +13,8 @@
 #define THROTTLE_MAX 2000.0f
 #define MAX_YAW_RATE_DEG_PER_SEC 75.0f
 #define MAX_PITCH_ROLL_ANGLE_DEGREES 60.0f
+#define MAX_VERTICAL_VELOCITY_METERS_PER_SECOND 1.0f
+#define STEADY_STATE_HOVER_THROTTLE 93.0f  // determined via testing on a 0-255 range
 
 // Defines the range of the controller inputs starting from 0.0f
 #define INPUT_MAX_CONTROLLER_INPUT 255.0f
@@ -24,6 +26,8 @@ typedef struct
 {
   imu_values_t gyroOutput;
   imu_values_t yawPitchRollDegrees;
+  double altitudeMeters;
+  double verticalVelocityMetersPerSec;
 } imu_output_t;
 
 typedef struct
@@ -44,6 +48,7 @@ typedef struct
 {  // yaw, pitch, and roll gains
   gains_t angleGains[3];
   gains_t rateGains[3];
+  gains_t verticalVelocityGains;
 } quadcopter_config_t;
 
 class QuadcopterController
@@ -64,6 +69,7 @@ class QuadcopterController
  private:
   std::array<std::unique_ptr<PIDController>, 3> _angleControllers;
   std::array<std::unique_ptr<PIDController>, 3> _rateControllers;
+  PIDController *_verticalVelocityController;
   double _throttle;
   double _previousUpdateMicros;
   DebugHelper *_debugHelper;

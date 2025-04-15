@@ -18,6 +18,12 @@
     3       1
 
 */
+static double mapf(double x, double in_min, double in_max, double out_min, double out_max)
+{
+  if (x > in_max) return out_max;
+  if (x < in_min) return out_min;
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
 // Public functions
 QuadcopterController::QuadcopterController(DebugHelper* debugHelper, unsigned long timeMicros)
@@ -27,6 +33,7 @@ QuadcopterController::QuadcopterController(DebugHelper* debugHelper, unsigned lo
     _angleControllers[i] = std::make_unique<PIDController>(debugHelper);
     _rateControllers[i] = std::make_unique<PIDController>(debugHelper);
   }
+  _verticalVelocityController = new PIDController(debugHelper);
 }
 
 void QuadcopterController::_yawUpdate(
@@ -79,6 +86,8 @@ motor_outputs_t QuadcopterController::calculateOutputs(
 {
   const double throttle = (double)controllerValues.leftStickInput.y;  // 0.0 to 255.0
 
+  const double desiredMetersPerSec = (throttle - (255.0f / 2.0f)) * MAX_VERTICAL_VELOCITY_METERS_PER_SECOND;
+
   if (!_initializedYawSetPointDegrees) {
     _initializedYawSetPointDegrees = true;
     _yawSetPointDegrees = imuValues.yawPitchRollDegrees[0];
@@ -119,6 +128,22 @@ motor_outputs_t QuadcopterController::calculateOutputs(
         angleControllerOutputs[i],
         timeSeconds);
   }
+
+  // ranges from -1000 to 1000
+  const float verticalVelocityOutput = _verticalVelocityController->computeOutput(
+      config.verticalVelocityGains,
+      imuValues.verticalVelocityMetersPerSec,
+      desiredMetersPerSec,
+      timeSeconds);
+
+  const float adjustedThrottle =
+      STEADY_STATE_HOVER_THROTTLE + mapf(verticalVelocityOutput, -1000.0f, 1000.0f, -127.5f, 127.5f);
+  LOG_INFO_PERIODIC_MILLIS(
+      100,
+      "Vertical velocity = %.2f, adjusted throttle: %.2f, vertical velocity PID output: %.2f",
+      imuValues.verticalVelocityMetersPerSec,
+      adjustedThrottle,
+      verticalVelocityOutput);
 
   // Axes 1
   motor_outputs_t motors = {

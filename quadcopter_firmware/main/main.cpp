@@ -426,7 +426,9 @@ static void _receivedIMUUpdate(imu_update_t update)
 
   _imuValues = {
       .gyroOutput = {gyroscope.z, gyroscope.y,  gyroscope.x},
-      .yawPitchRollDegrees = {_euler.yaw,  _euler.pitch, _euler.roll}
+      .yawPitchRollDegrees = {_euler.yaw,  _euler.pitch, _euler.roll},
+      .altitudeMeters = ekfAltitude,
+      .verticalVelocityMetersPerSec = ekfVerticalVelocity,
   };
 
   _vl53Manager.updatedAttitude(_euler);
