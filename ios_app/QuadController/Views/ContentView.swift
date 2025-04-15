@@ -38,11 +38,11 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   
   
   var leftStick = ControllerView(StickConfiguration(identifier: 0,
-                                                    returnsToDefaultForAxes: Set([.horizontal]),
+                                                    returnsToDefaultForAxes: Set([.vertical, .horizontal]),
                                                     vibrates: true,
                                                     axis: .vertical,
                                                     horizontalDefaultStickLocation: .center,
-                                                    verticalDefaultStickLocation: .begin))
+                                                    verticalDefaultStickLocation: .center))
   var rightStick = ControllerView(StickConfiguration(identifier: 1,
                                                      returnsToDefaultForAxes: Set([.vertical, .horizontal]),
                                                      vibrates: true,

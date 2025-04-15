@@ -393,7 +393,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     quadStatus.updateTelemetry(withData: data)
   }
   
-  func updatePID(axis : ControlAxis, type : PIDType, gains : PIDGains)
+  func updatePIDValues(axis : ControlAxis, type : PIDType, values : inout PIDValues)
   {
     guard let characteristic = pidTuningCharacteristic else {
       print("Error updating PIDs: No characteristic")
@@ -401,6 +401,21 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     }
     var controlAxis = axis.rawValue
     var pidType = type.rawValue
+    var buffer = Data()
+    withUnsafeBytes(of: &controlAxis) {
+      buffer.append(contentsOf: $0)
+    }
+    withUnsafeBytes(of: &pidType) {
+      buffer.append(contentsOf: $0)
+    }
+    withUnsafeBytes(of: &values) {
+      buffer.append(contentsOf: $0)
+    }
+    device?.writeValue(buffer, for: characteristic, type: .withoutResponse)
+  }
+  
+  func updatePID(axis : ControlAxis, type : PIDType, gains : PIDGains)
+  {
     var values : PIDValues
     switch (axis) {
     case .Yaw:
@@ -413,17 +428,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
       fatalError("Unsupported axis \(axis)")
     }
     
-    var buffer = Data()
-    withUnsafeBytes(of: &controlAxis) {
-      buffer.append(contentsOf: $0)
-    }
-    withUnsafeBytes(of: &pidType) {
-      buffer.append(contentsOf: $0)
-    }
-    withUnsafeBytes(of: &values) {
-      buffer.append(contentsOf: $0)
-    }
-    device?.writeValue(buffer, for: characteristic, type: .withoutResponse)
+    updatePIDValues(axis: axis, type: type, values: &values)
   }
   
   private func updateDelegateState() {

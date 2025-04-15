@@ -22,6 +22,7 @@ struct PIDGains : Codable {
 struct PIDsContainer : Codable {
   var angleValues : PIDGains
   var rateValues : PIDGains
+  var verticalGains : PIDValues
 }
 
 fileprivate struct PIDUpdateParams {
@@ -84,12 +85,16 @@ public class PIDController {
           integral: 0.02,
           derivative: 0.01
         )
+      ),
+      verticalGains: PIDValues(
+        proportional: 8.0,
+        integral: 0.1,
+        derivative: 2.0
       )
     )
   }
   
   private func sendUpdate(axis: ControlAxis, type: PIDType) {
-    print("Sending yaw P gains: \(self.gains.angleValues.yawGains.proportional)")
     lastSentTime = Date()
     switch (type) {
       case .Angle:
@@ -97,6 +102,9 @@ public class PIDController {
         break
       case .Rate:
         controller.updatePID(axis: axis, type: type, gains: self.gains.rateValues)
+        break
+      case .VerticalVelocity:
+        controller.updatePIDValues(axis: axis, type: type, values: &self.gains.verticalGains)
         break
       default:
         fatalError("Invalid PID type \(type)")
@@ -117,6 +125,23 @@ public class PIDController {
       default:
         fatalError("Invalid PID type \(type)")
     }
+    scheduleUpdateTransmission(axis: axis, type: type)
+  }
+  
+  func updatePidValues(axis: ControlAxis, type : PIDType, newValues : PIDValues)
+  {
+    switch (type) {
+    case .VerticalVelocity:
+      gains.verticalGains = newValues
+      break
+    default:
+      fatalError("Invalid PID type \(type) - use updatePids() instead")
+    }
+    scheduleUpdateTransmission(axis: axis, type: type)
+  }
+  
+  func scheduleUpdateTransmission(axis: ControlAxis, type : PIDType)
+  {
     if let lastSentTimeSeconds = self.lastSentTime?.timeIntervalSince1970 {
       if Date().timeIntervalSince1970 - lastSentTimeSeconds > updateRateSeconds {
         self.sendUpdate(axis: axis, type: type)

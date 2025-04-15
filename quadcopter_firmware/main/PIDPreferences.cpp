@@ -7,6 +7,40 @@
 #include "PersistentKeyValueStore.h"
 #include "PersistentKeysCommon.h"
 
+static quadcopter_config_t _defaultGains = {
+    .angleGains =
+        {{// yaw
+          .kP = 2.0f,
+          .kI = 0.01f,
+          .kD = 0.0f},
+                     {// pitch
+          .kP = 3.0f,
+          .kI = 0.02f,
+          .kD = 0.01f},
+                     {// roll
+          .kP = 3.0f,
+          .kI = 0.02f,
+          .kD = 0.01f}},
+    .rateGains =
+        {{// yaw
+          .kP = 2.1f,
+          .kI = 0.01f,
+          .kD = 0.0005f},
+                     {// pitch
+          .kP = 4.0f,
+          .kI = 0.02f,
+          .kD = 0.01f},
+                     {// roll
+          .kP = 4.0f,
+          .kI = 0.02f,
+          .kD = 0.01f}},
+    .verticalVelocityGains = {
+                     .kP = 8.0f,
+                     .kI = 0.10f,
+                     .kD = 2.0f,
+                     }
+};
+
 PIDPreferences::PIDPreferences(BLEController *controller, PersistentKeyValueStore *kvStore)
 {
   this->_kvStore = kvStore;
@@ -26,6 +60,8 @@ const std::string _getAxisKey(ControlAxis axis)
       return PersistentKeysCommon::PID_CONSTANTS_PREFIX + "PITCH";
     case ControlAxis::Roll:
       return PersistentKeysCommon::PID_CONSTANTS_PREFIX + "ROLL";
+    case ControlAxis::Vertical:
+      return PersistentKeysCommon::PID_CONSTANTS_PREFIX + "VERT";
     default:
       LOG_ERROR("Invalid axis\n");
       abort();
@@ -42,16 +78,28 @@ void PIDPreferences::_updateGains(ControlAxis axis, PIDType type, gains_t gains)
     case PIDType::Rate:
       this->gains.rateGains[(int)axis] = gains;
       break;
+    case PIDType::VerticalVelocity:
+      this->gains.verticalVelocityGains = gains;
+      break;
   }
-  std::vector<float> newGains = {
-      (float)this->gains.angleGains[(int)axis].kP,
-      (float)this->gains.angleGains[(int)axis].kI,
-      (float)this->gains.angleGains[(int)axis].kD,
-      (float)this->gains.rateGains[(int)axis].kP,
-      (float)this->gains.rateGains[(int)axis].kI,
-      (float)this->gains.rateGains[(int)axis].kD,
-  };
-  _kvStore->setVectorForKey<float>(_getAxisKey(axis), newGains);
+  if (axis != ControlAxis::Vertical) {
+    std::vector<float> newGains = {
+        (float)this->gains.angleGains[(int)axis].kP,
+        (float)this->gains.angleGains[(int)axis].kI,
+        (float)this->gains.angleGains[(int)axis].kD,
+        (float)this->gains.rateGains[(int)axis].kP,
+        (float)this->gains.rateGains[(int)axis].kI,
+        (float)this->gains.rateGains[(int)axis].kD,
+    };
+    _kvStore->setVectorForKey<float>(_getAxisKey(axis), newGains);
+  } else {
+    std::vector<float> newGains = {
+        (float)this->gains.verticalVelocityGains.kP,
+        (float)this->gains.verticalVelocityGains.kI,
+        (float)this->gains.verticalVelocityGains.kD,
+    };
+    _kvStore->setVectorForKey<float>(_getAxisKey(axis), newGains);
+  }
 }
 
 quadcopter_config_t PIDPreferences::_initializeGains()
@@ -59,13 +107,15 @@ quadcopter_config_t PIDPreferences::_initializeGains()
   const std::string yawKey = _getAxisKey(ControlAxis::Yaw);
   const std::string pitchKey = _getAxisKey(ControlAxis::Pitch);
   const std::string rollKey = _getAxisKey(ControlAxis::Roll);
+  const std::string verticalKey = _getAxisKey(ControlAxis::Vertical);
 
   if (_kvStore->hasValueForKey(yawKey) && _kvStore->hasValueForKey(pitchKey) && _kvStore->hasValueForKey(rollKey)) {
     const std::vector<float> yawGains = _kvStore->getVectorForKey<float>(yawKey, 6);
     const std::vector<float> pitchGains = _kvStore->getVectorForKey<float>(pitchKey, 6);
     const std::vector<float> rollGains = _kvStore->getVectorForKey<float>(rollKey, 6);
+    const std::vector<float> verticalGains = _kvStore->getVectorForKey<float>(verticalKey, 3);
 
-    if (yawGains.size() == 6 && pitchGains.size() == 6 && rollGains.size() == 6) {
+    if (yawGains.size() == 6 && pitchGains.size() == 6 && rollGains.size() == 6 && verticalGains.size() == 3) {
       return {
           .angleGains =
               {{// yaw
@@ -93,68 +143,20 @@ quadcopter_config_t PIDPreferences::_initializeGains()
                 .kP = rollGains[3],
                 .kI = rollGains[4],
                 .kD = rollGains[5]}},
+          .verticalVelocityGains =
+              {
+                           .kP = verticalGains[0],
+                           .kI = verticalGains[1],
+                           .kD = verticalGains[2],
+                           },
       };
     } else {
       LOG_ERROR("Failed to get PID gains from KV store - corrupt/invalid gains, using defaults");
     }
 
     LOG_WARN("Using default PID gains");
-    return {
-        .angleGains =
-            {{// yaw
-              .kP = 2.0f,
-              .kI = 0.01f,
-              .kD = 0.0f},
-                         {// pitch
-              .kP = 3.0f,
-              .kI = 0.02f,
-              .kD = 0.01f},
-                         {// roll
-              .kP = 3.0f,
-              .kI = 0.02f,
-              .kD = 0.01f}},
-        .rateGains = {
-                         {// yaw
-             .kP = 2.1f,
-             .kI = 0.01f,
-             .kD = 0.0005f},
-                         {// pitch
-             .kP = 4.0f,
-             .kI = 0.02f,
-             .kD = 0.01f},
-                         {// roll
-             .kP = 4.0f,
-             .kI = 0.02f,
-             .kD = 0.01f} }
-    };
+    return _defaultGains;
   }
 
-  return {
-      .angleGains =
-          {{// yaw
-            .kP = 2.0f,
-            .kI = 0.01f,
-            .kD = 0.0f},
-                       {// pitch
-            .kP = 3.0f,
-            .kI = 0.02f,
-            .kD = 0.01f},
-                       {// roll
-            .kP = 3.0f,
-            .kI = 0.02f,
-            .kD = 0.01f}},
-      .rateGains = {
-                       {// yaw
-           .kP = 2.1f,
-           .kI = 0.01f,
-           .kD = 0.0005f},
-                       {// pitch
-           .kP = 4.0f,
-           .kI = 0.02f,
-           .kD = 0.01f},
-                       {// roll
-           .kP = 4.0f,
-           .kI = 0.02f,
-           .kD = 0.01f} }
-  };
+  return _defaultGains;
 }

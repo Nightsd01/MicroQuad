@@ -16,6 +16,8 @@ func axisName(axis : ControlAxis) -> String
       return "Pitch"
     case .Roll:
       return "Roll"
+    case .Vertical:
+      return "Vertical"
     default:
       fatalError("Undefined control axis \(axis)")
   }
@@ -28,6 +30,10 @@ func pidTypeName(pidType: PIDType) -> String
       return "Angle"
     case .Rate:
       return "Rate"
+    case .VerticalVelocity:
+        return "Vertical Velocity"
+    default:
+        fatalError("Undefined PID type \(pidType)")
   }
 }
 
@@ -42,19 +48,30 @@ struct PIDSlidersView: View {
   @State var iValue: Double
   @State var dValue: Double
   
-  init(axis: ControlAxis, pidType: PIDType, changeHandler: @escaping (PIDType, ControlAxis, PIDValues) -> Void, initialValues: PIDValues) {
+  init(
+    axis: ControlAxis,
+    pidType: PIDType,
+    changeHandler: @escaping (PIDType, ControlAxis, PIDValues) -> Void,
+    initialValues: PIDValues,
+    pRange: ClosedRange<Double> = 0.0...10.0,
+    iRange : ClosedRange<Double> = 0.0...1.0,
+    dRange : ClosedRange<Double> = 0.0...0.1
+  ) {
     self.axis = axis
     self.pidType = pidType
     self.changeHandler = changeHandler
     self.pValue = Double(initialValues.proportional)
     self.iValue = Double(initialValues.integral)
     self.dValue = Double(initialValues.derivative)
+    self.pRange = pRange
+    self.iRange = iRange
+    self.dRange = dRange
   }
   
   // Each slider can have its own adjustable value range
-  let pRange : ClosedRange<Double> = 0.0...10.0
-  let iRange : ClosedRange<Double> = 0.0...1.0
-  let dRange : ClosedRange<Double> = 0.0...0.1
+  let pRange : ClosedRange<Double>
+  let iRange : ClosedRange<Double>
+  let dRange : ClosedRange<Double>
   
   func getValues() -> PIDValues {
     PIDValues(proportional: Float32(pValue), integral: Float32(iValue), derivative: Float32(dValue))
@@ -156,7 +173,7 @@ struct PIDAllAxisView: View {
       existing.rollGains = newValues
       break
     default:
-      fatalError("Unknown axis: \(axis)")
+      fatalError("Invalid gains axis: \(axis)")
     }
   }
   
@@ -171,6 +188,9 @@ struct PIDAllAxisView: View {
           self.updateGains(existing: &self.pids.rateValues, newValues: values, type: .Rate, axis: axis)
           controller.updatePids(axis: axis, type: type, newGains: self.pids.rateValues)
           break
+      case .VerticalVelocity:
+        self.pids.verticalGains = values
+        controller.updatePidValues(axis: axis, type: type, newValues: self.pids.verticalGains)
       default:
         fatalError("Unknown PID type \(type)")
       }
@@ -181,6 +201,13 @@ struct PIDAllAxisView: View {
           PIDDebuggerView(pidType: .Angle, changeHandler: changeHandler, initialGains: initialGains.angleValues)
           PIDDebuggerView(pidType: .Rate, changeHandler: changeHandler, initialGains: initialGains.rateValues)
         }
+        PIDSlidersView(
+          axis: .Vertical,
+          pidType: .VerticalVelocity,
+          changeHandler: changeHandler,
+          initialValues: initialGains.verticalGains,
+          dRange: 0.0...3.0
+        )
         Button("Reset to defaults") {
           pids = controller.resetToDefaults()
         }
