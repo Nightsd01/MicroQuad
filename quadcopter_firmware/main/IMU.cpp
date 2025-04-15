@@ -83,26 +83,26 @@ IMU::IMU(
     setAnyOffset = true;
   }
 
-  // if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_X)) {
-  //   const int16_t xOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_X);
-  //   LOG_INFO("Setting X gyro offset: %d", xOffset);
-  //   _imu->setGyrXOffset(xOffset);
-  //   setAnyOffset = true;
-  // }
+  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_X)) {
+    const int16_t xOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_X);
+    LOG_INFO("Setting X gyro offset: %d", xOffset);
+    _imu->setGyrXOffset(xOffset);
+    setAnyOffset = true;
+  }
 
-  // if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Y)) {
-  //   const int16_t yOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Y);
-  //   LOG_INFO("Setting Y gyro offset: %d", yOffset);
-  //   _imu->setGyrYOffset(yOffset);
-  //   setAnyOffset = true;
-  // }
+  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Y)) {
+    const int16_t yOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Y);
+    LOG_INFO("Setting Y gyro offset: %d", yOffset);
+    _imu->setGyrYOffset(yOffset);
+    setAnyOffset = true;
+  }
 
-  // if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Z)) {
-  //   const int16_t zOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Z);
-  //   LOG_INFO("Setting Z gyro offset: %d", zOffset);
-  //   _imu->setGyrZOffset(zOffset);
-  //   setAnyOffset = true;
-  // }
+  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Z)) {
+    const int16_t zOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Z);
+    LOG_INFO("Setting Z gyro offset: %d", zOffset);
+    _imu->setGyrZOffset(zOffset);
+    setAnyOffset = true;
+  }
 
   if (!setAnyOffset) {
     LOG_WARN("No IMU offsets found in persistent storage, please calibrate the device");
@@ -175,6 +175,10 @@ void IMU::loopHandler(void)
 
 void IMU::beginQuickGyroCalibration(void)
 {
+  // Need to reset the existing offsets before starting the calibration
+  _imu->setGyrXOffset(0.0f);
+  _imu->setGyrYOffset(0.0f);
+  _imu->setGyrZOffset(0.0f);
   isQuickGyroCalibrationInProgress = true;
   _startedQuickGyroCalibrationTimeMillis = millis();
   _quickCalibrationGyroSums = {0, 0, 0};
