@@ -39,14 +39,6 @@
 #include "soc/timer_group_reg.h"
 #include "soc/timer_group_struct.h"
 
-#ifndef MAX
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
-#endif  // MAX
-
-#ifndef MIN
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
-#endif  // MIN
-
 static std::vector<MotorController *> _speedControllers;
 
 BatteryController *_batteryController;

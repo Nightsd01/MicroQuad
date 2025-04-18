@@ -34,5 +34,13 @@ const gpio_num_t MOTOR_TELEM_PINS[NUM_MOTORS] = {GPIO_NUM_34, GPIO_NUM_33, GPIO_
 #define RAD_TO_DEGS(x) x * 57.295779513082320876798154814105f
 #endif  // RAD_TO_DEGS
 
+#ifndef MAX
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#endif  // MAX
+
+#ifndef MIN
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#endif  // MIN
+
 // declination angle for Foster City, CA
 #define DECLINATION_ANGLE_DEG (12.0 + (55.0 / 60.0)) / (180 / PI)
