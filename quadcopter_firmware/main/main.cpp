@@ -210,9 +210,12 @@ static void _gotMagUpdate(mag_update_t update)
   _receivedMagUpdate = true;
   _magValues = update;
   if (_motorMagCompensationHandler->isCalibrating) {
-    _motorMagCompensationHandler->updateMagValue(update);
+    _motorMagCompensationHandler->updateMagValue(update, _batteryController->batteryVoltage());
   } else if (_completedFirstArm && _mostRecentMotorValues[0] > 0 && _motorMagCompensationHandler->isCalibrated) {
-    _magValues = _motorMagCompensationHandler->applyMagneticMotorCompensation(update, _mostRecentMotorValues);
+    _magValues = _motorMagCompensationHandler->applyMagneticMotorCompensation(
+        update,
+        _mostRecentMotorValues,
+        _batteryController->batteryVoltage());
   }
   if (_imu->completedQuickCalibration) {
     // TODO: Commented out for debugging
