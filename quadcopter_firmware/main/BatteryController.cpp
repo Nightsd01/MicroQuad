@@ -1,8 +1,8 @@
 #include "BatteryController.h"
 
+#include "Constants.h"
 #include "DebugHelper.h"
 #include "Logger.h"
-#include "PinDefines.h"
 #include "TelemetryController.h"
 
 #define BATTERY_SCALE 0.001639280125196f

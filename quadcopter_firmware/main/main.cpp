@@ -17,6 +17,7 @@
 #include "BLEController.h"
 #include "Barometer.h"
 #include "BatteryController.h"
+#include "Constants.h"
 #include "ExtendedKalmanFilter.h"
 #include "Filters/KalmanFilter.h"
 #include "Filters/MedianFilter.h"
@@ -29,7 +30,6 @@
 #include "PIDPreferences.h"
 #include "PersistentKeyValueStore.h"
 #include "PersistentKeysCommon.h"
-#include "PinDefines.h"
 #include "SPI.h"
 #include "TelemetryController.h"
 #include "VL53Manager.h"
@@ -230,20 +230,11 @@ static void _configureMagnetometer(void)
   _compass = new QMC5883L(&Wire, QMC5883_ADDRESS);
   _compass->addObserver([&](mag_update_t update) { _gotMagUpdate(update); });
 
-  /**
-   * @brief  Set declination angle on your location and fix heading
-   * @n      You can find your declination on:
-   * http://magnetic-declination.com/
-   * @n      (+) Positive or (-) for negative
-   * @n      For Bytom / Poland declination angle is 4'26E (positive)
-   * @n      Formula: (deg + (min / 60.0)) / (180 / PI);
-   */
-  const float declinationAngle = (12.0 + (55.0 / 60.0)) / (180 / PI);
   _compass->setRange(QMC5883_RANGE_2GA);
   _compass->setMeasurementMode(QMC5883_CONTINOUS);
   _compass->setDataRate(QMC5883_DATARATE_200HZ);
   _compass->setSamples(QMC5883_SAMPLES_4);
-  _compass->setDeclinationAngle(declinationAngle);
+  _compass->setDeclinationAngle(DECLINATION_ANGLE_DEG);
 
   if (!_compass->begin()) {
     LOG_ERROR("Failed to begin compass");

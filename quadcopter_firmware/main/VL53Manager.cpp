@@ -5,19 +5,11 @@
 #include <stdexcept>  // For potentially throwing errors on invalid input
 #include <vector>     // Although input is float[3], vector might be safer if size isn't guaranteed
 
+#include "Constants.h"
 #include "Logger.h"
 #include "TelemetryController.h"
 #include "TelemetryEvent.h"
 
-// Define PI if M_PI isn't available or preferred
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-// Constant for converting degrees to radians
-#ifndef DEG_TO_RADS
-#define DEG_TO_RADS(x) x * 0.017453292519943295769236907684886f
-#endif  // DEG_TO_RADS
 // Define a maximum tilt angle beyond which the reading is considered unreliable for altitude
 constexpr float MAX_RELIABLE_TILT_DEG = 60.0f;  // Example: 60 degrees
 

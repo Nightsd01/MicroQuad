@@ -5,24 +5,10 @@
 #include <cmath>
 #include <stdexcept>  // For potential errors
 
+#include "Constants.h"
+
 // Small value to prevent division by zero
 constexpr float EPSILON = 1e-9f;
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846f
-#endif
-#ifndef M_PI_2
-#define M_PI_2 1.57079632679489661923f
-#endif
-
-// Constant for converting degrees to radians
-#ifndef DEG_TO_RADS
-#define DEG_TO_RADS(x) x * 0.017453292519943295769236907684886f
-#endif  // DEG_TO_RADS
-
-#ifndef RAD_TO_DEGS
-#define RAD_TO_DEGS(x) x * 57.295779513082320876798154814105f
-#endif  // RAD_TO_DEGS
 
 // Quaternion Helper Function Implementations
 // (Place these here or in a separate utility file included by both .h and .cpp)
