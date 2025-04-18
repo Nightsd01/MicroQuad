@@ -410,8 +410,17 @@ static void _receivedIMUUpdate(imu_update_t update)
     _motionDetector.imuUpdate(update, micros());
     return;
   }
-  _extendedKalmanFilter.predict(gyroscope.x, gyroscope.y, gyroscope.z, deltaTimeSeconds);
+  _extendedKalmanFilter.predict(
+      gyroscope.x,
+      gyroscope.y,
+      gyroscope.z,
+      accelerometer.x * STANDARD_GRAVITY,
+      accelerometer.y * STANDARD_GRAVITY,
+      accelerometer.z * STANDARD_GRAVITY,
+      deltaTimeSeconds);
 
+  // NOTE: Due to all the matrix allocations, we cannot combine this with predict()
+  // because of the limited stack size on the ESP32
   _extendedKalmanFilter.updateAccelerometer(
       accelerometer.x * STANDARD_GRAVITY,
       accelerometer.y * STANDARD_GRAVITY,

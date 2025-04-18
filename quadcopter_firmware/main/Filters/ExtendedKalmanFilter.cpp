@@ -199,137 +199,99 @@ ExtendedKalmanFilter::ExtendedKalmanFilter(const Config& config) : _config(confi
   _gravity_world(2, 0) = _config.gravity_magnitude;
 }
 
-void ExtendedKalmanFilter::predict(float gyro_x_deg_s, float gyro_y_deg_s, float gyro_z_deg_s, float dt)
+void ExtendedKalmanFilter::predict(
+    float gyro_x_deg_s,
+    float gyro_y_deg_s,
+    float gyro_z_deg_s,
+    float accel_x_m_s2,
+    float accel_y_m_s2,
+    float accel_z_m_s2,
+    float dt)
 {
-  // --- EKF Prediction Step ---
+  // ── 0.  Sanity check ───────────────────────────────────────────────────────
+  if (dt <= 0.0f) return;
 
-  // --- Argument Checks (Optional but Recommended) ---
-  if (dt <= 0.0f) {
-    // Cannot predict with zero or negative dt
-    // Optionally add logging here.
-    return;
-  }
-  if (dt > 0.1f) {  // Example threshold
-                    // Large dt might lead to instability or inaccuracy
-                    // Optionally add warning logging here.
-  }
+  // (Optional) warn if dt is unusually large
+  // if (dt > 0.1f) LOG_WARN("EKF dt = %.3f s", dt);
 
-  float gyro_x = DEG_TO_RADS(gyro_x_deg_s);  // Convert to rad/s
-  float gyro_y = DEG_TO_RADS(gyro_y_deg_s);  // Convert to rad/s
-  float gyro_z = DEG_TO_RADS(gyro_z_deg_s);  // Convert to rad/s
+  // ── 1.  Convert gyro to rad/s and pull current state -----------------------
+  float gx = DEG_TO_RADS(gyro_x_deg_s);
+  float gy = DEG_TO_RADS(gyro_y_deg_s);
+  float gz = DEG_TO_RADS(gyro_z_deg_s);
 
-  // 1. Get current state and covariance
-  Matrix<float, STATE_DIM, 1> x_current = _x;
-  Matrix<float, STATE_DIM, STATE_DIM> P_current = _PCovariance;
+  Matrix<float, STATE_DIM, 1> x_prev = _x;
+  Matrix<float, STATE_DIM, STATE_DIM> P_prev = _PCovariance;
 
-  // 2. Extract states needed for prediction dynamics
-  Matrix<float, 4, 1> q = x_current.slice<4, 1>(Q0_IDX, 0);
-  float alt = x_current(ALT_IDX, 0);
-  float velz = x_current(VELZ_IDX, 0);
-  // IMPORTANT: Gyro bias state MUST be stored in rad/s internally for consistency
-  Matrix<float, 3, 1> gyro_bias = x_current.slice<3, 1>(BG_XIDX, 0);
+  Matrix<float, 4, 1> q_prev = x_prev.slice<4, 1>(Q0_IDX, 0);
+  Matrix<float, 3, 1> b_g = x_prev.slice<3, 1>(BG_XIDX, 0);
 
-  // 3. Calculate bias-corrected angular rates (omega in rad/s)
-  float omega_x = gyro_x - gyro_bias(0, 0);  // Now both terms are in rad/s
-  float omega_y = gyro_y - gyro_bias(1, 0);
-  float omega_z = gyro_z - gyro_bias(2, 0);
+  // ── 2.  Attitude propagation ----------------------------------------------
+  Matrix<float, 3, 1> omega = {{gx - b_g(0, 0)}, {gy - b_g(1, 0)}, {gz - b_g(2, 0)}};
 
-  // --- State Propagation f(x, u, dt) ---
+  Matrix<float, 3, 1> dtheta = omega * dt;
+  float dtheta_norm_sq = dtheta(0, 0) * dtheta(0, 0) + dtheta(1, 0) * dtheta(1, 0) + dtheta(2, 0) * dtheta(2, 0);
 
-  // 4. Propagate attitude quaternion using delta quaternion method
-  Matrix<float, 4, 1> q_new;
-  Matrix<float, 3, 1> omega = {{omega_x}, {omega_y}, {omega_z}};
-  Matrix<float, 3, 1> delta_theta = omega * dt;
-
-  // Calculate norm^2 efficiently
-  float delta_theta_norm_sq = delta_theta(0, 0) * delta_theta(0, 0) + delta_theta(1, 0) * delta_theta(1, 0) +
-                              delta_theta(2, 0) * delta_theta(2, 0);
-
-  const float angle_tol_sq = 1e-12f;  // Threshold for small angle approximation (~1e-6 rad)
   Matrix<float, 4, 1> delta_q;
+  constexpr float ANGLE_TOL_SQ = 1e-12f;
+  if (dtheta_norm_sq > ANGLE_TOL_SQ) {
+    float dtheta_norm = std::sqrt(dtheta_norm_sq);
+    float half_ang = 0.5f * dtheta_norm;
+    float s = std::sin(half_ang);
+    float c = std::cos(half_ang);
 
-  if (delta_theta_norm_sq > angle_tol_sq) {
-    float delta_theta_norm = std::sqrt(delta_theta_norm_sq);
-    float half_angle = delta_theta_norm * 0.5f;
-    float sin_half_angle = std::sin(half_angle);
-    float cos_half_angle = std::cos(half_angle);
-
-    // Calculate axis (normalized delta_theta)
-    Matrix<float, 3, 1> axis = delta_theta * (1.0f / delta_theta_norm);
-
-    // Create delta quaternion delta_q
-    delta_q(0, 0) = cos_half_angle;
-    delta_q(1, 0) = axis(0, 0) * sin_half_angle;
-    delta_q(2, 0) = axis(1, 0) * sin_half_angle;
-    delta_q(3, 0) = axis(2, 0) * sin_half_angle;
-  } else {
-    // Angle is very small, use delta_q = [1, 0, 0, 0] (identity quaternion)
-    // Or use first-order approximation: delta_q ~= [1, wx*dt/2, wy*dt/2, wz*dt/2]
-    // Using identity is simpler and often sufficient for tiny angles.
+    Matrix<float, 3, 1> axis = dtheta * (1.0f / dtheta_norm);
+    delta_q(0, 0) = c;
+    delta_q(1, 0) = axis(0, 0) * s;
+    delta_q(2, 0) = axis(1, 0) * s;
+    delta_q(3, 0) = axis(2, 0) * s;
+  } else  // small‑angle first‑order approximation
+  {
     delta_q(0, 0) = 1.0f;
-    delta_q(1, 0) = omega_x * dt * 0.5f;
-    delta_q(2, 0) = omega_y * dt * 0.5f;
-    delta_q(3, 0) = omega_z * dt * 0.5f;
-    delta_q = normalizeQuaternion(delta_q);  // Ensure unit norm
+    delta_q(1, 0) = 0.5f * dtheta(0, 0);
+    delta_q(2, 0) = 0.5f * dtheta(1, 0);
+    delta_q(3, 0) = 0.5f * dtheta(2, 0);
+    delta_q = normalizeQuaternion(delta_q);
   }
 
-  // Update quaternion: q_new = q * delta_q (Hamilton product)
-  q_new = quaternionMultiplyHamiltonProduct(q, delta_q);
-
-  // Ensure the propagated quaternion is normalized (CRITICAL)
-  // Note: normalizeQuaternion should handle potential zero norm input gracefully.
+  Matrix<float, 4, 1> q_new = quaternionMultiplyHamiltonProduct(q_prev, delta_q);
   q_new = normalizeQuaternion(q_new);
 
-  // 5. Propagate altitude (simple linear model)
-  float alt_new = alt + velz * dt;
+  // ── 3.  IMU‑derived vertical acceleration (NED: +Z is Down) ---------------
+  Matrix<float, 3, 1> a_body = {{accel_x_m_s2}, {accel_y_m_s2}, {accel_z_m_s2}};
+  float a_z = _verticalAccelerationWorld(a_body, q_new);  // m/s², Down +
 
-  // 6. Propagate vertical velocity (model assumes constant velocity between updates)
-  float velz_new = velz;  // Velocity changes are driven by process noise and sensor updates
+  // ── 4.  Integrate to vertical velocity and altitude -----------------------
+  float velz_prev = x_prev(VELZ_IDX, 0);  // m/s (Down +)
+  float alt_prev = x_prev(ALT_IDX, 0);    // m   (Down +)
 
-  // 7. Propagate biases (model assumes biases are random walks)
-  // The state values themselves don't change here; change comes from noise via Q.
-  // Matrix<float, 3, 1> gyro_bias_new = gyro_bias;
-  // float baro_bias_new = x_current(BBARO_IDX, 0);
+  float velz_new = velz_prev + a_z * dt;
+  float alt_new = alt_prev + velz_prev * dt + 0.5f * a_z * dt * dt;
 
-  // 8. Update the state vector _x with propagated values
+  // ── 5.  Write propagated state --------------------------------------------
   _x.setSlice<4, 1>(Q0_IDX, 0, q_new);
-  _x(ALT_IDX, 0) = alt_new;
   _x(VELZ_IDX, 0) = velz_new;
-  // Biases don't change in state propagation step, only via noise (Q matrix)
-  // So, no need to call setSlice for gyro_bias or set value for baro_bias
+  _x(ALT_IDX, 0) = alt_new;
+  // (bias states remain unchanged in the deterministic model)
 
-  // --- Covariance Propagation P = F*P*F^T + Q ---
+  // ── 6.  Linearised transition matrix F ------------------------------------
+  Matrix<float, STATE_DIM, STATE_DIM> F = _calculateF(q_prev, omega(0, 0), omega(1, 0), omega(2, 0), dt);
 
-  // 9. Calculate State Transition Jacobian F = df/dx
-  //    F depends on the *current* attitude q and *corrected* omega used for propagation
-  Matrix<float, STATE_DIM, STATE_DIM> F = _calculateF(q, omega_x, omega_y, omega_z, dt);
+  // ── 7.  Base process noise matrix Q ---------------------------------------
+  Matrix<float, STATE_DIM, STATE_DIM> Q = _calculateQ(q_prev, dt);
 
-  // 10. Calculate Process Noise Covariance Q for interval dt
-  //     Q may depend on attitude q for mapping angular noise to quaternion noise
-  Matrix<float, STATE_DIM, STATE_DIM> Q = _calculateQ(q, dt);
+  // Additional continuous‑acceleration noise mapped into (alt, velz)
+  const float sigma2_accel = _config.accel_noise_variance;  // (m/s²)²
+  float dt2 = dt * dt, dt3 = dt2 * dt, dt4 = dt2 * dt2;
 
-  // 11. Propagate covariance: P_new = F * P_current * F^T + Q
-  _PCovariance = F * P_current * F.transpose() + Q;
+  Q(ALT_IDX, ALT_IDX) += 0.25f * sigma2_accel * dt4;
+  Q(ALT_IDX, VELZ_IDX) += 0.5f * sigma2_accel * dt3;
+  Q(VELZ_IDX, ALT_IDX) += 0.5f * sigma2_accel * dt3;
+  Q(VELZ_IDX, VELZ_IDX) += sigma2_accel * dt2;
 
-  // --- Post-Processing ---
-  // 12. Ensure covariance matrix remains symmetric (recommended for stability)
+  // ── 8.  Covariance propagation -------------------------------------------
+  _PCovariance = F * P_prev * F.transpose() + Q;
+  // Enforce symmetry (numerical hygiene)
   _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;
-
-// 13. Check for covariance blowup / NaNs (Optional Debugging)
-#ifdef DEBUG_EKF
-  for (size_t i = 0; i < STATE_DIM; ++i) {
-    if (!std::isfinite(_PCovariance(i, i)) || _PCovariance(i, i) < 0.0f) {
-      static bool logged = false;
-      if (!logged) {
-        logged = true;
-        // Log the covariance matrix for debugging
-        LOG_ERROR("Covariance matrix contains NaN or negative values.");
-        // Optionally, throw an exception or handle the error
-      }
-      // throw std::runtime_error("Covariance matrix contains NaN or negative values.");
-    }
-  }
-#endif  // DEBUG_EKF
 }
 
 Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateF(
@@ -496,7 +458,7 @@ void ExtendedKalmanFilter::updateAccelerometer(float accel_x, float accel_y, flo
   float accel_norm = std::sqrt(accel_x * accel_x + accel_y * accel_y + accel_z * accel_z);
   float expected_gravity = _config.gravity_magnitude;
   float accel_error = std::fabs(accel_norm - expected_gravity);
-  if (accel_error > 1.5f) {  // Tune threshold (e.g., 1.5 m/s^2)
+  if (accel_error > 5.5f) {  // Tune threshold (e.g., 1.5 m/s^2)
     LOG_ERROR("Skipping accel update due to high acceleration: %.2f", accel_error);
     return;
   }
@@ -796,6 +758,17 @@ void ExtendedKalmanFilter::updateRangefinder(float range_reading)
   Matrix<float, 4, 1> q = _x.slice<4, 1>(Q0_IDX, 0);
   q = normalizeQuaternion(q);
   _x.setSlice<4, 1>(Q0_IDX, 0, q);
+}
+
+float ExtendedKalmanFilter::_verticalAccelerationWorld(
+    const Matrix<float, 3, 1>& a_body, const Matrix<float, 4, 1>& q) const
+{
+  // Body → World
+  Matrix<float, 3, 3> R_bw = quaternionToRotationMatrix(q);
+  Matrix<float, 3, 1> a_world = R_bw * a_body;
+
+  // In NED, +Z is down;  _gravity_world = [0,0,+g]^T
+  return a_world(2, 0) - _config.gravity_magnitude;  // m/s² (net vertical)
 }
 
 // Getters Implementation

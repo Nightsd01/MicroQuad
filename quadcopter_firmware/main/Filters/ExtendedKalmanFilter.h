@@ -79,9 +79,21 @@ class ExtendedKalmanFilter
 
   ExtendedKalmanFilter(const Config& config);
 
-  // Prediction step based on gyro (mandatory) and dt
-  // Gyro values in degrees per second
-  void predict(float gyro_x_deg_s, float gyro_y_deg_s, float gyro_z_deg_s, float dt);
+  /**
+   * @brief  Propagate the state using gyro **and body‑frame linear acceleration**.
+   *
+   * @param gyro_*_deg_s   Body angular rate (°/s)
+   * @param accel_*_m_s2   Body linear acceleration (m/s², *including gravity*)
+   * @param dt             Time step (s)
+   */
+  void predict(
+      float gyro_x_deg_s,
+      float gyro_y_deg_s,
+      float gyro_z_deg_s,
+      float accel_x_m_s2,
+      float accel_y_m_s2,
+      float accel_z_m_s2,
+      float dt);
 
   // Update step using accelerometer measurement (for attitude correction)
   // Accelerometer values in G's in meters / (second ^ 2)
@@ -111,6 +123,9 @@ class ExtendedKalmanFilter
   float getBarometerBias() const;
 
  private:
+  /// Returns a_world_z − g  (positive Down in the NED convention)
+  float _verticalAccelerationWorld(const Matrix<float, 3, 1>& a_body, const Matrix<float, 4, 1>& q) const;
+
   // State vector: [q0, q1, q2, q3, alt, vel_z, bias_gx, bias_gy, bias_gz, bias_baro]
   Matrix<float, STATE_DIM, 1> _x;
 
