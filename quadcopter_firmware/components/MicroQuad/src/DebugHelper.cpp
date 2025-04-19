@@ -34,6 +34,8 @@ void DebugHelper::saveValues(unsigned long timestamp)
   dataManager.addDouble(ekfYawPitchRoll, 3);
   dataManager.addDouble(&ekfAltitude, 1);
   dataManager.addDouble(&ekfVerticalVelocity, 1);
+  dataManager.addDouble(&relativeAltitudeBarometer, 1);
+  dataManager.addDouble(&relativeAltitudeVL53, 1);
   dataManager.numSamples++;
 }
 

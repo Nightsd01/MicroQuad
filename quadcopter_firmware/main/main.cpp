@@ -557,6 +557,7 @@ void setup()
         _relativeAltitudeMeters = relativeAltMeters;
         if (std::isfinite(_relativeAltitudeMeters) && _relativeAltitudeMeters >= 0.0f &&
             _imu->completedQuickCalibration) {
+          _helper->relativeAltitudeBarometer = _relativeAltitudeMeters;
           _extendedKalmanFilter.updateBarometer(relativeAltMeters);
         }
       },
@@ -569,6 +570,7 @@ void setup()
       [&](float distance) {
         LOG_INFO("VL53L1X distance: %fm", distance);
         if (_imu->completedQuickCalibration) {
+          _helper->relativeAltitudeVL53 = distance;
           _extendedKalmanFilter.updateRangefinder(distance);
         }
       },

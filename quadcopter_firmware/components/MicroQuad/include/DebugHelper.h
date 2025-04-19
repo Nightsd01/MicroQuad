@@ -25,6 +25,8 @@ class DebugHelper
   double ekfYawPitchRoll[3];
   double ekfAltitude;
   double ekfVerticalVelocity;
+  double relativeAltitudeBarometer;
+  double relativeAltitudeVL53;
 
 #ifndef MATLAB_SIM
   void saveValues(unsigned long timestamp);
