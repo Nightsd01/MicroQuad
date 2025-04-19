@@ -1,0 +1,12 @@
+{
+  "files.associations": {
+    "cstdint": "cpp"
+  },
+  "[cpp]": {
+      "editor.tabSize": 2,
+      "editor.insertSpaces": true,
+      "editor.detectIndentation": false,
+      "editor.defaultFormatter": "xaver.clang-format",
+  },
+  "editor.formatOnSave": true,
+}

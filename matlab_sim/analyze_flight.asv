@@ -1,0 +1,185 @@
+% timestamp 1
+% yaw 2
+% pitch 3
+% roll 4
+% raw accel x 5
+% raw accel y 6
+% raw accel z 7
+% raw gyro x 8
+% raw gyro y 9
+% raw gyro z 10
+% filtered accel x 11
+% filtered accel y 12
+% filtered accel z 13
+% filtered gyro x 14
+% filtered gyro y 15
+% filtered gyro z 16
+% angle out yaw 17
+% angle out pitch 18
+% angle out roll 19
+% rate out yaw 20
+% rate out pitch 21
+% rate out roll 22
+% motor 1 23
+% motor 2 24
+% motor 3 25
+% motor 4 26
+% mag heading 27
+% throttle 28
+% voltage 29
+
+function analyze_flight(directory)
+    videoFilePath = fullfile(directory, '/flight.mov');
+    if ~isfile(videoFilePath)
+        error('The flight.mov file does not exist in the specified directory: %s', directory);
+    end
+
+    dataFilePath = fullfile(directory, 'debug.csv');
+
+    if ~isfile(dataFilePath)
+        error('The debug.csv file does not exist in the specified directory: %s', directory);
+    end
+
+    % process the debug data csv
+    opts = detectImportOptions(dataFilePath);
+    data = readmatrix(dataFilePath, opts);
+    videoSlowFactor = 5; % The video is slowed down by 5X
+
+    % Define the offset and conversion factor
+    timeOffset = data(1, 1); % Offset in microseconds (e.g., 1 second offset)
+    secondsToMicroseconds = 1e6; % Conversion factor to convert seconds to microseconds
+
+    videoReader = VideoReader(videoFilePath);
+    figure;
+
+    % show the video viewer
+    subplot(2, 2, 1);
+    hImage = imshow(readFrame(videoReader));
+    title('Video Playback');
+
+    % show the yaw pitch roll 
+    subplot(2, 2, 2); 
+    h1 = plot(data(:, 1), data(:, 2:4), 'LineWidth', 1.5); 
+    hold on;
+    hLine = xline(timeOffset, 'r', 'LineWidth', 2); % line indicating current time
+    xlabel('Time (seconds)');
+    ylabel('Degrees');
+    title('Yaw Pitch Roll');
+    addSeriesLabels(h1, 'X', 'Y', 'Z')
+
+    % show the gyro X, gyro Y, and gyro Z
+    subplot(2, 2, 3); 
+    h2 = plot(data(:, 1), data(:, 14:16), 'LineWidth', 1.5); 
+    hold on;
+    hLine = xline(timeOffset, 'r', 'LineWidth', 2); % line indicating current time
+    xlabel('Time (seconds)');
+    ylabel('Degrees per Second');
+    title('Post-Filter Gyro Data');
+
+    % show the accelerometer X, accelerometer Y, and accelerometer Z
+    subplot(2, 2, 3); 
+    h2 = plot(data(:, 1), data(:, 14:16), 'LineWidth', 1.5); 
+    hold on;
+    hLine = xline(timeOffset, 'r', 'LineWidth', 2); % line indicating current time
+    xlabel('Time (seconds)');
+    ylabel('Degrees per Second');
+    title('Post-Filter Gyro Data');
+
+    % Create slider for manual scrubbing
+    hSlider = uicontrol('Style', 'slider', 'Min', 0, 'Max', min(videoReader.Duration / videoSlowFactor, (data(end, 1) - timeOffset) / secondsToMicroseconds), 'Value', 0, ...
+        'Units', 'normalized', 'Position', [0.1 0.01 0.8 0.05], ...
+        'Callback', @(src, event) scrubSliderCallback(src, videoReader, hImage, hLine, timeOffset, secondsToMicroseconds, videoSlowFactor), ...
+        'SliderStep', [0.01, 0.1]);
+
+    % Add Play/Pause button
+    isPlaying = true; % Initial state - playing
+    uicontrol('Style', 'togglebutton', 'String', 'Pause', ...
+        'Units', 'normalized', 'Position', [0.92 0.01 0.07 0.05], ...
+        'Callback', @(src, event) playPauseCallback(src));
+
+    % Playback and update loop
+    while hasFrame(videoReader)
+        if isPlaying
+            frame = readFrame(videoReader);
+            set(hImage, 'CData', frame);
+            currentTime = videoReader.CurrentTime;
+    
+            % Convert video time to actual time considering slowdown and add offset
+            actualTime = (currentTime / videoSlowFactor) * secondsToMicroseconds + timeOffset;
+    
+            % Find the closest X value in the dataset
+            [~, closestIdx] = min(abs(data(:, 1) - actualTime));
+            closestTime = data(closestIdx, 1);
+    
+            % Update the vertical line on the chart to indicate the closest time in the dataset
+            set(hLine, 'Value', closestTime);
+    
+            % Update the slider position
+            set(hSlider, 'Value', min(currentTime / videoSlowFactor, hSlider.Max));
+    
+            % Pause if the dataset reaches the end
+            if closestIdx == size(data, 1)
+                isPlaying = false;
+                break;
+            end
+    
+            % Pause to match video frame rate
+            pause(1/videoReader.FrameRate);
+        else
+            % If paused, just pause for a short time before checking again
+            pause(0.1);
+        end
+    end
+    
+    function scrubSliderCallback(src, videoReader, hImage, hLine, timeOffset, secondsToMicroseconds, videoSlowFactor)
+        % Seek to the specified time in the video and update the frame
+        videoReader.CurrentTime = min(src.Value * videoSlowFactor, videoReader.Duration);
+        frame = readFrame(videoReader);
+        set(hImage, 'CData', frame);
+        
+        % Convert video time to actual time considering slowdown and add offset
+        actualTime = (videoReader.CurrentTime / videoSlowFactor) * secondsToMicroseconds + timeOffset;
+        
+        % Find the closest X value in the dataset
+        [~, closestIdx] = min(abs(data(:, 1) - actualTime));
+        closestTime = data(closestIdx, 1);
+
+        % Update the vertical line on the chart to indicate the closest time in the dataset
+        set(hLine, 'Value', closestTime);
+    end
+
+    % Add a listener to update scrubber in real-time while dragging
+    addlistener(hSlider, 'ContinuousValueChange', @(src, event) scrubSliderCallback(src, videoReader, hImage, hLine, timeOffset, secondsToMicroseconds, videoSlowFactor));
+
+    % Callback to handle the play/pause button
+    function playPauseCallback(src)
+        if src.Value == 1
+            isPlaying = false;
+            src.String = 'Play';
+        else
+            isPlaying = true;
+            src.String = 'Pause';
+        end
+    end
+end
+
+function toggleVisibility(src, event, lineHandle)
+    % This callback function toggles the visibility of a line
+    if src.Value
+        lineHandle.Visible = 'on';
+    else
+        lineHandle.Visible = 'off';
+    end
+end
+
+function addSeriesLabels(plt, label1, label2, label3)
+  % Adding legend
+    legend(label1, label2, label3);
+    
+    % Adding data tips (available by default, no need for additional code here)
+    
+    % Adding UI control to toggle visibility of series
+    uicontrol('Style', 'checkbox', 'String', 'Hide/Show Gyro X', ...
+                       'Value',1,'Position', [20 20 140 20], ...
+                       'Callback', {@toggleVisibility, plt(1)});
+end
