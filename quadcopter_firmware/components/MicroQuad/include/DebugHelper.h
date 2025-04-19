@@ -1,5 +1,4 @@
-#ifndef DEBUGHELPER_H
-#define DEBUGHELPER_H
+#pragma once
 
 #include <string>
 #include <vector>
@@ -26,8 +25,11 @@ class DebugHelper
   double ekfYawPitchRoll[3];
   double ekfAltitude;
   double ekfVerticalVelocity;
+
+#ifndef MATLAB_SIM
   void saveValues(unsigned long timestamp);
+#else   // MATLAB_SIM
+  void saveValues(unsigned long timestamp) {};
+#endif  // MATLAB_SIM
   DebugDataManager dataManager;
 };
-
-#endif

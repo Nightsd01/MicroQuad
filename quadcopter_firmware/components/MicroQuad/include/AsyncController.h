@@ -1,3 +1,5 @@
+#ifndef MATLAB_SIM
+
 #ifndef ASYNC_CONTROLLER_H
 #define ASYNC_CONTROLLER_H
 
@@ -64,4 +66,6 @@ class AsyncController
   const char *_taskLabel;
 };
 
-#endif
+#endif // ASYNC_CONTROLLER_H
+
+#endif // MATLAB_SIM

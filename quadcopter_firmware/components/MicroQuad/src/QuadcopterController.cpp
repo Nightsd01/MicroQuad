@@ -1,12 +1,13 @@
 #include "QuadcopterController.h"
 
+#ifndef MATLAB_SIM
 #include <Arduino.h>
+#endif // MATLAB_SIM
+
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "DebugHelper.h"
 #include "Logger.h"
-#include "PIDController.h"
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -166,22 +167,24 @@ motor_outputs_t QuadcopterController::calculateOutputs(
     motors[i] = MIN(MAX(motors[i], THROTTLE_MIN), THROTTLE_MAX);
   }
 
+  #ifndef MATLAB_SIM
   if (recordData) {
-    _debugHelper->angleOutputs[0] = angleControllerOutputs[0];
-    _debugHelper->angleOutputs[1] = angleControllerOutputs[1];
-    _debugHelper->angleOutputs[2] = angleControllerOutputs[2];
-    _debugHelper->rateOutputs[0] = rateControllerOutputs[0];
-    _debugHelper->rateOutputs[1] = rateControllerOutputs[1];
-    _debugHelper->rateOutputs[2] = rateControllerOutputs[2];
-    _debugHelper->motorValues[0] = motors[0];
-    _debugHelper->motorValues[1] = motors[1];
-    _debugHelper->motorValues[2] = motors[2];
-    _debugHelper->motorValues[3] = motors[3];
-    _debugHelper->throttle = throttle;
-    _debugHelper->setPoints[0] = desiredAnglesDegrees[0];
-    _debugHelper->setPoints[1] = desiredAnglesDegrees[1];
-    _debugHelper->setPoints[2] = desiredAnglesDegrees[2];
+    _debugHelper->angleOutputs[0] = angleOut[0];
+    _debugHelper->angleOutputs[1] = angleOut[1];
+    _debugHelper->angleOutputs[2] = angleOut[2];
+    _debugHelper->rateOutputs[0] = rateOut[0];
+    _debugHelper->rateOutputs[1] = rateOut[1];
+    _debugHelper->rateOutputs[2] = rateOut[2];
+    _debugHelper->motorValues[0] = m[0];
+    _debugHelper->motorValues[1] = m[1];
+    _debugHelper->motorValues[2] = m[2];
+    _debugHelper->motorValues[3] = m[3];
+    _debugHelper->throttle = baseThrottle;
+    _debugHelper->setPoints[0] = RAD_TO_DEG(angleSet[0]);
+    _debugHelper->setPoints[1] = RAD_TO_DEG(angleSet[1]);
+    _debugHelper->setPoints[2] = RAD_TO_DEG(angleSet[2]);
   }
+  #endif // MATLAB_SIM
 
   return motors;
 }

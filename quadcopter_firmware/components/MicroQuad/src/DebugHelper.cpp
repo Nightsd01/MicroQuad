@@ -1,5 +1,7 @@
 #include "DebugHelper.h"
 
+#ifndef MATLAB_SIM
+
 #include <stdio.h>
 
 #include <cassert>
@@ -34,3 +36,5 @@ void DebugHelper::saveValues(unsigned long timestamp)
   dataManager.addDouble(&ekfVerticalVelocity, 1);
   dataManager.numSamples++;
 }
+
+#endif  // MATLAB_SIM

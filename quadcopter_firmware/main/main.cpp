@@ -39,6 +39,12 @@
 #include "soc/timer_group_reg.h"
 #include "soc/timer_group_struct.h"
 
+#ifdef MATLAB_SIM
+// If MATLAB_SIM is defined (e.g., via -DMATLAB_SIM compiler flag),
+// this line will halt compilation and print the specified error message.
+#error This code must not be compiled with the MATLAB_SIM flag defined.
+#endif
+
 static std::vector<MotorController *> _speedControllers;
 
 BatteryController *_batteryController;
@@ -211,7 +217,7 @@ static void _gotMagUpdate(mag_update_t update)
   }
   if (_imu->completedQuickCalibration) {
     // TODO: Commented out for debugging
-    // _extendedKalmanFilter.updateMagnetometer(_magValues.x, _magValues.y, _magValues.z);
+    _extendedKalmanFilter.updateMagnetometer(_magValues.x, _magValues.y, _magValues.z);
   }
 
   EXECUTE_PERIODIC(1000, {

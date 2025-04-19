@@ -1,3 +1,5 @@
+#ifndef MATLAB_SIM
+
 #pragma once
 
 #include <AsyncController.h>
@@ -72,3 +74,28 @@ void LOG_CONSOLE(const char *format, ...);
   __LOG_PERIODIC_MILLIS(VERBOSE, intervalMillis, format, ##__VA_ARGS__)
 #define LOG_CONSOLE_PERIODIC_MILLIS(intervalMillis, format, ...) \
   __LOG_PERIODIC_MILLIS(CONSOLE, intervalMillis, format, ##__VA_ARGS__)
+
+#else  // MATLAB_SIM
+
+#define LOG_ERROR(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_WARN(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_INFO(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_DEBUG(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_VERBOSE(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_CONSOLE(format, ...) printf(format, ##__VA_ARGS__)
+
+#define LOG_ERROR_ASYNC_ON_MAIN(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_WARN_ASYNC_ON_MAIN(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_INFO_ASYNC_ON_MAIN(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_DEBUG_ASYNC_ON_MAIN(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_VERBOSE_ASYNC_ON_MAIN(format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_CONSOLE_ASYNC_ON_MAIN(format, ...) printf(format, ##__VA_ARGS__)
+
+#define LOG_ERROR_PERIODIC_MILLIS(intervalMillis, format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_WARN_PERIODIC_MILLIS(intervalMillis, format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_INFO_PERIODIC_MILLIS(intervalMillis, format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_DEBUG_PERIODIC_MILLIS(intervalMillis, format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_VERBOSE_PERIODIC_MILLIS(intervalMillis, format, ...) printf(format, ##__VA_ARGS__)
+#define LOG_CONSOLE_PERIODIC_MILLIS(intervalMillis, format, ...) printf(format, ##__VA_ARGS__)
+
+#endif  // MATLAB_SIM

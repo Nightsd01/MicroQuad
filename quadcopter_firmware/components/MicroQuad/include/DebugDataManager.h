@@ -1,5 +1,4 @@
-#ifndef DEBUG_DATA_MANAGER_H
-#define DEBUG_DATA_MANAGER_H
+#pragma once
 
 #include "esp_system.h"
 
@@ -9,8 +8,14 @@
 class DebugDataManager
 {
  public:
+#ifndef MATLAB_SIM
   DebugDataManager();
   void addDouble(double *vals, uint64_t size);
+#else   // MATLAB_SIM
+  DebugDataManager() : numSamples(0), data(nullptr), currentSize(0) {}
+  void addDouble(double *vals, uint64_t size) {}
+#endif  // MATLAB_SIM
+
   uint64_t numSamples;
   uint8_t *data;
   uint64_t currentSize;
@@ -20,5 +25,3 @@ class DebugDataManager
   volatile bool _reallocating;
   void _growHeapIfNeeded(void);
 };
-
-#endif
