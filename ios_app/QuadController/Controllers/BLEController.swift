@@ -271,9 +271,11 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     // 32 bytes: EKF quaternion
     // 24 bytes: EKF yaw pitch roll
     // 8 bytes: EKF altitude
-    // 8 bytes: EKF yaw pitch roll
+    // 8 bytes: EKF vertical velocity
+    // 8 bytes: barometer relative altitude
+    // 8 bytes: laser rangefinder relative altitude
     var result = ""
-    let valuesPerPacket = 44
+    let valuesPerPacket = 46
     let byteCount = data.count / 8
     for i in 0..<byteCount {
       let value = data.withUnsafeBytes { buffer in

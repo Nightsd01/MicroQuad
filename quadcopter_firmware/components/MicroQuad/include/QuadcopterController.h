@@ -74,7 +74,7 @@ class QuadcopterController
   double _previousUpdateMicros;
   DebugHelper *_debugHelper;
   unsigned long _startTime;
-  double _yawSetPointDegrees;
+  double _yawSetPointRad;
   bool _initializedYawSetPointDegrees = false;
   unsigned long _lastYawUpdateTimeMicros = 0;
   void _yawUpdate(
