@@ -11,8 +11,6 @@
 constexpr float EPSILON = 1e-9f;
 
 // Quaternion Helper Function Implementations
-// (Place these here or in a separate utility file included by both .h and .cpp)
-
 Matrix<float, 4, 1> quaternionMultiplyHamiltonProduct(const Matrix<float, 4, 1>& q1, const Matrix<float, 4, 1>& q2)
 {
   Matrix<float, 4, 1> q_out;
@@ -111,15 +109,12 @@ Matrix<float, 3, 1> getYawPitchRollDegreesFromQuaternion(const Matrix<float, 4, 
 
     // Yaw (z-axis rotation) = atan2(2*(q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3))
     yaw_rad = atan2f(2.0f * (q0q3 + q1q2), q0q0 + q1q1 - q2q2 - q3q3);
-
-    float denom = q0q0 + q1q1 - q2q2 - q3q3;
-    yaw_rad = atan2f(2.0f * (q0q3 + q1q2), denom);
   }
 
   // Convert radians to degrees before storing
-  ypr_deg(0, 0) = yaw_rad * RAD_TO_DEG;
-  ypr_deg(1, 0) = pitch_rad * RAD_TO_DEG;
-  ypr_deg(2, 0) = roll_rad * RAD_TO_DEG;
+  ypr_deg(0, 0) = RAD_TO_DEGS(yaw_rad);
+  ypr_deg(1, 0) = RAD_TO_DEGS(pitch_rad);
+  ypr_deg(2, 0) = RAD_TO_DEGS(roll_rad);
 
   return ypr_deg;
 }
@@ -197,9 +192,6 @@ void ExtendedKalmanFilter::predict(
   // ── 0.  Sanity check ───────────────────────────────────────────────────────
   if (dt <= 0.0f) return;
 
-  // (Optional) warn if dt is unusually large
-  // if (dt > 0.1f) LOG_WARN("EKF dt = %.3f s", dt);
-
   // ── 1.  Convert gyro to rad/s and pull current state -----------------------
   float gx = DEG_TO_RADS(gyro_x_deg_s);
   float gy = DEG_TO_RADS(gyro_y_deg_s);
@@ -263,16 +255,12 @@ void ExtendedKalmanFilter::predict(
   Matrix<float, STATE_DIM, STATE_DIM> F = _calculateF(q_prev, omega(0, 0), omega(1, 0), omega(2, 0), dt);
 
   // ── 7.  Base process noise matrix Q ---------------------------------------
+  // Calculate Q based on configured noise densities and dt
   Matrix<float, STATE_DIM, STATE_DIM> Q = _calculateQ(q_prev, dt);
 
-  // Additional continuous‑acceleration noise mapped into (alt, velz)
-  const float sigma2_accel = _config.accel_noise_variance;  // (m/s²)²
-  float dt2 = dt * dt, dt3 = dt2 * dt, dt4 = dt2 * dt2;
-
-  Q(ALT_IDX, ALT_IDX) += 0.25f * sigma2_accel * dt4;
-  Q(ALT_IDX, VELZ_IDX) += 0.5f * sigma2_accel * dt3;
-  Q(VELZ_IDX, ALT_IDX) += 0.5f * sigma2_accel * dt3;
-  Q(VELZ_IDX, VELZ_IDX) += sigma2_accel * dt2;
+  // NOTE: The incorrect addition of terms based on _config.accel_noise_variance
+  // has been removed here (Fix for EKF-02). Process noise for alt/vel
+  // is now solely determined by _config.velz_Process_noise within _calculateQ.
 
   // ── 8.  Covariance propagation -------------------------------------------
   _PCovariance = F * P_prev * F.transpose() + Q;
@@ -537,15 +525,6 @@ void ExtendedKalmanFilter::updateAccelerometer(float accel_x, float accel_y, flo
   // Belt-and-braces: Enforce symmetry AFTER Joseph form update
   _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;
 
-  // --- Optional: Use Joseph form for Covariance Update (more stable) ---
-  // Matrix<float, STATE_DIM, STATE_DIM> I_KH = I - K * H;
-  // _PCovariance = I_KH * P_pred * I_KH.transpose() + K * R_mat * K.transpose();
-  // --- End Optional ---
-
-  // --- Ensure Covariance Symmetry (recommended after update) ---
-  // _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f; // Uses transpose, +, * scalar
-  // --- End Symmetry Enforcement ---
-
   // 12. Renormalize the quaternion part of the updated state vector _x
   //     using slice() to get a copy and setSlice() to write it back.
   //     Assumes normalizeQuaternion returns the normalized value.
@@ -578,63 +557,75 @@ void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float ma
   const float min_norm = 1e-6f;
   if (norm_z < min_norm) {
     // Magnetometer reading is too weak or zero, cannot reliably use it. Skip update.
-    // Optionally add logging here.
+    LOG_WARN_PERIODIC_MILLIS(100, "Skipping mag update due to low magnitude: %.3f", norm_z);
     return;
   }
 
   // Normalize the measurement vector
   Matrix<float, 3, 1> z = z_raw * (1.0f / norm_z);
 
-  // 4. Get the reference magnetic field vector (from config, assumed normalized)
-  const Matrix<float, 3, 1>& m_ref = _config.mag_reference_vector;
+  // 4. Get the reference magnetic field vector and normalize it (Fix for EKF-03)
+  Matrix<float, 3, 1> m_ref_raw = _config.mag_reference_vector;
+  float norm_m_ref = std::sqrt(
+      m_ref_raw(0, 0) * m_ref_raw(0, 0) + m_ref_raw(1, 0) * m_ref_raw(1, 0) + m_ref_raw(2, 0) * m_ref_raw(2, 0));
+  Matrix<float, 3, 1> m_ref;  // Normalized reference vector
+  if (norm_m_ref > min_norm) {
+    m_ref = m_ref_raw * (1.0f / norm_m_ref);
+  } else {
+    // Reference vector is zero or near-zero, cannot use magnetometer.
+    LOG_ERROR_PERIODIC_MILLIS("Mag reference vector norm is too small: %.3f", norm_m_ref);
+    return;
+  }
 
   // 5. Calculate the predicted measurement h(x)
-  //    h(x) = Rotate reference vector from world frame to body frame
+  //    h(x) = Rotate normalized reference vector from world frame to body frame
   Matrix<float, 3, 3> R_bw = quaternionToRotationMatrix(q);  // Get Body-to-World matrix
   Matrix<float, 3, 3> R_wb = R_bw.transpose();               // Calculate World-to-Body via transpose
-  Matrix<float, 3, 1> h = R_wb * m_ref;                      // Use the correct R_wb
-  // Note: If m_ref is normalized and R_wb is a valid rotation, h is also normalized.
+  Matrix<float, 3, 1> h = R_wb * m_ref;                      // Use the correct R_wb and normalized m_ref
+  // Now both z and h are expected to be unit vectors.
 
   // 6. Calculate the measurement residual (innovation) y = z - h
   Matrix<float, 3, 1> y = z - h;
 
   // 7. Calculate the measurement Jacobian H = dh/dx | x = x_pred (3 x STATE_DIM)
   //    Only depends on quaternion state variables (q0, q1, q2, q3).
+  //    Uses the CORRECTED Jacobian derivation (Fix for EKF-01).
   Matrix<float, 3, STATE_DIM> H;  // Default constructor zeros the matrix
 
   float q0 = q(0, 0);
   float q1 = q(1, 0);
   float q2 = q(2, 0);
   float q3 = q(3, 0);
-  float mx = m_ref(0, 0);
+  float mx = m_ref(0, 0);  // Use normalized reference components
   float my = m_ref(1, 0);
   float mz = m_ref(2, 0);
 
-  // H = [ H_q | 0_{3x6} ] where H_q = [ d(R*m_ref)/dq0, d(R*m_ref)/dq1, ... ]
-  // Column for q0: d(R*m_ref)/dq0 = (dR/dq0) * m_ref
-  H(0, Q0_IDX) = 2.0f * (q0 * mx - q3 * my + q2 * mz);
-  H(1, Q0_IDX) = 2.0f * (q3 * mx + q0 * my - q1 * mz);
-  H(2, Q0_IDX) = 2.0f * (-q2 * mx + q1 * my + q0 * mz);
+  // H = [ H_q | 0_{3x6} ] where H_q = d(R_wb * m_ref)/dq
+  // Column for q0: d(h)/dq0
+  H(0, Q0_IDX) = 2.0f * (q0 * mx + q3 * my - q2 * mz);
+  H(1, Q0_IDX) = 2.0f * (-q3 * mx + q0 * my + q1 * mz);
+  H(2, Q0_IDX) = 2.0f * (q2 * mx - q1 * my + q0 * mz);
 
-  // Column for q1: d(R*m_ref)/dq1 = (dR/dq1) * m_ref
+  // Column for q1: d(h)/dq1
   H(0, Q1_IDX) = 2.0f * (q1 * mx + q2 * my + q3 * mz);
-  H(1, Q1_IDX) = 2.0f * (q2 * mx - q1 * my - q0 * mz);
-  H(2, Q1_IDX) = 2.0f * (q3 * mx + q0 * my - q1 * mz);
+  H(1, Q1_IDX) = 2.0f * (q2 * mx - q1 * my + q0 * mz);
+  H(2, Q1_IDX) = 2.0f * (q3 * mx - q0 * my - q1 * mz);
 
-  // Column for q2: d(R*m_ref)/dq2 = (dR/dq2) * m_ref
-  H(0, Q2_IDX) = 2.0f * (-q2 * mx + q1 * my + q0 * mz);
+  // Column for q2: d(h)/dq2
+  H(0, Q2_IDX) = 2.0f * (-q2 * mx + q1 * my - q0 * mz);
   H(1, Q2_IDX) = 2.0f * (q1 * mx + q2 * my + q3 * mz);
-  H(2, Q2_IDX) = 2.0f * (-q0 * mx + q3 * my - q2 * mz);
+  H(2, Q2_IDX) = 2.0f * (q0 * mx + q3 * my - q2 * mz);
 
-  // Column for q3: d(R*m_ref)/dq3 = (dR/dq3) * m_ref
-  H(0, Q3_IDX) = 2.0f * (-q3 * mx - q0 * my + q1 * mz);
-  H(1, Q3_IDX) = 2.0f * (q0 * mx - q3 * my + q2 * mz);
+  // Column for q3: d(h)/dq3
+  H(0, Q3_IDX) = 2.0f * (-q3 * mx + q0 * my + q1 * mz);
+  H(1, Q3_IDX) = 2.0f * (-q0 * mx - q1 * my + q2 * mz);
   H(2, Q3_IDX) = 2.0f * (q1 * mx + q2 * my + q3 * mz);
 
   // Columns ALT_IDX through BBARO_IDX remain zero.
 
   // 8. Define the measurement noise covariance matrix R (3x3)
   //    Uses _R_mag, assumes uncorrelated noise on normalized axes.
+  //    Note: Using fixed variance for normalized measurement is an approximation
   Matrix<float, 3, 3> R_mat;  // Default zeroed
   R_mat(0, 0) = _R_mag;
   R_mat(1, 1) = _R_mag;
@@ -645,33 +636,19 @@ void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float ma
 
   // 10. Calculate the Kalman Gain K = P_pred * H^T * S^-1
   //     Ensure S.invert() is numerically stable.
-  Matrix<float, STATE_DIM, 3> K = P_pred * H.transpose() * S.invert();
+  Matrix<float, STATE_DIM, 3> K =
+      P_pred * H.transpose() * S.invert();  // Assuming invert() handles potential issues or check was done
 
   // 11. Update the state estimate: x_updated = x_pred + K * y
   _x = x_pred + K * y;
 
-  // 12. Update the state covariance: P_updated = (I - K * H) * P_pred
+  // 12. Update the state covariance using Joseph form: P = (I - KH)P(I - KH)' + KRK'
   Matrix<float, STATE_DIM, STATE_DIM> I = Matrix<float, STATE_DIM, STATE_DIM>::identity();
   Matrix<float, STATE_DIM, STATE_DIM> I_KH = I - K * H;
-  // Make sure R_mat (or R for 1D updates) holds the appropriate measurement noise covariance matrix
-  // calculated earlier in the specific update function.
-  // For updateAccelerometer/Magnetometer, use R_mat (3x3)
-  // For updateBarometer/Rangefinder, use R (1x1)
-  // Let's assume the variable is called 'R_noise_matrix' in general below:
-  // Matrix<float, M, M> R_noise_matrix = ...; // Defined earlier in the function (e.g., R_mat or R)
   _PCovariance = I_KH * P_pred * I_KH.transpose() + K * R_mat * K.transpose();
 
   // Belt-and-braces: Enforce symmetry AFTER Joseph form update
   _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;
-
-  // --- Optional: Joseph form P = (I-KH)P(I-KH)' + KRK' ---
-  // Matrix<float, STATE_DIM, STATE_DIM> I_KH = I - K * H;
-  // _PCovariance = I_KH * P_pred * I_KH.transpose() + K * R_mat * K.transpose();
-  // --- End Optional ---
-
-  // --- Optional: Ensure Covariance Symmetry ---
-  // _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;
-  // --- End Optional ---
 
   // 13. Renormalize the quaternion part of the updated state vector _x
   Matrix<float, 4, 1> q_updated = _x.slice<4, 1>(Q0_IDX, 0);
