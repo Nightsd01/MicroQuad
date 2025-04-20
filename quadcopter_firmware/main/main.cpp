@@ -181,7 +181,9 @@ static void _updateArmStatus(void)
   }
   if (_armed && !_completedFirstArm) {
     _completedFirstArm = true;
-    updateMotors({1000.0f, 1000.0f, 1000.0f, 1000.0f});
+    _updateLED(_armed ? 255 : 0, _armed ? 0 : 255, 0);
+    AsyncController::main.executeAfter(50, []() { updateMotors({1000.0f, 1000.0f, 1000.0f, 1000.0f}); });
+    return;
   }
   _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange, &_armed, sizeof(bool));
   if (!_enteredEmergencyMode) {
