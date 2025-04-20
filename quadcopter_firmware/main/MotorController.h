@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef MATLAB_SIM
+
 #define MIN_THROTTLE_RANGE 48
 #define MAX_THROTTLE_RANGE 2047
 
@@ -36,3 +38,5 @@ class MotorController
   bool _isHalted = false;
   void _writeRawValue(uint16_t value);
 };
+
+#endif  // MATLAB_SIM

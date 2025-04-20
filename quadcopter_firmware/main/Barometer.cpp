@@ -1,5 +1,7 @@
 #include "Barometer.h"
 
+#ifndef MATLAB_SIM
+
 #include <Adafruit_BME280.h>
 #include <Arduino.h>
 #include <AsyncController.h>
@@ -62,3 +64,5 @@ void Barometer::loopHandler(void)
     _altitudeHandler(_medianFilter.getMedian());
   }
 }
+
+#endif  // MATLAB_SIM

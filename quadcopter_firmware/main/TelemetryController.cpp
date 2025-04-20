@@ -1,5 +1,7 @@
 #include "TelemetryController.h"
 
+#ifndef MATLAB_SIM
+
 #include <Logger.h>
 
 static const char *_eventTypeToString(TelemetryEvent event)
@@ -102,3 +104,5 @@ void TelemetryController::loopHandler(void)
     _bleController->sendTelemetryUpdate(data, event.size + 1);
   }
 }
+
+#endif  // MATLAB_SIM

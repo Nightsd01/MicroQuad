@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef MATLAB_SIM
+
 #include <deque>
 
 #include "BLEController.h"
@@ -44,3 +46,5 @@ class TelemetryController
   bool _waitingForTransmission = false;
   uint64_t _eventCount;
 };
+
+#endif  // MATLAB_SIM

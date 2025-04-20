@@ -1,5 +1,7 @@
 #include "VL53Manager.h"
 
+#ifndef MATLAB_SIM
+
 #include <cmath>      // For cos() and M_PI (or define PI manually)
 #include <limits>     // For NaN checking/return
 #include <stdexcept>  // For potentially throwing errors on invalid input
@@ -145,3 +147,4 @@ void VL53Manager::updatedAttitude(const EulerAngle &yawPitchRoll)
   _gotFirstIMUUpdate = true;
   _yawPitchRoll = yawPitchRoll;
 }
+#endif  // MATLAB_SIM

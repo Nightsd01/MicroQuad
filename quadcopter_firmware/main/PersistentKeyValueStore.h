@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef MATLAB_SIM
+
 #include <array>
 #include <string>
 #include <vector>
@@ -24,3 +26,5 @@ class PersistentKeyValueStore
   bool hasValueForKey(const std::string& key);
   void removeValueForKey(const std::string& key);
 };
+
+#endif  // MATLAB_SIM

@@ -1,5 +1,7 @@
 #include "PersistentKeyValueStore.h"
 
+#ifndef MATLAB_SIM
+
 #include <nvs.h>
 #include <nvs_flash.h>
 
@@ -313,3 +315,5 @@ std::vector<T> PersistentKeyValueStore::getVectorForKey(const std::string& key, 
 
 template std::vector<float> PersistentKeyValueStore::getVectorForKey(const std::string& key, size_t length);
 template void PersistentKeyValueStore::setVectorForKey(const std::string& key, const std::vector<float>& value);
+
+#endif  // MATLAB_SIM

@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef MATLAB_SIM
+
 #include <PIDController.h>
 #include <QuadcopterController.h>
 
@@ -21,3 +23,5 @@ class PIDPreferences
   quadcopter_config_t _initializeGains();
   void _updateGains(ControlAxis axis, PIDType type, gains_t gains);
 };
+
+#endif  // MATLAB_SIM

@@ -1,5 +1,7 @@
 #include "LEDController.h"
 
+#ifndef MATLAB_SIM
+
 #define RMT_CLK_DIV 1              // RMT clock divider
 #define RMT_TICK_DURATION_NS 12.5  // Duration of one RMT clock tick in nanoseconds
 
@@ -101,3 +103,4 @@ void LEDController::showRGB(uint8_t red, uint8_t green, uint8_t blue)
   // Wait for transmission to complete
   ESP_ERROR_CHECK(rmt_tx_wait_all_done(_rmt_channel, 30));
 }
+#endif  // MATLAB_SIM

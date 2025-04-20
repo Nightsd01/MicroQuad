@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef MATLAB_SIM
+
 #include <Adafruit_BME280.h>
 #include <Arduino.h>
 #include <Wire.h>
@@ -39,3 +41,5 @@ class Barometer
   std::function<void(float)> _altitudeHandler;
   uint64_t _lastUpdateTimestampMillis;
 };
+
+#endif  // MATLAB_SIM

@@ -19,7 +19,7 @@
 const gpio_num_t MOTOR_PINS[NUM_MOTORS] = {GPIO_NUM_8, GPIO_NUM_7, GPIO_NUM_5, GPIO_NUM_6};
 const gpio_num_t MOTOR_TELEM_PINS[NUM_MOTORS] = {GPIO_NUM_34, GPIO_NUM_33, GPIO_NUM_4, GPIO_NUM_21};
 
-#endif // MATLAB_SIM
+#endif  // MATLAB_SIM
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
@@ -47,3 +47,5 @@ const gpio_num_t MOTOR_TELEM_PINS[NUM_MOTORS] = {GPIO_NUM_34, GPIO_NUM_33, GPIO_
 
 // declination angle for Foster City, CA
 #define DECLINATION_ANGLE_DEG (12.0 + (55.0 / 60.0)) / (180 / PI)
+
+#define STANDARD_GRAVITY 9.81f  // or 9.80665f for higher precision

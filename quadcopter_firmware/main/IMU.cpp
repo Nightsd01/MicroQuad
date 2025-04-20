@@ -1,5 +1,7 @@
 #include "IMU.h"
 
+#ifndef MATLAB_SIM
+
 #include <Logger.h>
 
 #include "PersistentKeysCommon.h"
@@ -342,3 +344,5 @@ std::map<CalibrationResponse, std::function<void(void)>> IMU::calibrationHandler
 
   return responseHandlers;
 }
+
+#endif MATLAB_SIM

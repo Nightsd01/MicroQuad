@@ -1,5 +1,7 @@
 #include "BatteryController.h"
 
+#ifndef MATLAB_SIM
+
 #include "Constants.h"
 #include "DebugHelper.h"
 #include "Logger.h"
@@ -38,3 +40,4 @@ void BatteryController::loopHandler(void)
     _debugHelper->voltage = voltage;
   });
 }
+#endif  // MATLAB_SIM

@@ -1,4 +1,7 @@
 #pragma once
+
+#ifndef MATLAB_SIM
+
 #include "driver/rmt_encoder.h"
 #include "driver/rmt_tx.h"
 
@@ -16,3 +19,5 @@ class LEDController
   bool _connectedRMT;
   void _connectRMT(void);
 };
+
+#endif  // MATLAB_SIM

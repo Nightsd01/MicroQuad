@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef MATLAB_SIM
+
 #include <VL53L1X.h>
 #include <Wire.h>
 
@@ -34,3 +36,5 @@ class VL53Manager
   EulerAngle _yawPitchRoll;
   bool _gotFirstIMUUpdate = false;
 };
+
+#endif  // MATLAB_SIM

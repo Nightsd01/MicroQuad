@@ -1,5 +1,7 @@
 
 
+#ifndef MATLAB_SIM
+
 #include <DebugHelper.h>
 #include <QuadcopterController.h>
 #include <Wire.h>
@@ -38,12 +40,6 @@
 #include "esp_system.h"
 #include "soc/timer_group_reg.h"
 #include "soc/timer_group_struct.h"
-
-#ifdef MATLAB_SIM
-// If MATLAB_SIM is defined (e.g., via -DMATLAB_SIM compiler flag),
-// this line will halt compilation and print the specified error message.
-#error This code must not be compiled with the MATLAB_SIM flag defined.
-#endif
 
 static std::vector<MotorController *> _speedControllers;
 
@@ -381,8 +377,6 @@ static bool _receivedFirstImuUpdate = false;
 static bool _computedEuler = false;
 
 static uint64_t _imuUpdateCounter = 0;
-
-constexpr float STANDARD_GRAVITY = 9.81f;  // or 9.80665f for higher precision
 
 static void _receivedIMUUpdate(imu_update_t update)
 {
@@ -908,3 +902,5 @@ void loop()
     LOG_INFO("Switched LED back to red");
   }
 }
+
+#endif  // MATLAB_SIM

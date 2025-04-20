@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef MATLAB_SIM
+
 #include <QMC5883L.h>
 #include <QuadcopterController.h>
 
@@ -82,3 +84,5 @@ class MotorMagCompensationHandler
 
   void _completeCalibration(void);
 };
+
+#endif  // MATLAB_SIM

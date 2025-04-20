@@ -1,5 +1,7 @@
 #include "Logger.h"
 
+#ifndef MATLAB_SIM
+
 #include <Arduino.h>
 #include <esp_log.h>
 
@@ -84,3 +86,5 @@ void LOG_DEBUG(const char *format, ...) { __LOG(LogLevel::debug); }
 void LOG_VERBOSE(const char *format, ...) { __LOG(LogLevel::verbose); }
 
 void LOG_CONSOLE(const char *format, ...) { __LOG(LogLevel::console); }
+
+#endif  // MATLAB_SIM

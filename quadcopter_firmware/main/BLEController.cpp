@@ -1,5 +1,7 @@
 #include "BLEController.h"
 
+#ifndef MATLAB_SIM
+
 #include <AsyncController.h>
 #include <DebugHelper.h>
 #include <Logger.h>
@@ -12,12 +14,10 @@
 
 #include "BLE2902.h"
 #include "BLEUtils.h"
+#include "Constants.h"
 
 #define MAX_CALIBRATION_PACKET_SIZE_BYTES 10
 #define TERMINATE_UPLOAD_STREAM_SIGNAL "==TERMINATE=="
-
-#define MIN(x, y) (x < y ? x : y)
-#define MAX(x, y) (x > y ? x : y)
 
 BLEController::BLEController()
 {
@@ -523,3 +523,4 @@ void BLEController::setPIDConstantsUpdateHandler(
 {
   _pidConstantsUpdateHandler = pidConstantsUpdateHandler;
 }
+#endif  // MATLAB_SIM

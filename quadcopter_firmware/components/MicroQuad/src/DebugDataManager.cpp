@@ -1,5 +1,7 @@
 #include "DebugDataManager.h"
 
+#ifndef MATLAB_SIM
+
 #include <cstring>
 
 #include "Logger.h"
@@ -48,3 +50,5 @@ void DebugDataManager::_growHeapIfNeeded(void)
     _reallocating = false;
   }
 }
+
+#endif  // MATLAB_SIM

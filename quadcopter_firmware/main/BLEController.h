@@ -1,5 +1,6 @@
-#ifndef BLECONTROLLER_H
-#define BLECONTROLLER_H
+#pragma once
+
+#ifndef MATLAB_SIM
 
 #include <Arduino.h>
 #include <PIDController.h>
@@ -118,4 +119,4 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   uint64_t _lastDebugDataTransmissionTimestampMillis = 0;
 };
 
-#endif
+#endif  // MATLAB_SIM

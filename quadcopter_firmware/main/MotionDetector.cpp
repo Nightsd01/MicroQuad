@@ -1,5 +1,7 @@
 #include "MotionDetector.h"
 
+#ifndef MATLAB_SIM
+
 #include <Logger.h>
 
 #include <cmath>  // For std::sqrt, std::fabs
@@ -135,3 +137,4 @@ void MotionDetector::imuUpdate(const imu_update_t& data, uint64_t current_micros
     }
   }
 }
+#endif  // MATLAB_SIM

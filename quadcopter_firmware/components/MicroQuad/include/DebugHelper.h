@@ -30,8 +30,8 @@ class DebugHelper
 
 #ifndef MATLAB_SIM
   void saveValues(unsigned long timestamp);
+  DebugDataManager dataManager;
 #else   // MATLAB_SIM
   void saveValues(unsigned long timestamp) {};
 #endif  // MATLAB_SIM
-  DebugDataManager dataManager;
 };

@@ -8,13 +8,15 @@
 
 #pragma once
 
+#ifndef MATLAB_SIM
+
 #include <Arduino.h>
 #include <SPI.h>
 #include <stdint.h>
 
 class Mpu6x00
 {
-public:
+ public:
   typedef enum
   {
 
@@ -207,7 +209,7 @@ public:
     setGyroOffsetZ(z);
   }
 
-protected:
+ protected:
   Mpu6x00(
       const uint8_t deviceId, SPIClass &spi, const uint8_t csPin, const gyroFsr_e gyroFsr, const accelFsr_e accelFsr)
   {
@@ -219,7 +221,7 @@ protected:
     init(deviceId, &SPI, csPin, gyroFsr, accelFsr);
   }
 
-private:
+ private:
   bool _magnetometer;
 
   // Configuration bits
@@ -283,8 +285,8 @@ private:
   uint8_t m_buffer[15];
   uint8_t ext_sensor_buffer[24];
 
-  void
-  init(const uint8_t deviceId, SPIClass *spi, const uint8_t csPin, const gyroFsr_e gyroFsr, const accelFsr_e accelFsr)
+  void init(
+      const uint8_t deviceId, SPIClass *spi, const uint8_t csPin, const gyroFsr_e gyroFsr, const accelFsr_e accelFsr)
   {
     m_deviceId = deviceId;
     m_spi = spi;
@@ -294,7 +296,7 @@ private:
     m_accelFsr = accelFsr;
 
     // float gscale[] = {250., 500., 1000., 2000.};
-    m_gyroScale = 1.0; // gscale[gyroFsr] / 32768.;
+    m_gyroScale = 1.0;  // gscale[gyroFsr] / 32768.;
 
     float ascale[] = {2., 4., 8., 16.};
     m_accelScale = ascale[accelFsr] / 32768.;
@@ -341,11 +343,11 @@ private:
 
   float getFloatValue(const uint8_t k, const float scale) { return getRawValue(k) * scale; }
 
-}; // class Mpu6x00
+};  // class Mpu6x00
 
 class Mpu6000 : public Mpu6x00
 {
-public:
+ public:
   Mpu6000(
       SPIClass &spi, const uint8_t csPin, const gyroFsr_e gyroFsr = GYRO_500DPS, const accelFsr_e accelFsr = ACCEL_16G)
       : Mpu6x00(0x68, spi, csPin, gyroFsr, accelFsr)
@@ -360,7 +362,7 @@ public:
 
 class Mpu6500 : public Mpu6x00
 {
-public:
+ public:
   Mpu6500(
       SPIClass &spi, const uint8_t csPin, const gyroFsr_e gyroFsr = GYRO_500DPS, const accelFsr_e accelFsr = ACCEL_16G)
       : Mpu6x00(0x70, spi, csPin, gyroFsr, accelFsr)
@@ -372,3 +374,5 @@ public:
   {
   }
 };
+
+#endif  // MATLAB_SIM

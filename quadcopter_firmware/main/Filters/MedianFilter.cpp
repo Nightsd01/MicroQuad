@@ -1,12 +1,18 @@
 #include "MedianFilter.h"
 
+#ifndef MATLAB_SIM
 #include "esp_err.h"
+#endif  // MATLAB_SIM
 
 template <typename T>
 MedianFilter<T>::MedianFilter(size_t windowSize) : _windowSize(windowSize), _index(0)
 {
   if (_windowSize == 0) {
+#ifndef MATLAB_SIM
     ESP_ERROR_CHECK(ESP_ERR_INVALID_ARG);
+#else
+    throw std::invalid_argument("Window size must be greater than 0");
+#endif  // MATLAB_SIM
   }
 }
 

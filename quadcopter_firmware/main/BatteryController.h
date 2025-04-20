@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef MATLAB_SIM
+
 class BLEController;
 class DebugHelper;
 class TelemetryController;
@@ -17,3 +19,5 @@ class BatteryController
   BLEController *_bluetoothController;
   DebugHelper *_debugHelper;
 };
+
+#endif  // MATLAB_SIM

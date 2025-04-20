@@ -1,5 +1,7 @@
 #include "MotorMagCompensationHandler.h"
 
+#ifndef MATLAB_SIM
+
 #include <Logger.h>
 
 #include "Constants.h"
@@ -249,3 +251,4 @@ void MotorMagCompensationHandler::_completeCalibration()
   _inSpinUp = false;
   _stepAcc.reset();
 }
+#endif  // MATLAB_SIM

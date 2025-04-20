@@ -1,5 +1,7 @@
 #include "MotorController.h"
 
+#ifndef MATLAB_SIM
+
 #include <Logger.h>
 
 #include "esp_log.h"
@@ -106,3 +108,4 @@ void MotorController::_writeRawValue(uint16_t value)
   ESP_ERROR_CHECK(rmt_disable(_escChan));
   ESP_ERROR_CHECK(rmt_enable(_escChan));
 }
+#endif  // MATLAB_SIM

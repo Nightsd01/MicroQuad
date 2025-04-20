@@ -1,5 +1,6 @@
-#ifndef IMU_h
-#define IMU_h
+#pragma once
+
+#ifndef MATLAB_SIM
 
 #include <SPI.h>
 
@@ -91,4 +92,4 @@ class IMU
   int64_t _numQuickGyroCalibrationSamples = 0;
 };
 
-#endif
+#endif  // MATLAB_SIM

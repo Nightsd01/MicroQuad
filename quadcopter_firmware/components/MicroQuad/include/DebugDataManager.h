@@ -1,6 +1,10 @@
 #pragma once
 
+#ifndef MATLAB_SIM
 #include "esp_system.h"
+#endif  // MATLAB_SIM
+
+#include <stdint.h>
 
 #define DEBUG_PACKET_SIZE 200
 #define INITIAL_DATA_SIZE 1024 * 96

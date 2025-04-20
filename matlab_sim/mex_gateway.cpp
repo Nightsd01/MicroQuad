@@ -2,13 +2,13 @@
 
 #include <stdio.h>
 
+#include "DebugHelper.h"
+#include "QuadcopterController.h"
 #include "Shared.h"
-#include <DebugDataManager.h>
-#include <QuadcopterController.h>
 #include <string>
 
 // Magnetometer
-#include <Matrix.h>
+#include "Matrix.h"
 
 #include <algorithm>
 
@@ -18,11 +18,26 @@
 #include "Filters/MedianFilter.h"
 #include "Logger.h"
 
-static DebugDataManager *_helper;
+// TODO: These are defined in components/QMC5883L
+// Refactor so that component respects MATLAB_SIM and
+// can avoid duplicating these structs
+struct xyz_vector_t {
+  float x, y, z;
+};
+
+struct mag_update_t {
+  float x, y, z;
+  float heading;
+};
+
+static DebugHelper *_helper;
 static QuadcopterController *_controller;
 
 static void initController() {
   delete _controller;
+  delete _helper;
+
+  _helper = new DebugHelper();
   _controller = new QuadcopterController(_helper, micros());
 }
 
@@ -35,25 +50,25 @@ static uint64_t _previousMicros = 0;
 static bool _receivedImuUpdate = false;
 static bool _gotFirstIMUUpdate = false;
 static uint64_t _imuUpdateCounter = 0;
+Vector3f _accelerometer;
 
 static void _receivedIMUUpdate(imu_update_t update) {
   const float deltaTimeSeconds =
       (float)(micros() - _previousMicros) / 1000000.0f;
   _previousMicros = micros();
-  _receivedFirstImuUpdate = true;
 
   Vector3f gyroscope = {update.gyro_x, update.gyro_y, update.gyro_z};
-  Vector3f accelerometer = {update.accel_x, update.accel_y, update.accel_z};
+  _accelerometer = {update.accel_x, update.accel_y, update.accel_z};
   Vector3f mag = {_magValues.x, _magValues.y, _magValues.z};
 
   _extendedKalmanFilter.predict(
-      gyroscope.x, gyroscope.y, gyroscope.z, accelerometer.x * STANDARD_GRAVITY,
-      accelerometer.y * STANDARD_GRAVITY, accelerometer.z * STANDARD_GRAVITY,
-      deltaTimeSeconds);
+      gyroscope.x, gyroscope.y, gyroscope.z,
+      _accelerometer.x * STANDARD_GRAVITY, _accelerometer.y * STANDARD_GRAVITY,
+      _accelerometer.z * STANDARD_GRAVITY, deltaTimeSeconds);
 
-  _extendedKalmanFilter.updateAccelerometer(accelerometer.x * STANDARD_GRAVITY,
-                                            accelerometer.y * STANDARD_GRAVITY,
-                                            accelerometer.z * STANDARD_GRAVITY);
+  _extendedKalmanFilter.updateAccelerometer(
+      _accelerometer.x * STANDARD_GRAVITY, _accelerometer.y * STANDARD_GRAVITY,
+      _accelerometer.z * STANDARD_GRAVITY);
 
   const auto ekfAttitudeQuaternion =
       _extendedKalmanFilter.getAttitudeQuaternion();
@@ -66,60 +81,62 @@ static void _receivedIMUUpdate(imu_update_t update) {
             .roll = ekfYawPitchRoll(2, 0)};
 
   _imuValues = {
-      .gyroOutput = {gyroscope.axis.x, gyroscope.axis.y, gyroscope.axis.z},
-      .yawPitchRollDegrees = {_euler.angle.yaw, _euler.angle.pitch,
-                              _euler.angle.roll}};
+      .gyroOutput = {gyroscope.z, gyroscope.y, gyroscope.x},
+      .yawPitchRollDegrees = {_euler.yaw, _euler.pitch, _euler.roll},
+      .altitudeMeters = ekfAltitude,
+      .verticalVelocityMetersPerSec = ekfVerticalVelocity,
+  };
 
   _receivedImuUpdate = true;
   _gotFirstIMUUpdate = true;
 }
 
-// 1. timestamp
-// 2. yaw
-// 3. pitch
-// 4. roll
-// 5. raw accel x
-// 6. raw accel y
-// 7. raw accel z
-// 8. raw gyro x
-// 9. raw gyro y
-// 10. raw gyro z
-// 11. filtered accel x
-// 12. filtered accel y
-// 13. filtered accel z
-// 14. filtered gyro x
-// 15. filtered gyro y
-// 16. filtered gyro z
-// 17. angle out yaw
-// 18. angle out pitch
-// 19. angle out roll
-// 20. rate out yaw
-// 21. rate out pitch
-// 22. rate out roll
-// 23. motor 1
-// 24. motor 2
-// 25. motor 3
-// 26. motor 4
-// 27. mag x
-// 28. mag y
-// 29. mag z
-// 30. mag heading
-// 31. throttle
-// 32. voltage
-// 33. desired yaw
-// 34. desired pitch
-// 35. desired roll
-// 36. ekf quat 0
-// 37. ekf quat 1
-// 38. ekf quat 2
-// 39. ekf quat 3
-// 40. ekf yaw
-// 41. ekf pitch
-// 42. ekf roll
-// 43. ekf altitude
-// 44. ekf vert velocity
-// 45. relative altitude barometer (in meters)
-// 46. relative altitude rangefinder (in meters)
+// 0. timestamp
+// 1. yaw
+// 2. pitch
+// 3. roll
+// 4. raw accel x
+// 5. raw accel y
+// 6. raw accel z
+// 7. raw gyro x
+// 8. raw gyro y
+// 9. raw gyro z
+// 10. filtered accel x
+// 11. filtered accel y
+// 12. filtered accel z
+// 13. filtered gyro x
+// 14. filtered gyro y
+// 15. filtered gyro z
+// 16. angle out yaw
+// 17. angle out pitch
+// 18. angle out roll
+// 19. rate out yaw
+// 20. rate out pitch
+// 21. rate out roll
+// 22. motor 1
+// 23. motor 2
+// 24. motor 3
+// 25. motor 4
+// 26. mag x
+// 27. mag y
+// 28. mag z
+// 29. mag heading
+// 30. throttle
+// 31. voltage
+// 32. desired yaw
+// 33. desired pitch
+// 34. desired roll
+// 35. ekf quat 0
+// 36. ekf quat 1
+// 37. ekf quat 2
+// 38. ekf quat 3
+// 39. ekf yaw
+// 40. ekf pitch
+// 41. ekf roll
+// 42. ekf altitude
+// 43. ekf vert velocity
+// 44. relative altitude barometer (in meters)
+// 45. relative altitude rangefinder (in meters)
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
   initController();
@@ -176,6 +193,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
         .heading = (float)_data[row + 26 * numRows],
     };
 
+    _extendedKalmanFilter.updateBarometer((float)_data[row + 44 * numRows]);
+    _extendedKalmanFilter.updateRangefinder((float)_data[row + 45 * numRows]);
+
     if (row < 10) {
       printf("Update %zu: %f, %f, %f, %f, %f, %f\n", row + 1, update.accel_x,
              update.accel_y, update.accel_z, update.gyro_x, update.gyro_y,
@@ -195,9 +215,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
     matrixData[row + 5 * numOutputRows] =
         _imuValues.yawPitchRollDegrees[1]; // Pitch
     matrixData[row + 6 * numOutputRows] =
-        _imuValues.yawPitchRollDegrees[2];                           // Roll
-    matrixData[row + 7 * numOutputRows] = _imuValues.accelOutput[0]; // accel X
-    matrixData[row + 8 * numOutputRows] = _imuValues.accelOutput[1]; // accel Y
-    matrixData[row + 9 * numOutputRows] = _imuValues.accelOutput[2]; // accel Z
+        _imuValues.yawPitchRollDegrees[2];                  // Roll
+    matrixData[row + 7 * numOutputRows] = _accelerometer.x; // accel X
+    matrixData[row + 8 * numOutputRows] = _accelerometer.y; // accel Y
+    matrixData[row + 9 * numOutputRows] = _accelerometer.z; // accel Z
   }
 }

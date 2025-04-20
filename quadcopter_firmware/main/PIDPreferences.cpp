@@ -1,5 +1,7 @@
 #include "PIDPreferences.h"
 
+#ifndef MATLAB_SIM
+
 #include <AsyncController.h>
 #include <Logger.h>
 
@@ -160,3 +162,4 @@ quadcopter_config_t PIDPreferences::_initializeGains()
 
   return _defaultGains;
 }
+#endif  // MATLAB_SIM
