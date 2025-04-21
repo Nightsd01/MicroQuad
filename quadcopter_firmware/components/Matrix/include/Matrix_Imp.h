@@ -259,6 +259,73 @@ Matrix<T, ROWS, COLS> Matrix<T, ROWS, COLS>::identity(void)
 }
 
 template <typename T, size_t ROWS, size_t COLS>
+inline T Matrix<T, ROWS, COLS>::determinant(void) const
+{
+  // Determinant is only defined for square matrices.
+  // Use static_assert for compile-time check.
+  static_assert(ROWS == COLS, "Determinant is only defined for square matrices.");
+
+  constexpr size_t N = ROWS;  // The order of the square matrix
+
+  // Base case: 1x1 matrix
+  // Use 'if constexpr' (C++17) for compile-time evaluation of branches.
+  // If not using C++17, regular 'if' works but might compile unused branches.
+  if constexpr (N == 1) {
+    return (*this)(0, 0);
+  }
+  // Base case: 2x2 matrix (direct calculation is faster)
+  else if constexpr (N == 2) {
+    return ((*this)(0, 0) * (*this)(1, 1)) - ((*this)(0, 1) * (*this)(1, 0));
+  }
+  // Recursive step: NxN matrix (N > 2)
+  // Using cofactor expansion along the first row (row 0)
+  else {
+    T det = T{0};   // Initialize determinant result. Use T{} for zero initialization.
+    T sign = T{1};  // Sign for cofactor term, starts positive for (0,0) element.
+
+    for (size_t j = 0; j < N; ++j) {  // Iterate through columns of the first row
+      // Calculate the minor matrix by removing row 0 and column j
+      Matrix<T, N - 1, N - 1> minor_matrix = _createSubmatrix(0, j);
+
+      // Recursively find the determinant of the minor
+      T minor_determinant = minor_matrix.determinant();
+
+      // Add the term: (-1)^(0+j) * element(0,j) * det(minor)
+      det += sign * (*this)(0, j) * minor_determinant;
+
+      // Flip the sign for the next element in the row expansion
+      sign = -sign;
+    }
+    return det;
+  }
+}
+
+template <typename T, size_t ROWS, size_t COLS>
+inline Matrix<T, ROWS - 1, COLS - 1> Matrix<T, ROWS, COLS>::_createSubmatrix(size_t skip_row, size_t skip_col) const
+{
+  Matrix<T, ROWS - 1, COLS - 1> sub;  // Resulting submatrix
+  size_t sub_r = 0;                   // Current row in the submatrix
+
+  for (size_t r = 0; r < ROWS; ++r) {
+    if (r == skip_row) {
+      continue;  // Skip the specified row
+    }
+
+    size_t sub_c = 0;  // Current column in the submatrix
+    for (size_t c = 0; c < COLS; ++c) {
+      if (c == skip_col) {
+        continue;  // Skip the specified column
+      }
+      // Copy element to the submatrix
+      sub(sub_r, sub_c) = (*this)(r, c);
+      sub_c++;  // Move to the next column in the submatrix
+    }
+    sub_r++;  // Move to the next row in the submatrix
+  }
+  return sub;
+}
+
+template <typename T, size_t ROWS, size_t COLS>
 std::ostream& operator<<(std::ostream& os, const Matrix<T, ROWS, COLS>& matrix)
 {
   // Delegate to your existing description method

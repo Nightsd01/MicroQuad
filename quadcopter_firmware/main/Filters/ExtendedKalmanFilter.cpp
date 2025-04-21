@@ -189,25 +189,30 @@ void ExtendedKalmanFilter::predict(
     float accel_z_m_s2,
     float dt)
 {
-  // ── 0.  Sanity check ───────────────────────────────────────────────────────
   if (dt <= 0.0f) return;
 
-  // ── 1.  Convert gyro to rad/s and pull current state -----------------------
+  // Convert gyro to rad/s
   float gx = DEG_TO_RADS(gyro_x_deg_s);
   float gy = DEG_TO_RADS(gyro_y_deg_s);
   float gz = DEG_TO_RADS(gyro_z_deg_s);
 
+  // Copy old state/cov
   Matrix<float, STATE_DIM, 1> x_prev = _x;
   Matrix<float, STATE_DIM, STATE_DIM> P_prev = _PCovariance;
 
+  // Extract some sub-states
   Matrix<float, 4, 1> q_prev = x_prev.slice<4, 1>(Q0_IDX, 0);
   Matrix<float, 3, 1> b_g = x_prev.slice<3, 1>(BG_XIDX, 0);
 
-  // ── 2.  Attitude propagation ----------------------------------------------
+  // Body-frame acceleration vector
+  Matrix<float, 3, 1> a_body = {{accel_x_m_s2}, {accel_y_m_s2}, {accel_z_m_s2}};
+
+  // Bias-corrected angular rates
   Matrix<float, 3, 1> omega = {{gx - b_g(0, 0)}, {gy - b_g(1, 0)}, {gz - b_g(2, 0)}};
 
+  // --- 1) Attitude propagation ---
   Matrix<float, 3, 1> dtheta = omega * dt;
-  float dtheta_norm_sq = dtheta(0, 0) * dtheta(0, 0) + dtheta(1, 0) * dtheta(1, 0) + dtheta(2, 0) * dtheta(2, 0);
+  float dtheta_norm_sq = dtheta.dot(dtheta);
 
   Matrix<float, 4, 1> delta_q;
   constexpr float ANGLE_TOL_SQ = 1e-12f;
@@ -222,66 +227,83 @@ void ExtendedKalmanFilter::predict(
     delta_q(1, 0) = axis(0, 0) * s;
     delta_q(2, 0) = axis(1, 0) * s;
     delta_q(3, 0) = axis(2, 0) * s;
-  } else  // small‑angle first‑order approximation
-  {
+  } else {
+    // small-angle approximation
     delta_q(0, 0) = 1.0f;
     delta_q(1, 0) = 0.5f * dtheta(0, 0);
     delta_q(2, 0) = 0.5f * dtheta(1, 0);
     delta_q(3, 0) = 0.5f * dtheta(2, 0);
-    delta_q = normalizeQuaternion(delta_q);
+    normalizeQuaternion(delta_q);
   }
 
   Matrix<float, 4, 1> q_new = quaternionMultiplyHamiltonProduct(q_prev, delta_q);
   q_new = normalizeQuaternion(q_new);
 
-  // ── 3.  IMU‑derived vertical acceleration (NED: +Z is Down) ---------------
-  Matrix<float, 3, 1> a_body = {{accel_x_m_s2}, {accel_y_m_s2}, {accel_z_m_s2}};
-  float a_z = _verticalAccelerationWorld(a_body, q_new);  // m/s², Down +
+  // --- 2) Vertical acceleration in world (NED) ---
+  float a_z = _verticalAccelerationWorld(a_body, q_new);  // +Z down
 
-  // ── 4.  Integrate to vertical velocity and altitude -----------------------
-  float velz_prev = x_prev(VELZ_IDX, 0);  // m/s (Down +)
-  float alt_prev = x_prev(ALT_IDX, 0);    // m   (Down +)
+  // --- 3) Integrate alt & vel ---
+  float velz_prev = x_prev(VELZ_IDX, 0);
+  float alt_prev = x_prev(ALT_IDX, 0);
 
   float velz_new = velz_prev + a_z * dt;
   float alt_new = alt_prev + velz_prev * dt + 0.5f * a_z * dt * dt;
 
-  // ── 5.  Write propagated state --------------------------------------------
+  // Write back to state
   _x.setSlice<4, 1>(Q0_IDX, 0, q_new);
   _x(VELZ_IDX, 0) = velz_new;
   _x(ALT_IDX, 0) = alt_new;
-  // (bias states remain unchanged in the deterministic model)
 
-  // ── 6.  Linearised transition matrix F ------------------------------------
-  Matrix<float, STATE_DIM, STATE_DIM> F = _calculateF(q_prev, omega(0, 0), omega(1, 0), omega(2, 0), dt);
+  // --- 4) Build F with new partial derivatives ---
+  Matrix<float, STATE_DIM, STATE_DIM> F =
+      _calculateF(q_prev, omega(0, 0), omega(1, 0), omega(2, 0), a_body, dt);  // <-- CHANGED
 
-  // ── 7.  Base process noise matrix Q ---------------------------------------
-  // Calculate Q based on configured noise densities and dt
+  // --- 5) Build Q ---
   Matrix<float, STATE_DIM, STATE_DIM> Q = _calculateQ(q_prev, dt);
 
-  // NOTE: The incorrect addition of terms based on _config.accel_noise_variance
-  // has been removed here (Fix for EKF-02). Process noise for alt/vel
-  // is now solely determined by _config.velz_Process_noise within _calculateQ.
-
-  // ── 8.  Covariance propagation -------------------------------------------
+  // --- 6) Covariance propagation ---
   _PCovariance = F * P_prev * F.transpose() + Q;
-  // Enforce symmetry (numerical hygiene)
-  _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;
+  _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;  // enforce symmetry
+}
+
+static Matrix<float, 1, 4> partialAzWrtQuaternion(const Matrix<float, 4, 1>& q, const Matrix<float, 3, 1>& abody)
+{
+  // For a_z = the 3rd component of (R_bw(q) * abody), ignoring the constant -g
+  float q0 = q(0, 0), q1 = q(1, 0), q2 = q(2, 0), q3 = q(3, 0);
+  float ax = abody(0, 0), ay = abody(1, 0), az = abody(2, 0);
+
+  // By explicit partial derivatives of the 3rd row of R_bw * abody
+  // R_bw(2,0) = 2(q1q3 - q0q2)
+  // R_bw(2,1) = 2(q2q3 + q0q1)
+  // R_bw(2,2) = (q0^2 - q1^2 - q2^2 + q3^2)
+  // => a_z = R_bw(2,0)*ax + R_bw(2,1)*ay + R_bw(2,2)*az
+
+  Matrix<float, 1, 4> d;
+  d.zeros();
+
+  // wrt q0
+  d(0, 0) = -2.f * q2 * ax + 2.f * q1 * ay + 2.f * q0 * az;
+  // wrt q1
+  d(0, 1) = 2.f * q3 * ax + 2.f * q0 * ay - 2.f * q1 * az;
+  // wrt q2
+  d(0, 2) = -2.f * q0 * ax + 2.f * q3 * ay - 2.f * q2 * az;
+  // wrt q3
+  d(0, 3) = 2.f * q1 * ax + 2.f * q2 * ay + 2.f * q3 * az;
+
+  return d;
 }
 
 Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateF(
     const Matrix<float, 4, 1>& q,
     float omega_x,
     float omega_y,
-    float omega_z,  // Bias-corrected rates (rad/s)
+    float omega_z,
+    const Matrix<float, 3, 1>& a_body,  // <-- ADDED
     float dt)
 {
-  // Initialize F as the Identity matrix (STATE_DIM x STATE_DIM).
   Matrix<float, STATE_DIM, STATE_DIM> F_term = Matrix<float, STATE_DIM, STATE_DIM>::identity();
 
-  // --- Calculate Fqq block: d(quat_new) / d(quat_old) ---
-  // Fqq = I(4x4) + 0.5 * Omega(omega) * dt
-
-  // Construct Omega matrix using initializer list
+  // --- Fqq block (attitude) ---
   Matrix<float, 4, 4> Omega = {
       {0.0f,    -omega_x, -omega_y, -omega_z},
       {omega_x, 0.0f,     omega_z,  -omega_y},
@@ -289,40 +311,35 @@ Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateF(
       {omega_z, omega_y,  -omega_x, 0.0f    }
   };
 
-  // Calculate Fqq = I + Omega * (0.5*dt)
   Matrix<float, 4, 4> Fqq = Matrix<float, 4, 4>::identity() + Omega * (0.5f * dt);
-
-  // Place Fqq into the main F matrix
   F_term.setSlice<4, 4>(Q0_IDX, Q0_IDX, Fqq);
 
-  // --- Calculate Fqbg block: d(quat_new) / d(gyro_bias) ---
-  // Fqbg = -0.5 * dt * Xi(q)
-
-  // Extract quaternion components first
-  float q0 = q(0, 0);
-  float q1 = q(1, 0);
-  float q2 = q(2, 0);
-  float q3 = q(3, 0);
-
-  // Construct Xi matrix using initializer list
+  // --- Fqbg: derivative of quaternion wrt gyro biases ---
+  float q0 = q(0, 0), q1 = q(1, 0), q2 = q(2, 0), q3 = q(3, 0);
   Matrix<float, 4, 3> Xi = {
       {-q1, -q2, -q3},
       {q0,  -q3, q2 },
       {q3,  q0,  -q1},
       {-q2, q1,  q0 }
   };
-
-  // Calculate Fqbg = Xi * (-0.5*dt)
   Matrix<float, 4, 3> Fqbg = Xi * (-0.5f * dt);
-
-  // Place Fqbg into the main F matrix
   F_term.setSlice<4, 3>(Q0_IDX, BG_XIDX, Fqbg);
 
-  // --- Set other non-identity elements ---
-  // d(alt_new) / d(velz_old) = dt
-  F_term(ALT_IDX, VELZ_IDX) = dt;
+  // --- F for alt and velz wrt alt, velz ---
+  F_term(ALT_IDX, VELZ_IDX) = dt;  // d(alt) / d(velz) = dt
 
-  // All other elements remain as per Identity matrix initialization
+  // --- NEW: partial derivatives of (velz, alt) wrt quaternion ---
+  //    velz_new = velz_old + a_z(q)*dt
+  // => partial wrt q = dt * d(a_z)/dq
+  //    alt_new = alt_old + velz_old*dt + 0.5*a_z(q)*dt^2
+  // => partial wrt q = 0.5*dt^2 * d(a_z)/dq
+  Matrix<float, 1, 4> dAz_dq = partialAzWrtQuaternion(q, a_body);
+
+  // place them into the correct rows:
+  for (int i = 0; i < 4; ++i) {
+    F_term(VELZ_IDX, Q0_IDX + i) = dt * dAz_dq(0, i);             // d(velz)/dq
+    F_term(ALT_IDX, Q0_IDX + i) = 0.5f * dt * dt * dAz_dq(0, i);  // d(alt)/dq
+  }
 
   return F_term;
 }
@@ -546,6 +563,8 @@ void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float ma
 
   // 2. Extract current attitude quaternion
   Matrix<float, 4, 1> q = x_pred.slice<4, 1>(Q0_IDX, 0);
+  // Optional: Renormalize q here just in case, though predict/update should maintain it.
+  // q = normalizeQuaternion(q);
 
   // 3. Construct and Normalize the measurement vector z
   Matrix<float, 3, 1> z_raw = {{mag_x}, {mag_y}, {mag_z}};  // Raw magnetometer reading
@@ -557,14 +576,14 @@ void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float ma
   const float min_norm = 1e-6f;
   if (norm_z < min_norm) {
     // Magnetometer reading is too weak or zero, cannot reliably use it. Skip update.
-    LOG_WARN_PERIODIC_MILLIS(100, "Skipping mag update due to low magnitude: %.3f", norm_z);
+    // Optionally add logging here: LOG_WARN("Skipping mag update due to low measurement magnitude: %.3f", norm_z);
     return;
   }
 
   // Normalize the measurement vector
   Matrix<float, 3, 1> z = z_raw * (1.0f / norm_z);
 
-  // 4. Get the reference magnetic field vector and normalize it (Fix for EKF-03)
+  // 4. Get the reference magnetic field vector and normalize it (Fix for EKF-03 normalization part)
   Matrix<float, 3, 1> m_ref_raw = _config.mag_reference_vector;
   float norm_m_ref = std::sqrt(
       m_ref_raw(0, 0) * m_ref_raw(0, 0) + m_ref_raw(1, 0) * m_ref_raw(1, 0) + m_ref_raw(2, 0) * m_ref_raw(2, 0));
@@ -573,12 +592,12 @@ void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float ma
     m_ref = m_ref_raw * (1.0f / norm_m_ref);
   } else {
     // Reference vector is zero or near-zero, cannot use magnetometer.
-    LOG_ERROR_PERIODIC_MILLIS("Mag reference vector norm is too small: %.3f", norm_m_ref);
+    // Optionally add logging here: LOG_ERROR("Mag reference vector norm is too small: %.3f", norm_m_ref);
     return;
   }
 
   // 5. Calculate the predicted measurement h(x)
-  //    h(x) = Rotate normalized reference vector from world frame to body frame
+  // h(x) = Rotate normalized reference vector from world frame to body frame
   Matrix<float, 3, 3> R_bw = quaternionToRotationMatrix(q);  // Get Body-to-World matrix
   Matrix<float, 3, 3> R_wb = R_bw.transpose();               // Calculate World-to-Body via transpose
   Matrix<float, 3, 1> h = R_wb * m_ref;                      // Use the correct R_wb and normalized m_ref
@@ -588,8 +607,8 @@ void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float ma
   Matrix<float, 3, 1> y = z - h;
 
   // 7. Calculate the measurement Jacobian H = dh/dx | x = x_pred (3 x STATE_DIM)
-  //    Only depends on quaternion state variables (q0, q1, q2, q3).
-  //    Uses the CORRECTED Jacobian derivation (Fix for EKF-01).
+  // Only depends on quaternion state variables (q0, q1, q2, q3).
+  // Uses the CORRECTED Jacobian derivation (Fix for EKF-01).
   Matrix<float, 3, STATE_DIM> H;  // Default constructor zeros the matrix
 
   float q0 = q(0, 0);
@@ -618,14 +637,14 @@ void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float ma
 
   // Column for q3: d(h)/dq3
   H(0, Q3_IDX) = 2.0f * (-q3 * mx + q0 * my + q1 * mz);
-  H(1, Q3_IDX) = 2.0f * (-q0 * mx - q1 * my + q2 * mz);
+  H(1, Q3_IDX) = 2.0f * (-q0 * mx - q3 * my + q2 * mz);
   H(2, Q3_IDX) = 2.0f * (q1 * mx + q2 * my + q3 * mz);
 
   // Columns ALT_IDX through BBARO_IDX remain zero.
 
   // 8. Define the measurement noise covariance matrix R (3x3)
-  //    Uses _R_mag, assumes uncorrelated noise on normalized axes.
-  //    Note: Using fixed variance for normalized measurement is an approximation
+  // Uses _R_mag, assumes uncorrelated noise on normalized axes.
+  // Note: Using fixed variance for normalized measurement is an approximation (see EKF-03 discussion).
   Matrix<float, 3, 3> R_mat;  // Default zeroed
   R_mat(0, 0) = _R_mag;
   R_mat(1, 1) = _R_mag;
@@ -634,8 +653,21 @@ void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float ma
   // 9. Calculate the innovation covariance S = H * P_pred * H^T + R
   Matrix<float, 3, 3> S = H * P_pred * H.transpose() + R_mat;
 
+  // --- Check for ill-conditioned S (Fix for EKF-06) ---
+  // Calculate determinant (assuming Matrix library has a determinant method)
+  // If determinant() is not available, implement the 3x3 calculation shown above.
+  float detS = S.determinant();
+  const float min_det_threshold = 1e-9f;  // Threshold to consider S ill-conditioned (tune this)
+
+  if (fabsf(detS) < min_det_threshold) {
+    // S is singular or near-singular, skip update to avoid numerical instability
+    // Optionally add logging here: LOG_WARN("Skipping mag update due to ill-conditioned S matrix (det=%.3e)", detS);
+    return;
+  }
+  // --- End EKF-06 Fix ---
+
   // 10. Calculate the Kalman Gain K = P_pred * H^T * S^-1
-  //     Ensure S.invert() is numerically stable.
+  // Inversion is now safer after the determinant check.
   Matrix<float, STATE_DIM, 3> K =
       P_pred * H.transpose() * S.invert();  // Assuming invert() handles potential issues or check was done
 
@@ -647,10 +679,10 @@ void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float ma
   Matrix<float, STATE_DIM, STATE_DIM> I_KH = I - K * H;
   _PCovariance = I_KH * P_pred * I_KH.transpose() + K * R_mat * K.transpose();
 
-  // Belt-and-braces: Enforce symmetry AFTER Joseph form update
+  // 13. Belt-and-braces: Enforce symmetry AFTER Joseph form update
   _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;
 
-  // 13. Renormalize the quaternion part of the updated state vector _x
+  // 14. Renormalize the quaternion part of the updated state vector _x
   Matrix<float, 4, 1> q_updated = _x.slice<4, 1>(Q0_IDX, 0);
   Matrix<float, 4, 1> q_normalized = normalizeQuaternion(q_updated);  // Assumes normalizeQuaternion works as needed
   _x.setSlice<4, 1>(Q0_IDX, 0, q_normalized);

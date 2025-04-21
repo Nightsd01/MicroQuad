@@ -40,6 +40,8 @@ class TelemetryController
 
   void loopHandler(void);
 
+  bool disableTransmission = false;
+
  private:
   BLEController *_bleController;
   std::deque<_telem_event_t> _eventQueue;

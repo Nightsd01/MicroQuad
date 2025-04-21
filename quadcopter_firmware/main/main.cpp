@@ -213,10 +213,6 @@ static void _gotMagUpdate(mag_update_t update)
         _mostRecentMotorValues,
         _batteryController->batteryVoltage());
   }
-  if (_imu->completedQuickCalibration) {
-    // TODO: Commented out for debugging
-    _extendedKalmanFilter.updateMagnetometer(_magValues.x, _magValues.y, _magValues.z);
-  }
 
   EXECUTE_PERIODIC(1000, {
     LOG_INFO("Sending mag update with heading %f, from update %f", _magValues.heading, update.heading);
@@ -407,6 +403,8 @@ static void _receivedIMUUpdate(imu_update_t update)
       accelerometer.z * STANDARD_GRAVITY,
       deltaTimeSeconds);
 
+  _extendedKalmanFilter.updateMagnetometer(mag.x, mag.y, mag.z);
+
   // NOTE: Due to all the matrix allocations, we cannot combine this with predict()
   // because of the limited stack size on the ESP32
   _extendedKalmanFilter.updateAccelerometer(
@@ -447,9 +445,9 @@ static void _receivedIMUUpdate(imu_update_t update)
   _helper->ypr[0] = _euler.yaw;
   _helper->ypr[1] = _euler.pitch;
   _helper->ypr[2] = _euler.roll;
-  _helper->magValues[0] = _magValues.x;
-  _helper->magValues[1] = _magValues.y;
-  _helper->magValues[2] = _magValues.z;
+  _helper->magValues[0] = mag.x;
+  _helper->magValues[1] = mag.y;
+  _helper->magValues[2] = mag.z;
   _helper->magValues[3] = _magValues.heading;
   _helper->ekfQuaternion[0] = ekfAttitudeQuaternion(0, 0);
   _helper->ekfQuaternion[1] = ekfAttitudeQuaternion(1, 0);
@@ -766,7 +764,8 @@ void loop()
   _barometer.loopHandler();
   _vl53Manager.loopHandler();
 
-  _handleFirstStagePreCalibrationIfNeeded();
+  // _handleFirstStagePreCalibrationIfNeeded();
+  _imu->completedQuickCalibration = true;
 
   if (_receivedAltitudeUpdate) {
     LOG_INFO_PERIODIC_MILLIS(1000, "Altitude: %fm", _relativeAltitudeMeters);

@@ -14,6 +14,8 @@
 #include "Arduino.h"
 #include "Logger.h"
 
+static int sampleRate = 4;
+static int sampleCounter = 0;
 void DebugHelper::saveValues(unsigned long timestamp)
 {
   double ts = (double)timestamp;

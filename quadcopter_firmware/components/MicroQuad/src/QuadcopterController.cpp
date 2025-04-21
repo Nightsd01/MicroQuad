@@ -2,7 +2,7 @@
 
 #ifndef MATLAB_SIM
 #include <Arduino.h>
-#endif // MATLAB_SIM
+#endif  // MATLAB_SIM
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,27 +21,24 @@
     3       1
 
 */
-static double mapf(double x, double in_min, double in_max, double out_min,
-                   double out_max) {
-  if (x > in_max)
-    return out_max;
-  if (x < in_min)
-    return out_min;
+static double mapf(double x, double in_min, double in_max, double out_min, double out_max)
+{
+  if (x > in_max) return out_max;
+  if (x < in_min) return out_min;
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-static inline float wrapPi(float a) {
+static inline float wrapPi(float a)
+{
   // returns angle in (-π, π]
-  if (a > M_PI)
-    a -= 2.0f * M_PI;
-  if (a <= -M_PI)
-    a += 2.0f * M_PI;
+  if (a > M_PI) a -= 2.0f * M_PI;
+  if (a <= -M_PI) a += 2.0f * M_PI;
   return a;
 }
 
 // Public functions
-QuadcopterController::QuadcopterController(DebugHelper *debugHelper,
-                                           unsigned long timeMicros) {
+QuadcopterController::QuadcopterController(DebugHelper *debugHelper, unsigned long timeMicros)
+{
   _debugHelper = debugHelper;
   for (int i = 0; i < 3; i++) {
     _angleControllers[i] = std::make_unique<PIDController>(debugHelper);
@@ -50,9 +47,8 @@ QuadcopterController::QuadcopterController(DebugHelper *debugHelper,
   _verticalVelocityController = new PIDController(debugHelper);
 }
 
-void QuadcopterController::_yawUpdate(unsigned long now,
-                                      const controller_values_t &sticks,
-                                      const imu_output_t &imu) {
+void QuadcopterController::_yawUpdate(unsigned long now, const controller_values_t &sticks, const imu_output_t &imu)
+{
   if (_lastYawUpdateTimeMicros == 0) {
     _lastYawUpdateTimeMicros = now;
     return;
@@ -71,8 +67,7 @@ void QuadcopterController::_yawUpdate(unsigned long now,
   // 3. keep it close to current yaw so the PID takes the short path
   const double yawNowRad = DEG_TO_RAD(imu.yawPitchRollDegrees[0]);
   const double diff = wrapPi(_yawSetPointRad - yawNowRad);
-  _yawSetPointRad =
-      yawNowRad + diff; // same numeric value but guaranteed shortest arc
+  _yawSetPointRad = yawNowRad + diff;  // same numeric value but guaranteed shortest arc
 }
 
 // TODO: {bradhesse} Convert whole codebase purely to use radians and not
@@ -83,24 +78,27 @@ void QuadcopterController::_yawUpdate(unsigned long now,
 // now
 motor_outputs_t QuadcopterController::calculateOutputs(
     const quadcopter_config_t &cfg,
-    const imu_output_t &imu, // attitude in degrees, gyro in DPS
-    const controller_values_t &sticks, unsigned long nowUs, bool recordData) {
+    const imu_output_t &imu,  // attitude in degrees, gyro in DPS
+    const controller_values_t &sticks,
+    unsigned long nowUs,
+    bool recordData)
+{
   // ------------------------------------------------------------------ 0.  time
   // base
   const double nowSec = nowUs * 1e-6;
 
   // ------------------------------------------------------------------ 1.
   // altitude loop (unchanged)
-  const double throttleIn = (double)sticks.leftStickInput.y; // 0 … 255
-  const double velSet_mps =
-      (throttleIn - 127.5) * MAX_VERTICAL_VELOCITY_METERS_PER_SECOND;
+  const double throttleIn = (double)sticks.leftStickInput.y;  // 0 … 255
+  const double velSet_mps = (throttleIn - 127.5) * MAX_VERTICAL_VELOCITY_METERS_PER_SECOND;
 
   const float velPidOut = _verticalVelocityController->computeOutput(
-      cfg.verticalVelocityGains, imu.verticalVelocityMetersPerSec, velSet_mps,
+      cfg.verticalVelocityGains,
+      imu.verticalVelocityMetersPerSec,
+      velSet_mps,
       nowSec);
 
-  const float baseThrottle = STEADY_STATE_HOVER_THROTTLE +
-                             mapf(velPidOut, -1000.f, 1000.f, -127.5f, 127.5f);
+  const float baseThrottle = STEADY_STATE_HOVER_THROTTLE + mapf(velPidOut, -1000.f, 1000.f, -127.5f, 127.5f);
 
   // ------------------------------------------------------------------ 2.  yaw
   // set‑point initialisation
@@ -116,51 +114,48 @@ motor_outputs_t QuadcopterController::calculateOutputs(
   // ------------------------------------------------------------------ 3.
   // desired roll / pitch angles
   const double stickNormRoll =
-      (sticks.rightStickInput.x - INPUT_MAX_CONTROLLER_INPUT / 2.0) /
-      (INPUT_MAX_CONTROLLER_INPUT / 2.0);
+      (sticks.rightStickInput.x - INPUT_MAX_CONTROLLER_INPUT / 2.0) / (INPUT_MAX_CONTROLLER_INPUT / 2.0);
   const double stickNormPitch =
-      (sticks.rightStickInput.y - INPUT_MAX_CONTROLLER_INPUT / 2.0) /
-      (INPUT_MAX_CONTROLLER_INPUT / 2.0);
+      (sticks.rightStickInput.y - INPUT_MAX_CONTROLLER_INPUT / 2.0) / (INPUT_MAX_CONTROLLER_INPUT / 2.0);
 
   const double rollSet_deg = MAX_PITCH_ROLL_ANGLE_DEGREES * stickNormRoll;
   const double pitchSet_deg = MAX_PITCH_ROLL_ANGLE_DEGREES * stickNormPitch;
 
   // ------------------------------------------------------------------ 4. outer
   // angle PIDs  (rad in / rad out)
-  const float angleMeas[3] = {DEG_TO_RAD((float)imu.yawPitchRollDegrees[0]),
-                              DEG_TO_RAD((float)imu.yawPitchRollDegrees[1]),
-                              DEG_TO_RAD((float)imu.yawPitchRollDegrees[2])};
-  float angleSet[3] = {(float)_yawSetPointRad, DEG_TO_RAD((float)pitchSet_deg),
-                       DEG_TO_RAD((float)rollSet_deg)};
+  const float angleMeas[3] = {
+      DEG_TO_RAD((float)imu.yawPitchRollDegrees[0]),
+      DEG_TO_RAD((float)imu.yawPitchRollDegrees[1]),
+      DEG_TO_RAD((float)imu.yawPitchRollDegrees[2])};
+  float angleSet[3] = {(float)_yawSetPointRad, DEG_TO_RAD((float)pitchSet_deg), DEG_TO_RAD((float)rollSet_deg)};
 
   // wrap yaw error to shortest path
   angleSet[0] = angleMeas[0] + wrapPi(angleSet[0] - angleMeas[0]);
 
   float angleOut[3], rateOut[3];
   for (int i = 0; i < 3; ++i) {
-    angleOut[i] = _angleControllers[i]->computeOutput(
-        cfg.angleGains[i], angleMeas[i], angleSet[i], nowSec);
+    angleOut[i] = _angleControllers[i]->computeOutput(cfg.angleGains[i], angleMeas[i], angleSet[i], nowSec);
 
     rateOut[i] = _rateControllers[i]->computeOutput(
         cfg.rateGains[i],
-        DEG_TO_RAD(imu.gyroOutput[i]), // gyro DPS → rad/s
-        angleOut[i],                   // desired rad/s
+        DEG_TO_RAD(imu.gyroOutput[i]),  // gyro DPS → rad/s
+        angleOut[i],                    // desired rad/s
         nowSec);
   }
 
   // ------------------------------------------------------------------ 5. motor
   // mix
   motor_outputs_t m = {
-      (float)(baseThrottle + rateOut[1] - rateOut[2] - rateOut[0]), // M1
-      (float)(baseThrottle - rateOut[1] + rateOut[2] - rateOut[0]), // M2
-      (float)(baseThrottle - rateOut[1] - rateOut[2] + rateOut[0]), // M3
-      (float)(baseThrottle + rateOut[1] + rateOut[2] + rateOut[0])  // M4
+      (float)(baseThrottle + rateOut[1] - rateOut[2] - rateOut[0]),  // M1
+      (float)(baseThrottle - rateOut[1] + rateOut[2] - rateOut[0]),  // M2
+      (float)(baseThrottle - rateOut[1] - rateOut[2] + rateOut[0]),  // M3
+      (float)(baseThrottle + rateOut[1] + rateOut[2] + rateOut[0])   // M4
   };
 
   // ------------------------------------------------------------------ 6. scale
   // & clamp to ESC range
   for (int i = 0; i < NUM_MOTORS; ++i) {
-    m[i] = MIN(MAX(m[i], 0), 255); // stick byte range
+    m[i] = MIN(MAX(m[i], 0), 255);  // stick byte range
     m[i] = (m[i] / 255.0f) * (THROTTLE_MAX - THROTTLE_MIN) + THROTTLE_MIN;
     m[i] = MIN(MAX(m[i], THROTTLE_MIN), THROTTLE_MAX);
   }
@@ -182,7 +177,7 @@ motor_outputs_t QuadcopterController::calculateOutputs(
     _debugHelper->setPoints[1] = RAD_TO_DEG(angleSet[1]);
     _debugHelper->setPoints[2] = RAD_TO_DEG(angleSet[2]);
   }
-#endif // MATLAB_SIM
+#endif  // MATLAB_SIM
 
   _previousUpdateMicros = nowUs;
   return m;

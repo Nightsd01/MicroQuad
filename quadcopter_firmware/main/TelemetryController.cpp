@@ -53,7 +53,7 @@ TelemetryController::TelemetryController(BLEController *controller) { _bleContro
 // [1:] - data
 void TelemetryController::updateTelemetryEvent(TelemetryEvent event, void *data, size_t size)
 {
-  if (!_bleController->isConnected) {
+  if (!_bleController->isConnected || disableTransmission) {
     return;
   }
 

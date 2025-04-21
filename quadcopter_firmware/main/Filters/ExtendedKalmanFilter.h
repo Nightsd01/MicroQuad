@@ -150,10 +150,11 @@ class ExtendedKalmanFilter
   // --- Private Helper Methods ---
   // Calculates the state transition Jacobian F for the prediction step
   Matrix<float, STATE_DIM, STATE_DIM> _calculateF(
-      const Matrix<float, 4, 1>& q,  // Current quaternion state
+      const Matrix<float, 4, 1>& q,
       float omega_x,
       float omega_y,
-      float omega_z,  // Bias-corrected rates (rad/s)
+      float omega_z,
+      const Matrix<float, 3, 1>& a_body,  // <-- ADDED
       float dt);
 
   // Calculates the process noise matrix Q for a given dt

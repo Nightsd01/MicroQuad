@@ -63,6 +63,21 @@ class Matrix
   // Access sub-matrix copy (row, col)
   template <size_t SUBROWS, size_t SUBCOLS>
   inline void setSlice(size_t row, size_t col, Matrix<T, SUBROWS, SUBCOLS> sub) __attribute__((always_inline));
+
+  inline T determinant(void) const __attribute__((always_inline));
+
+ private:
+  /**
+   * @brief Creates a submatrix by removing a specified row and column.
+   * @details Used internally for calculating the determinant (finding minors).
+   * Assumes ROWS > 0 and COLS > 0. Template parameters ensure return type
+   * matches the submatrix dimensions. Only sensible if ROWS > 1 and COLS > 1.
+   * @param skip_row The index of the row to exclude.
+   * @param skip_col The index of the column to exclude.
+   * @return A Matrix<T, ROWS-1, COLS-1> which is the minor matrix.
+   */
+  inline Matrix<T, ROWS - 1, COLS - 1> _createSubmatrix(size_t skip_row, size_t skip_col) const
+      __attribute__((always_inline));
 };
 
 // -----------------------------------------------------------------------------
