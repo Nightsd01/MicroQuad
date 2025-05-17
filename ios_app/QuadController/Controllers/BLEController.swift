@@ -264,7 +264,9 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     // 24 bytes: angle PID outputs[3]
     // 24 bytes: rate PID outputs[3]
     // 32 bytes: motor values[4]
-    // 32 bytes: mag values[4]
+    // 32 bytes: mag raw values[4]
+    // 32 bytes: mag post-sof/hard matrix calibration values[4]
+    // 32 bytes: mag post motor-mag calibration values[4]
     // 8 bytes: throttle
     // 8 bytes: voltage
     // 24 bytes: set points[3]
@@ -275,7 +277,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     // 8 bytes: barometer relative altitude
     // 8 bytes: laser rangefinder relative altitude
     var result = ""
-    let valuesPerPacket = 46
+    let valuesPerPacket = 54
     let byteCount = data.count / 8
     for i in 0..<byteCount {
       let value = data.withUnsafeBytes { buffer in

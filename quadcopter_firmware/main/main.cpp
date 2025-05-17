@@ -205,6 +205,33 @@ static void _gotMagUpdate(mag_update_t update)
 {
   _receivedMagUpdate = true;
   _magValues = update;
+  _helper->magValuesRaw[0] = update.x;
+  _helper->magValuesRaw[1] = update.y;
+  _helper->magValuesRaw[2] = update.z;
+  _helper->magValuesRaw[3] = _magValues.heading;
+  if (_magCalibrator->isCalibrating()) {
+    _magCalibrator->addMeasurement({{update.x}, {update.y}, {update.z}});
+    return;
+  } else if (_magCalibrator->isCalibrationComplete()) {
+    Vector3float mag = {{_magValues.x}, {_magValues.y}, {_magValues.z}};
+    mag = _magCalibrator->applyCorrection(mag);
+    _magValues.x = mag(0, 0);
+    _magValues.y = mag(1, 0);
+    _magValues.z = mag(2, 0);
+    _magValues.heading = std::atan2(-_magValues.y, _magValues.x);
+    _helper->magValuesPostSoftHardMatrixCalibration[0] = _magValues.x;
+    _helper->magValuesPostSoftHardMatrixCalibration[1] = _magValues.y;
+    _helper->magValuesPostSoftHardMatrixCalibration[2] = _magValues.z;
+    _helper->magValuesPostSoftHardMatrixCalibration[3] = _magValues.heading;
+    LOG_INFO_PERIODIC_MILLIS(
+        500,
+        "Magnetometer soft/hard iron calibration applied, magnitude before: %.3f, after: %.3f",
+        std::sqrt(update.x * update.x + update.y * update.y + update.z * update.z),
+        std::sqrt(_magValues.x * _magValues.x + _magValues.y * _magValues.y + _magValues.z * _magValues.z));
+  } else {
+    LOG_WARN_PERIODIC_MILLIS(500, "Magnetometer not calibrated, using raw values");
+  }
+
   if (_motorMagCompensationHandler->isCalibrating) {
     _motorMagCompensationHandler->updateMagValue(update, _batteryController->batteryVoltage());
   } else if (_completedFirstArm && _mostRecentMotorValues[0] > 0 && _motorMagCompensationHandler->isCalibrated) {

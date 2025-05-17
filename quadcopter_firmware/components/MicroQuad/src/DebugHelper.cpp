@@ -14,6 +14,9 @@
 #include "Arduino.h"
 #include "Logger.h"
 
+// double magValuesRaw[4];                            // x, y, z, heading
+// double magValuesPostSoftHardMatrixCalibration[4];  // x, y, z, heading
+// double magValuesPostMotorMagCompCalibration[4];    // x, y, z, heading
 static int sampleRate = 4;
 static int sampleCounter = 0;
 void DebugHelper::saveValues(unsigned long timestamp)
@@ -28,7 +31,9 @@ void DebugHelper::saveValues(unsigned long timestamp)
   dataManager.addDouble(angleOutputs, 3);
   dataManager.addDouble(rateOutputs, 3);
   dataManager.addDouble(motorValues, 4);
-  dataManager.addDouble(magValues, 4);
+  dataManager.addDouble(magValuesRaw, 4);
+  dataManager.addDouble(magValuesPostSoftHardMatrixCalibration, 4);
+  dataManager.addDouble(magValuesPostMotorMagCompCalibration, 4);
   dataManager.addDouble(&throttle, 1);
   dataManager.addDouble(&voltage, 1);
   dataManager.addDouble(setPoints, 3);
