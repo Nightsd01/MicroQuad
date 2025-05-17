@@ -41,6 +41,15 @@ Matrix<T, ROWS, COLS>::Matrix(const T& value)
 }
 
 template <typename T, size_t ROWS, size_t COLS>
+Matrix<T, ROWS, COLS>::Matrix(T values[ROWS * COLS])
+{
+  // Copy the data from the array to the matrix
+  for (size_t i = 0; i < ROWS * COLS; ++i) {
+    data[i] = values[i];
+  }
+}
+
+template <typename T, size_t ROWS, size_t COLS>
 std::string Matrix<T, ROWS, COLS>::description(void) const
 {
   std::ostringstream oss;

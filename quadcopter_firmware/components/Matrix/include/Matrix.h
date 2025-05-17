@@ -34,6 +34,9 @@ class Matrix
   // Constructor (initialize all elements to a specific value)
   Matrix(const T& value);
 
+  // Initialize from C array (in row-major order)
+  Matrix(T values[ROWS * COLS]);
+
   std::string description(void) const;
 
   // Access element (row, col)
