@@ -7,23 +7,6 @@
 
 import Foundation
 
-public struct XYZ {
-  let x : Float32
-  let y : Float32
-  let z : Float32
-}
-
-public struct YawPitchRoll {
-  let yaw : Float32
-  let pitch : Float32
-  let roll : Float32
-}
-
-public struct MagRawValues {
-  let xyz: XYZ
-  let heading : Float32
-}
-
 public struct MemoryStatus {
   // Represents how much space (in bytes) is currently free
   let freeHeapByteCount : UInt32
