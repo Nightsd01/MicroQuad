@@ -48,9 +48,8 @@ PIDPreferences::PIDPreferences(BLEController *controller, PersistentKeyValueStor
   this->_kvStore = kvStore;
   this->gains = _initializeGains();
 
-  controller->setPIDConstantsUpdateHandler([this](ControlAxis axis, PIDType type, gains_t gains) {
-    AsyncController::main.executeAsync([this, axis, type, gains]() { this->_updateGains(axis, type, gains); });
-  });
+  controller->setPIDConstantsUpdateHandler(
+      [this](ControlAxis axis, PIDType type, gains_t gains) { this->_updateGains(axis, type, gains); });
 }
 
 const std::string _getAxisKey(ControlAxis axis)
@@ -72,7 +71,7 @@ const std::string _getAxisKey(ControlAxis axis)
 
 void PIDPreferences::_updateGains(ControlAxis axis, PIDType type, gains_t gains)
 {
-  LOG_INFO("Updating gains, axis = %i, type = %i, kP = %s", gains.kP);
+  LOG_INFO("Updating gains, axis = %i, type = %i, kP = %f", axis, type, gains.kP);
   switch (type) {
     case PIDType::Angle:
       this->gains.angleGains[(int)axis] = gains;
@@ -106,60 +105,96 @@ void PIDPreferences::_updateGains(ControlAxis axis, PIDType type, gains_t gains)
 
 quadcopter_config_t PIDPreferences::_initializeGains()
 {
-  const std::string yawKey = _getAxisKey(ControlAxis::Yaw);
-  const std::string pitchKey = _getAxisKey(ControlAxis::Pitch);
-  const std::string rollKey = _getAxisKey(ControlAxis::Roll);
-  const std::string verticalKey = _getAxisKey(ControlAxis::Vertical);
+  // Start with the default configuration
+  quadcopter_config_t config = _defaultGains;
 
-  if (_kvStore->hasValueForKey(yawKey) && _kvStore->hasValueForKey(pitchKey) && _kvStore->hasValueForKey(rollKey)) {
-    const std::vector<float> yawGains = _kvStore->getVectorForKey<float>(yawKey, 6);
-    const std::vector<float> pitchGains = _kvStore->getVectorForKey<float>(pitchKey, 6);
-    const std::vector<float> rollGains = _kvStore->getVectorForKey<float>(rollKey, 6);
-    const std::vector<float> verticalGains = _kvStore->getVectorForKey<float>(verticalKey, 3);
-
-    if (yawGains.size() == 6 && pitchGains.size() == 6 && rollGains.size() == 6 && verticalGains.size() == 3) {
-      return {
-          .angleGains =
-              {{// yaw
-                .kP = yawGains[0],
-                .kI = yawGains[1],
-                .kD = yawGains[2]},
-                           {// pitch
-                .kP = pitchGains[0],
-                .kI = pitchGains[1],
-                .kD = pitchGains[2]},
-                           {// roll
-                .kP = rollGains[0],
-                .kI = rollGains[1],
-                .kD = rollGains[2]}},
-          .rateGains =
-              {{// yaw
-                .kP = yawGains[3],
-                .kI = yawGains[4],
-                .kD = yawGains[5]},
-                           {// pitch
-                .kP = pitchGains[3],
-                .kI = pitchGains[4],
-                .kD = pitchGains[5]},
-                           {// roll
-                .kP = rollGains[3],
-                .kI = rollGains[4],
-                .kD = rollGains[5]}},
-          .verticalVelocityGains =
-              {
-                           .kP = verticalGains[0],
-                           .kI = verticalGains[1],
-                           .kD = verticalGains[2],
-                           },
-      };
-    } else {
-      LOG_ERROR("Failed to get PID gains from KV store - corrupt/invalid gains, using defaults");
-    }
-
-    LOG_WARN("Using default PID gains");
-    return _defaultGains;
+  // Check if KeyValue store is available
+  if (!_kvStore) {
+    LOG_ERROR("KeyValue store is null, cannot load PID gains. Using defaults.");
+    return config;  // Returns default gains
   }
 
-  return _defaultGains;
+  LOG_INFO("Loading PID gains from persistent storage...");
+
+  // --- Try to load Yaw gains ---
+  const std::string yawKey = _getAxisKey(ControlAxis::Yaw);
+  if (_kvStore->hasValueForKey(yawKey)) {
+    const std::vector<float> yawGains =
+        _kvStore->getVectorForKey<float>(yawKey, 6);  // Expect 6 floats (angle P,I,D, rate P,I,D)
+    if (yawGains.size() == 6) {
+      config.angleGains[0] = {.kP = yawGains[0], .kI = yawGains[1], .kD = yawGains[2]};  // Index 0 assumed Yaw
+      config.rateGains[0] = {.kP = yawGains[3], .kI = yawGains[4], .kD = yawGains[5]};   // Index 0 assumed Yaw
+      LOG_INFO("Loaded custom Yaw PID gains from KV store.");
+    } else {
+      LOG_ERROR(
+          "Invalid Yaw PID gains found in KV store (size %zu, expected 6), using defaults for Yaw.",
+          yawGains.size());
+      // No action needed, config already holds defaults for Yaw
+    }
+  } else {
+    LOG_WARN("No Yaw PID gains found in KV store, using defaults for Yaw.");
+    // No action needed, config already holds defaults for Yaw
+  }
+
+  // --- Try to load Pitch gains ---
+  const std::string pitchKey = _getAxisKey(ControlAxis::Pitch);
+  if (_kvStore->hasValueForKey(pitchKey)) {
+    const std::vector<float> pitchGains = _kvStore->getVectorForKey<float>(pitchKey, 6);  // Expect 6 floats
+    if (pitchGains.size() == 6) {
+      config.angleGains[1] = {.kP = pitchGains[0], .kI = pitchGains[1], .kD = pitchGains[2]};  // Index 1 assumed Pitch
+      config.rateGains[1] = {.kP = pitchGains[3], .kI = pitchGains[4], .kD = pitchGains[5]};   // Index 1 assumed Pitch
+      LOG_INFO("Loaded custom Pitch PID gains from KV store.");
+    } else {
+      LOG_ERROR(
+          "Invalid Pitch PID gains found in KV store (size %zu, expected 6), using defaults for Pitch.",
+          pitchGains.size());
+      // No action needed, config already holds defaults for Pitch
+    }
+  } else {
+    LOG_WARN("No Pitch PID gains found in KV store, using defaults for Pitch.");
+    // No action needed, config already holds defaults for Pitch
+  }
+
+  // --- Try to load Roll gains ---
+  const std::string rollKey = _getAxisKey(ControlAxis::Roll);
+  if (_kvStore->hasValueForKey(rollKey)) {
+    const std::vector<float> rollGains = _kvStore->getVectorForKey<float>(rollKey, 6);  // Expect 6 floats
+    if (rollGains.size() == 6) {
+      config.angleGains[2] = {.kP = rollGains[0], .kI = rollGains[1], .kD = rollGains[2]};  // Index 2 assumed Roll
+      config.rateGains[2] = {.kP = rollGains[3], .kI = rollGains[4], .kD = rollGains[5]};   // Index 2 assumed Roll
+      LOG_INFO("Loaded custom Roll PID gains from KV store.");
+    } else {
+      LOG_ERROR(
+          "Invalid Roll PID gains found in KV store (size %zu, expected 6), using defaults for Roll.",
+          rollGains.size());
+      // No action needed, config already holds defaults for Roll
+    }
+  } else {
+    LOG_WARN("No Roll PID gains found in KV store, using defaults for Roll.");
+    // No action needed, config already holds defaults for Roll
+  }
+
+  // --- Try to load Vertical gains ---
+  const std::string verticalKey = _getAxisKey(ControlAxis::Vertical);
+  if (_kvStore->hasValueForKey(verticalKey)) {
+    const std::vector<float> verticalGains =
+        _kvStore->getVectorForKey<float>(verticalKey, 3);  // Expect 3 floats (P,I,D)
+    if (verticalGains.size() == 3) {
+      config.verticalVelocityGains = {.kP = verticalGains[0], .kI = verticalGains[1], .kD = verticalGains[2]};
+      LOG_INFO("Loaded custom Vertical PID gains from KV store.");
+    } else {
+      LOG_ERROR(
+          "Invalid Vertical PID gains found in KV store (size %zu, expected 3), using defaults for Vertical.",
+          verticalGains.size());
+      // No action needed, config already holds defaults for Vertical
+    }
+  } else {
+    LOG_WARN("No Vertical PID gains found in KV store, using defaults for Vertical.");
+    // No action needed, config already holds defaults for Vertical
+  }
+
+  // Return the config, which contains defaults potentially overwritten by loaded values
+  return config;
 }
+
 #endif  // MATLAB_SIM
