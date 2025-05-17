@@ -67,6 +67,11 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     }
   }
   
+  public func updateArmStatusListener(_ listener : ArmStatusListener)
+  {
+    quadStatus.armStatusListener = listener
+  }
+  
   public func scan() {
     manager = CBCentralManager(delegate: nil, queue: nil)
     manager.delegate = self
@@ -443,10 +448,10 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
 
     switch manager.state {
       case .poweredOff:
-        bleStatus = "Powered Off"
+        bleStatus = "Disconnected"
         break
       case .poweredOn:
-        bleStatus = "Powered On"
+        bleStatus = "Disconnected"
         manager.scanForPeripherals(withServices: [CBUUID(string: BLEController.serviceUUID)], options: nil)
         break
       case .unknown:

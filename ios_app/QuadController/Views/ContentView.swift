@@ -20,6 +20,7 @@ private class PreviousControlValues {
 struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   
   @ObservedObject var controller = BLEController()
+  @ObservedObject var armStatusController = ArmStatusController()
   var pidCalibrationController : PIDController!
   @ObservedObject var accelGyroCalibrationController = CalibrationController(calibrationType: .AccelerometerGyro)
   @ObservedObject var magnetometerCalibrationController = CalibrationController(calibrationType: .Magnetometer)
@@ -63,6 +64,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
     accelGyroCalibrationController.provideBLEController(controller)
     magnetometerCalibrationController.provideBLEController(controller)
     magnetometerMotorCalibrationController.provideBLEController(controller)
+    armStatusController.provideBLEController(controller)
   }
   
   func calibrationButton(type : CalibrationType, typeLabel : String, calibrationController : CalibrationController) -> some View
@@ -92,7 +94,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
           Spacer()
           leftStick
           Spacer()
-          BLEStatusView(controller)
+          BLEStatusView(controller, armStatusController: armStatusController)
           Spacer()
           rightStick
           Spacer()

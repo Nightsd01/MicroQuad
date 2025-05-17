@@ -10,28 +10,17 @@ import SwiftUI
 struct BLEStatusView: View {
   var controller : BLEController
   @ObservedObject var status : QuadStatus
-  @State private var armedStatus = 0
+  @ObservedObject var armStatusController : ArmStatusController
   
-  init(_ controller : BLEController) {
+  init(_ controller : BLEController, armStatusController : ArmStatusController) {
     self.controller = controller
     self.status = controller.quadStatus
+    self.armStatusController = armStatusController
   }
   
   var body: some View {
     VStack {
       VStack {
-        Spacer()
-        HStack {
-          Spacer()
-          Text("Status: ").bold()
-          Text(self.controller.bleStatus)
-          Spacer()
-        }
-        Spacer()
-        (status.armed
-          ? Text("Armed").foregroundColor(.red).bold()
-          : Text("Disarmed").foregroundColor(.green).bold()
-        )
         Spacer()
         HStack {
           BatteryStatusView(status)
@@ -56,11 +45,11 @@ struct BLEStatusView: View {
               .foregroundColor(.clear)
           }
         }
-        Picker(selection: $armedStatus, label: Text("Arm Status"), content: {
-          Text("Disarmed").tag(0)
-          Text("Armed").tag(1)
+        Picker(selection: $armStatusController.armed, label: Text("Arm Status"), content: {
+          Text("Disarmed").tag(false)
+          Text("Armed").tag(true)
         }).pickerStyle(SegmentedPickerStyle())
-        .onChange(of: armedStatus) { oldValue, newValue in
+        .onChange(of: armStatusController.armed) { oldValue, newValue in
           handleArmChange()
         }
         MemoryStatusView(status: status)
@@ -99,17 +88,18 @@ struct BLEStatusView: View {
   }
   
   private func handleArmChange() {
-    self.armedStatus = self.armedStatus == 0 ? 1 : 0
-    controller.updateArmStatus(armed: armedStatus == 1)
+    armStatusController.handleArmStatusChange(sendUpdateToQuadcopter: true)
+    status.armed = armStatusController.armed
   }
 }
 
 
 struct BLEStatusView_Previews: PreviewProvider {
   static var previews: some View {
-    let controller = BLEController();
+    let controller = BLEController()
+    let armStatusController = ArmStatusController()
     controller.bleStatus = "Test Status"
     controller.quadStatus.updateTelemetry(withData: "1,1150.98,1600.4,1999.0,1000.0,3.9,70".data(using: .utf8)!)
-    return BLEStatusView(controller).previewLayout(.fixed(width: 1000, height: 500))
+    return BLEStatusView(controller, armStatusController: armStatusController).previewLayout(.fixed(width: 1000, height: 500))
   }
 }

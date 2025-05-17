@@ -56,6 +56,8 @@ public class QuadStatus : ObservableObject {
   @Published var loopUpdateRateHz : UInt64?
   @Published var imuUpdateRateHz : UInt64?
   
+  public weak var armStatusListener : ArmStatusListener?
+  
   private func parseNumericArray<T : Numeric>(withData data : Data, count: Int) -> [T]?
   {
     let totalBytes = count * MemoryLayout<T>.size
@@ -121,7 +123,13 @@ public class QuadStatus : ObservableObject {
           return
         }
         let byte = payload[0]
-        self.armed = byte == 1 ? true : false
+        let armUpdate = byte == 1 ? true : false
+        if (self.armed != armUpdate) {
+          // we don't want to set sendUpdateToQuadcopter to true as that would
+          // result in an infinite loop
+          armStatusListener?.handleArmStatusChange(sendUpdateToQuadcopter: false)
+        }
+        self.armed = armUpdate
         break
       case .BatteryVoltage:
         guard let values : [Float32] = parseNumericArray(withData: payload, count: 1) else {
