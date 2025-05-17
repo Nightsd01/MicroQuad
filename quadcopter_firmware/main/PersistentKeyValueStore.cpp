@@ -281,6 +281,7 @@ void PersistentKeyValueStore::setVectorForKey(const std::string& key, const std:
     LOG_ERROR("Error (%s) committing changes!", esp_err_to_name(err));
   }
 
+  LOG_INFO("Stored vector with values (for key %s): ", key.c_str());
   nvs_close(handle);
 }
 
@@ -293,23 +294,75 @@ std::vector<T> PersistentKeyValueStore::getVectorForKey(const std::string& key, 
   // Open NVS namespace in read mode
   err = nvs_open(kNamespaceName, NVS_READONLY, &handle);
   if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
-    return {};
+    LOG_ERROR("Error (%s) opening NVS handle for key '%s'!", esp_err_to_name(err), key.c_str());
+    return {};  // Return empty vector on error
   }
-  void* buffer = (void*)malloc(length * sizeof(T));
-  if (!buffer) {
-    LOG_ERROR("Failed to allocate buffer for array");
+
+  // Calculate the expected size in bytes
+  size_t expectedSizeBytes = length * sizeof(T);
+  if (expectedSizeBytes == 0 && length > 0) {
+    // Avoid potential issues if sizeof(T) is somehow zero or length is huge causing overflow
+    LOG_ERROR("Invalid expected size calculation for key '%s'", key.c_str());
+    nvs_close(handle);
     return {};
   }
 
-  size_t foundSize = length * sizeof(T);
-  std::vector<T> result = std::vector<T>(length);
-  err = nvs_get_blob(handle, key.c_str(), result.data(), &foundSize);
-  nvs_close(handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) getting blob value!", esp_err_to_name(err));
-    return {};
+  // Create the vector to hold the result. It's initialized with default values.
+  std::vector<T> result(length);
+
+  // Prepare the size variable for nvs_get_blob (in/out parameter)
+  // Input: size of the buffer (result.data())
+  // Output: size of the blob actually read
+  size_t foundSizeBytes = expectedSizeBytes;  // Initialize with buffer size
+
+  // Attempt to read the blob directly into the vector's memory
+  // Only proceed if the vector has allocated space (length > 0)
+  if (length > 0) {
+    err = nvs_get_blob(handle, key.c_str(), result.data(), &foundSizeBytes);
+  } else {
+    // If expected length is 0, check if a zero-length blob exists
+    err = nvs_get_blob(handle, key.c_str(), nullptr, &foundSizeBytes);
+    if (err == ESP_OK && foundSizeBytes == 0) {
+      // Key exists and is zero-length, which matches expectation
+      // result is already empty, so this is fine.
+    } else if (err == ESP_ERR_NVS_NOT_FOUND) {
+      // Key doesn't exist, also fine if length is 0.
+      err = ESP_OK;  // Treat as success
+    } else {
+      // Some other error occurred or non-zero blob found when expecting zero
+      err = ESP_FAIL;  // Force error path
+    }
   }
+
+  nvs_close(handle);  // Close NVS handle regardless of success or failure
+
+  // --- Check results ---
+  if (err != ESP_OK) {
+    // Common case: Key not found - don't log as error unless debugging
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+      // LOG_DEBUG("Key '%s' not found in NVS.", key.c_str());
+    } else {
+      LOG_ERROR("Error (%s) getting blob for key '%s'!", esp_err_to_name(err), key.c_str());
+    }
+    return {};  // Return empty vector on error
+  }
+
+  // *** Crucial Check: Verify the size actually read ***
+  if (foundSizeBytes != expectedSizeBytes) {
+    LOG_ERROR(
+        "Size mismatch for key '%s': Expected %zu bytes, but found %zu bytes!",
+        key.c_str(),
+        expectedSizeBytes,
+        foundSizeBytes);
+    return {};  // Return empty vector because data is incomplete/corrupt
+  } else {
+    LOG_INFO("Loaded vector with values (for key %s): ", key.c_str());
+    for (size_t i = 0; i < length; ++i) {
+      LOG_INFO("%f ", result[i]);
+    }
+  }
+
+  // If we reach here, err was ESP_OK and the size matches.
   return result;
 }
 
