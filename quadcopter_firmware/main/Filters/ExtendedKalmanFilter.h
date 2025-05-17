@@ -5,6 +5,8 @@
 #include <cmath>
 #include <vector>
 
+#include "Constants.h"
+
 /**
  * @brief Simple struct to hold 3D vector data (x,y,z).
  */
@@ -72,9 +74,8 @@ class ExtendedKalmanFilter
     float range_noise_variance = 0.01f;  // m^2
 
     // Other constants
-    float gravity_magnitude = 9.81f;
-    Matrix<float, 3, 1> mag_reference_vector = {
-        {0.446f}, {0.116f}, {0.887f}};  // adjust for location, this is for Foster City, CA
+    float gravity_magnitude = STANDARD_GRAVITY;  // m/s^2
+    Matrix<float, 3, 1> mag_reference_vector = MAGNETIC_REFERENCE_VECTOR;
   };
 
   ExtendedKalmanFilter(const Config& config);
@@ -123,6 +124,7 @@ class ExtendedKalmanFilter
   float getBarometerBias() const;
 
  private:
+  float _quatToYaw(const Matrix<float, 4, 1>& q) const;
   /// Returns a_world_z − g  (positive Down in the NED convention)
   float _verticalAccelerationWorld(const Matrix<float, 3, 1>& a_body, const Matrix<float, 4, 1>& q) const;
 

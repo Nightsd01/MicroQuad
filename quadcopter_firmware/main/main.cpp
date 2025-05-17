@@ -26,6 +26,7 @@
 #include "IMU.h"
 #include "LEDController.h"
 #include "Logger.h"
+#include "MagnetometerCalibrator.h"
 #include "MotionDetector.h"
 #include "MotorController.h"
 #include "MotorMagCompensationHandler.h"
@@ -111,8 +112,9 @@ static MotionDetector _motionDetector;
 EulerAngle _euler;
 
 static ExtendedKalmanFilter::Config _ekfConfig;
-
 static ExtendedKalmanFilter _extendedKalmanFilter(_ekfConfig);
+
+static MagnetometerCalibrator *_magCalibrator;
 
 static Barometer _barometer;
 static bool _receivedAltitudeUpdate = false;
@@ -121,6 +123,9 @@ static float _relativeAltitudeMeters = 0.0f;
 MotorMagCompensationHandler *_motorMagCompensationHandler;
 
 motor_outputs_t _mostRecentMotorValues = {};
+
+static QuadcopterController *_controller;
+static DebugHelper *_helper;
 
 // When we start recording debug data, we want the LED to flash blue
 // for RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS. This lets us align
@@ -263,28 +268,30 @@ static void _configureMagnetometer(void)
     LOG_ERROR("Failed to begin compass");
     abort();
   }
-
-  if (_persistentKvStore.hasValueForKey(PersistentKeysCommon::MAG_OFFSETS)) {
-    const std::vector<float> offsets = _persistentKvStore.getVectorForKey<float>(PersistentKeysCommon::MAG_OFFSETS, 3);
-
-    if (offsets.size() != 3) {
-      LOG_WARN("magnetometer: Invalid calibration offsets found in persistent storage, please calibrate the compass");
-    } else {
-      LOG_INFO("Setting magnetometer offsets: %f, %f, %f", offsets[0], offsets[1], offsets[2]);
-      _compass->setCalibrationOffsets({offsets[0], offsets[1], offsets[2]});
-    }
-  } else {
-    LOG_WARN("magnetometer: No calibration offsets found in persistent storage, please calibrate the compass");
-  }
 }
-
-static QuadcopterController *_controller;
-static DebugHelper *_helper;
 
 static void initController()
 {
   delete _controller;
   _controller = new QuadcopterController(_helper, micros());
+}
+
+static void _setupMagnetometerCalibrator(void)
+{
+  delete _magCalibrator;
+
+  float expectedFieldMagnitudeGauss = 0.0f;
+  Matrix<float, 3, 1> magRefVector = MAGNETIC_REFERENCE_VECTOR;
+  for (int i = 0; i < 3; i++) {
+    expectedFieldMagnitudeGauss += magRefVector(i, 0);
+  }
+  expectedFieldMagnitudeGauss = std::sqrt(expectedFieldMagnitudeGauss);
+  MagnetometerCalibrator::Config config = {
+      .min_points = 200,
+      .max_points = 0,  // unlimited
+      .num_seconds_for_calibration = 30,
+      .expected_field_magnitude_gauss = expectedFieldMagnitudeGauss};
+  _magCalibrator = new MagnetometerCalibrator(config, &_persistentKvStore);
 }
 
 static void _handleMagnetometerCalibration(CalibrationResponse response)
@@ -297,17 +304,17 @@ static void _handleMagnetometerCalibration(CalibrationResponse response)
     }
     case CalibrationResponse::Continue: {
       LOG_INFO("Beginning compass calibration");
-      _compass->calibrate(8.0f /* seconds */, [&](bool succeeded, xyz_vector_t offsets) {
-        LOG_INFO("Calibration %s", succeeded ? "succeeded" : "failed");
-        if (!succeeded) {
+      _magCalibrator->startCalibration([&](bool success) {
+        if (!success) {
           LOG_ERROR("Failed to calibrate compass");
           _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Failed);
           return;
         }
-        LOG_INFO("Successfully calibrated compass: %f, %f, %f", offsets.x, offsets.y, offsets.z);
+        LOG_INFO(
+            "Successfully calibrated compass with hard iron matrix: %s, soft iron matrix: %s",
+            _magCalibrator->getHardIronOffset().description().c_str(),
+            _magCalibrator->getSoftIronMatrix().description().c_str());
         _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Complete);
-        std::vector<float> offsetsVector = {offsets.x, offsets.y, offsets.z};
-        _persistentKvStore.setVectorForKey(PersistentKeysCommon::MAG_OFFSETS, offsetsVector);
       });
       break;
     }
@@ -329,6 +336,7 @@ static void _beginMagneticMotorInterferenceCalibration(void)
     return;
   }
   _motorDebugEnabled = true;
+  _compass->setCalibrationOffsets({0.0f, 0.0f, 0.0f});
   _motorMagCompensationHandler->beginCalibration(
       [&](motor_outputs_t outputs) {
         LOG_INFO(
@@ -398,6 +406,8 @@ static Vector3f _applyMisalignment(const Vector3f &v, const Matrix<float, 3, 3> 
       .z = mat(2, 0) * v.x + mat(2, 1) * v.y + mat(2, 2) * v.z};
 }
 
+static float _heightMetersRangefinderEstimate = 0.0f;
+static bool _setRangefinderHeightEstimate = false;
 static uint64_t _previousMicros = 0;
 static bool _receivedFirstImuUpdate = false;
 static bool _computedEuler = false;
@@ -431,7 +441,17 @@ static void _receivedIMUUpdate(imu_update_t update)
       accelerometer.z * STANDARD_GRAVITY,
       deltaTimeSeconds);
 
-  _extendedKalmanFilter.updateMagnetometer(mag.x, mag.y, mag.z);
+  if (_receivedAltitudeUpdate && std::isfinite(_relativeAltitudeMeters) && _relativeAltitudeMeters >= 0.0f &&
+      _imu->completedQuickCalibration) {
+    _extendedKalmanFilter.updateBarometer(_relativeAltitudeMeters);
+  }
+
+  if (_setRangefinderHeightEstimate && std::isfinite(_heightMetersRangefinderEstimate) &&
+      _imu->completedQuickCalibration) {
+    _extendedKalmanFilter.updateRangefinder(_heightMetersRangefinderEstimate);
+  }
+
+  _extendedKalmanFilter.updateMagnetometer(_magValues.x, _magValues.y, _magValues.z);
 
   // NOTE: Due to all the matrix allocations, we cannot combine this with predict()
   // because of the limited stack size on the ESP32
@@ -473,10 +493,6 @@ static void _receivedIMUUpdate(imu_update_t update)
   _helper->ypr[0] = _euler.yaw;
   _helper->ypr[1] = _euler.pitch;
   _helper->ypr[2] = _euler.roll;
-  _helper->magValues[0] = mag.x;
-  _helper->magValues[1] = mag.y;
-  _helper->magValues[2] = mag.z;
-  _helper->magValues[3] = _magValues.heading;
   _helper->ekfQuaternion[0] = ekfAttitudeQuaternion(0, 0);
   _helper->ekfQuaternion[1] = ekfAttitudeQuaternion(1, 0);
   _helper->ekfQuaternion[2] = ekfAttitudeQuaternion(2, 0);
@@ -577,11 +593,7 @@ void setup()
       [](float relativeAltMeters) {
         _receivedAltitudeUpdate = true;
         _relativeAltitudeMeters = relativeAltMeters;
-        if (std::isfinite(_relativeAltitudeMeters) && _relativeAltitudeMeters >= 0.0f &&
-            _imu->completedQuickCalibration) {
-          _helper->relativeAltitudeBarometer = _relativeAltitudeMeters;
-          _extendedKalmanFilter.updateBarometer(relativeAltMeters);
-        }
+        _helper->relativeAltitudeBarometer = _relativeAltitudeMeters;
       },
       _telemetryController,
       0x76,
@@ -591,10 +603,9 @@ void setup()
   _vl53Manager.begin(
       [&](float distance) {
         LOG_INFO("VL53L1X distance: %fm", distance);
-        if (_imu->completedQuickCalibration) {
-          _helper->relativeAltitudeVL53 = distance;
-          _extendedKalmanFilter.updateRangefinder(distance);
-        }
+        _setRangefinderHeightEstimate = true;
+        _heightMetersRangefinderEstimate = distance;
+        _helper->relativeAltitudeVL53 = distance;
       },
       _telemetryController,
       0x29 /* i2c bus address */,
@@ -606,6 +617,9 @@ void setup()
   LOG_INFO("Configuring magnetometer");
   _configureMagnetometer();
   LOG_INFO("Successfully initialized magnetometer");
+
+  LOG_INFO("Initializing magnetometer calibrator");
+  _setupMagnetometerCalibrator();
 
   LOG_INFO("Initializing magnetometer motors compensation handler");
   _motorMagCompensationHandler = new MotorMagCompensationHandler(&_persistentKvStore);
@@ -792,8 +806,7 @@ void loop()
   _barometer.loopHandler();
   _vl53Manager.loopHandler();
 
-  // _handleFirstStagePreCalibrationIfNeeded();
-  _imu->completedQuickCalibration = true;
+  _handleFirstStagePreCalibrationIfNeeded();
 
   if (_receivedAltitudeUpdate) {
     LOG_INFO_PERIODIC_MILLIS(1000, "Altitude: %fm", _relativeAltitudeMeters);
