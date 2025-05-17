@@ -20,6 +20,7 @@ private class PreviousControlValues {
 struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   
   @ObservedObject var controller = BLEController()
+  @ObservedObject var joystickController = BluetoothStickController()
   @ObservedObject var armStatusController = ArmStatusController()
   var pidCalibrationController : PIDController!
   @ObservedObject var accelGyroCalibrationController = CalibrationController(calibrationType: .AccelerometerGyro)
@@ -38,16 +39,8 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   @State private var motor4 = 0.0
   
   
-  var leftStick = ControllerView(StickConfiguration(identifier: 0,
-                                                    returnsToDefaultForAxes: Set([.vertical, .horizontal]),
-                                                    vibrates: true,
-                                                    axis: .vertical,
-                                                    horizontalDefaultStickLocation: .center,
-                                                    verticalDefaultStickLocation: .center))
-  var rightStick = ControllerView(StickConfiguration(identifier: 1,
-                                                     returnsToDefaultForAxes: Set([.vertical, .horizontal]),
-                                                     vibrates: true,
-                                                     axis: .none))
+  var leftStick : ControllerView!
+  var rightStick : ControllerView!
   
   init() {
     self.init(bleDisabled: false)
@@ -55,8 +48,6 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   
   init(bleDisabled : Bool) {
     pidCalibrationController = PIDController(controller: controller)
-    leftStick.controlDelegate = self
-    rightStick.controlDelegate = self
     if (!bleDisabled) {
       controller.scan()
     }
@@ -65,6 +56,29 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
     magnetometerCalibrationController.provideBLEController(controller)
     magnetometerMotorCalibrationController.provideBLEController(controller)
     armStatusController.provideBLEController(controller)
+    joystickController.provideBLEController(controller)
+    leftStick = ControllerView(
+      StickConfiguration(
+        identifier: 0,
+        returnsToDefaultForAxes: Set([.vertical, .horizontal]),
+        vibrates: true,
+        axis: .vertical,
+        stickType: .left,
+        horizontalDefaultStickLocation: .center,
+        verticalDefaultStickLocation: .center),
+      joystickController)
+    rightStick = ControllerView(
+      StickConfiguration(
+        identifier: 1,
+        returnsToDefaultForAxes: Set([.vertical, .horizontal]),
+        vibrates: true,
+        axis: .none,
+        stickType: .right),
+      joystickController)
+    leftStick.controlDelegate = self
+    rightStick.controlDelegate = self
+    joystickController.armStatusListener = armStatusController
+    controller.updateArmStatusListener(armStatusController)
   }
   
   func calibrationButton(type : CalibrationType, typeLabel : String, calibrationController : CalibrationController) -> some View
@@ -90,6 +104,15 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   var body: some View {
     ZStack {
       VStack {
+        HStack {
+          Spacer()
+          Text("Connection: ").bold()
+          Text(self.controller.bleStatus)
+          Spacer()
+          Text("Controller: ").bold()
+          Text(self.joystickController.isConnected ? "Connected" : "Disconnected")
+          Spacer()
+        }
         HStack {
           Spacer()
           leftStick

@@ -13,9 +13,9 @@ public protocol ControllerViewDelegate {
 }
 
 public struct ControllerView : View {
-  private static var currentId = 0
+  @ObservedObject var bluetoothStickController: BluetoothStickController
   
-  private let kSize = CGSize(width: 200, height: 200)
+  private static var currentId = 0
   
   public var controllerId : Int
   
@@ -23,6 +23,10 @@ public struct ControllerView : View {
     didSet {
       print("Set control delegate!")
     }
+  }
+  
+  private var kSize : CGSize {
+    return bluetoothStickController.isConnected ? CGSize(width: 100, height: 100) : CGSize(width: 200, height: 200)
   }
   
   @State private var dragOffset : CGPoint?
@@ -35,9 +39,10 @@ public struct ControllerView : View {
   
   private let impactGenerator = UIImpactFeedbackGenerator(style: .medium)
   
-  init(_ configuration : StickConfiguration) {
+  init(_ configuration : StickConfiguration, _ bluetoothStickController: BluetoothStickController) {
     self.configuration = configuration
     self.controllerId = ControllerView.currentId
+    self.bluetoothStickController = bluetoothStickController
     ControllerView.currentId += 1
   }
   
@@ -48,12 +53,14 @@ public struct ControllerView : View {
       ZStack {
         RoundedRectangle(cornerRadius: 5.0, style: .continuous)
           .fill(controlColor)
-          .frame(width: 20, height: kSize.height, alignment: .center)
+          .frame(width: kSize.width / 5.0, height: kSize.height, alignment: .center)
+          .animation(.linear)
         RoundedRectangle(cornerRadius: 5.0, style: .continuous)
           .fill(controlColor)
-          .frame(width: kSize.width, height: 20, alignment: .center)
+          .frame(width: kSize.width, height: kSize.height / 5.0, alignment: .center)
+          .animation(.linear)
         Circle()
-          .frame(width: /*@START_MENU_TOKEN@*/100/*@END_MENU_TOKEN@*/, height: /*@START_MENU_TOKEN@*/100/*@END_MENU_TOKEN@*/, alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/)
+          .frame(width: kSize.width / 2.0, height: kSize.height / 2.0, alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/)
           .position(offsetToCoordinate(geometry))
           .animation(.linear)
           .gesture(
@@ -67,7 +74,15 @@ public struct ControllerView : View {
   }
   
   private func offsetToCoordinate(_ geometry : GeometryProxy) -> CGPoint {
-    let offset = dragOffset ?? defaultDragOffset()
+    guard bluetoothStickController.isConnected,
+            let stickPosition = configuration.stickType == .left ? bluetoothStickController.leftStickValues : bluetoothStickController.rightStickValues else {
+      // Bluetooth joystick not connected
+      let offset = dragOffset ?? defaultDragOffset()
+      return CGPoint(x: geometry.frame(in: .local).minX + (geometry.size.width / 2.0) + offset.x,
+                     y: geometry.frame(in: .local).minY + (geometry.size.height / 2.0) + offset.y)
+    }
+    
+    let offset = CGPoint(x: kSize.width * Double(stickPosition.x) / 2.0, y: kSize.height * Double(stickPosition.y) / -2.0)
     return CGPoint(x: geometry.frame(in: .local).minX + (geometry.size.width / 2.0) + offset.x,
                    y: geometry.frame(in: .local).minY + (geometry.size.height / 2.0) + offset.y)
   }
@@ -178,9 +193,14 @@ public struct ControllerView : View {
 
 struct ControllerView_Previews: PreviewProvider {
   static var previews: some View {
-    ControllerView(StickConfiguration(identifier: 0,
-                                      returnsToDefaultForAxes: Set<Axis>([.vertical, .horizontal]),
-                                      vibrates: true,
-                                      axis: .none))
+    let bluetoothJoystickController = BluetoothStickController()
+    ControllerView(
+      StickConfiguration(
+        identifier: 0,
+        returnsToDefaultForAxes: Set<Axis>([.vertical, .horizontal]),
+        vibrates: true,
+        axis: .none,
+        stickType: .left),
+      bluetoothJoystickController /* bluetoothStickController */)
   }
 }

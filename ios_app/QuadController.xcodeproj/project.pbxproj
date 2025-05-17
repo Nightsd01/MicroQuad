@@ -54,6 +54,8 @@
 		CA011B132CFBF729006E5C74 /* CalibrationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationController.swift; sourceTree = "<group>"; };
 		CA2C3D8025C61478007BAF1F /* MotorStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotorStatusView.swift; sourceTree = "<group>"; };
 		CA2C3D8D25C78E15007BAF1F /* BatteryStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryStatusView.swift; sourceTree = "<group>"; };
+		CA4AFCB02DCD9F480041EE78 /* BluetoothJoystickController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothJoystickController.swift; sourceTree = "<group>"; };
+		CA4AFCB22DCDA0EE0041EE78 /* CommonDefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonDefs.swift; sourceTree = "<group>"; };
 		CA4AFCB82DCEDF2F0041EE78 /* ArmStatusController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArmStatusController.swift; sourceTree = "<group>"; };
 		CA524550255225B500537AD4 /* BLEController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEController.swift; sourceTree = "<group>"; };
 		CA62A17126E5984400FFE119 /* DebuggerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebuggerView.swift; sourceTree = "<group>"; };
@@ -93,6 +95,7 @@
 			isa = PBXGroup;
 			children = (
 				CA524550255225B500537AD4 /* BLEController.swift */,
+				CA4AFCB02DCD9F480041EE78 /* BluetoothJoystickController.swift */,
 				CA011B0F2CF976A2006E5C74 /* CameraController.swift */,
 				CA011B132CFBF729006E5C74 /* CalibrationController.swift */,
 				CAED1C312D8A5993001215E2 /* PIDControlller.swift */,
@@ -261,6 +264,7 @@
 				CA62A17226E5984400FFE119 /* DebuggerView.swift in Sources */,
 				CA2C3D8125C61478007BAF1F /* MotorStatusView.swift in Sources */,
 				CA9E90732D0FD26600E35D4E /* AlertModels.swift in Sources */,
+				CA4AFCB12DCD9F5B0041EE78 /* BluetoothJoystickController.swift in Sources */,
 				CA8BF34F25BD035D007B3440 /* BLEStatusView.swift in Sources */,
 				CAF03F7E2544D7A500D04771 /* ContentView.swift in Sources */,
 				CA524551255225B500537AD4 /* BLEController.swift in Sources */,
