@@ -233,12 +233,13 @@ static void _gotMagUpdate(mag_update_t update)
   }
 
   if (_motorMagCompensationHandler->isCalibrating) {
-    _motorMagCompensationHandler->updateMagValue(update, _batteryController->batteryVoltage());
+    _motorMagCompensationHandler->updateMagValue(update);
   } else if (_completedFirstArm && _mostRecentMotorValues[0] > 0 && _motorMagCompensationHandler->isCalibrated) {
-    _magValues = _motorMagCompensationHandler->applyMagneticMotorCompensation(
-        update,
-        _mostRecentMotorValues,
-        _batteryController->batteryVoltage());
+    _magValues = _motorMagCompensationHandler->applyMagneticMotorCompensation(_magValues, _mostRecentMotorValues);
+    _helper->magValuesPostMotorMagCompCalibration[0] = _magValues.x;
+    _helper->magValuesPostMotorMagCompCalibration[1] = _magValues.y;
+    _helper->magValuesPostMotorMagCompCalibration[2] = _magValues.z;
+    _helper->magValuesPostMotorMagCompCalibration[3] = _magValues.heading;
   }
 
   EXECUTE_PERIODIC(1000, {
