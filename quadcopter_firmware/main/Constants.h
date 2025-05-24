@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Matrix.h>
+
 #ifndef MATLAB_SIM
 #include "Arduino.h"
 #include "QuadcopterController.h"
@@ -49,3 +51,5 @@ const gpio_num_t MOTOR_TELEM_PINS[NUM_MOTORS] = {GPIO_NUM_34, GPIO_NUM_33, GPIO_
 #define DECLINATION_ANGLE_DEG (12.0 + (55.0 / 60.0)) / (180 / PI)
 
 #define STANDARD_GRAVITY 9.81f  // or 9.80665f for higher precision
+
+#define MAGNETIC_REFERENCE_VECTOR {{0.446f}, {0.116f}, {0.887f}}  // adjust for location, this is for Foster City, CA

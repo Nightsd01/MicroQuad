@@ -333,13 +333,14 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
     // bytes 2 to 14 - angle gains (kp, ki, kd)
     ControlAxis axis = (ControlAxis)pidConstants[0];
     PIDType type = (PIDType)pidConstants[1];
-    gains_t gains = {
-        .kP = *((float *)&pidConstants[2]),
-        .kI = *((float *)&pidConstants[6]),
-        .kD = *((float *)&pidConstants[10]),
-    };
+    float kP, kI, kD;
+    memcpy(&kP, &pidConstants[2], sizeof(float));
+    memcpy(&kI, &pidConstants[6], sizeof(float));
+    memcpy(&kD, &pidConstants[10], sizeof(float));
+
+    gains_t gains = {.kP = kP, .kI = kI, .kD = kD};
     if (_pidConstantsUpdateHandler) {
-      // _pidConstantsUpdateHandler(axis, type, gains);
+      AsyncController::main.executePossiblySync([=]() { _pidConstantsUpdateHandler(axis, type, gains); });
       LOG_INFO_ASYNC_ON_MAIN(
           "Updating PID constants for axis %d, type %d, p = %f, i = %f, d = %f",
           axis,
