@@ -6,6 +6,10 @@
 #include "Matrix.h"
 #include "MatrixTestHelpers.h"
 
+// ========================================================================
+// == BASIC MATRIX TESTS ==
+// ========================================================================
+
 TEST(MatrixIntTests, EqualityTest)
 {
   Matrix<int, 2, 2> A = {
@@ -30,6 +34,112 @@ TEST(MatrixIntTests, InequalityTest)
       {0, 1}
   };
   EXPECT_TRUE(A != B);
+}
+
+// Test N-dimensional matrices
+TEST(MatrixNDTests, ThreeDimensionalMatrix)
+{
+  Matrix<int, 2, 3, 4> tensor3D;  // 2x3x4 tensor
+  EXPECT_EQ(tensor3D.ndims, 3u);
+  EXPECT_EQ(tensor3D.total_size, 24u);
+  EXPECT_EQ(tensor3D.dimensions[0], 2u);
+  EXPECT_EQ(tensor3D.dimensions[1], 3u);
+  EXPECT_EQ(tensor3D.dimensions[2], 4u);
+  
+  // Test element access
+  tensor3D(0, 0, 0) = 1;
+  tensor3D(1, 2, 3) = 42;
+  EXPECT_EQ(tensor3D(0, 0, 0), 1);
+  EXPECT_EQ(tensor3D(1, 2, 3), 42);
+}
+
+TEST(MatrixNDTests, OneDimensionalVector)
+{
+  Matrix<float, 5> vec;  // 5-element vector
+  EXPECT_EQ(vec.ndims, 1u);
+  EXPECT_EQ(vec.total_size, 5u);
+  
+  // Initialize values
+  for (size_t i = 0; i < 5; ++i) {
+    vec(i) = static_cast<float>(i * 1.5f);
+  }
+  
+  // Check values
+  EXPECT_FLOAT_EQ(vec(0), 0.0f);
+  EXPECT_FLOAT_EQ(vec(1), 1.5f);
+  EXPECT_FLOAT_EQ(vec(4), 6.0f);
+}
+
+TEST(MatrixNDTests, FourDimensionalTensor)
+{
+  Matrix<double, 2, 3, 4, 5> tensor4D;  // 2x3x4x5 tensor
+  EXPECT_EQ(tensor4D.ndims, 4u);
+  EXPECT_EQ(tensor4D.total_size, 120u);
+  EXPECT_EQ(tensor4D.dimensions[0], 2u);
+  EXPECT_EQ(tensor4D.dimensions[1], 3u);
+  EXPECT_EQ(tensor4D.dimensions[2], 4u);
+  EXPECT_EQ(tensor4D.dimensions[3], 5u);
+  
+  // Test element access
+  tensor4D(0, 0, 0, 0) = 1.0;
+  tensor4D(1, 2, 3, 4) = 42.0;
+  EXPECT_DOUBLE_EQ(tensor4D(0, 0, 0, 0), 1.0);
+  EXPECT_DOUBLE_EQ(tensor4D(1, 2, 3, 4), 42.0);
+}
+
+TEST(MatrixNDTests, ElementWiseOperations3D)
+{
+  Matrix<int, 2, 2, 2> A(1);  // All elements = 1
+  Matrix<int, 2, 2, 2> B(2);  // All elements = 2
+  
+  // Addition
+  auto C = A + B;
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_EQ(C[i], 3);
+  }
+  
+  // Subtraction
+  auto D = B - A;
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_EQ(D[i], 1);
+  }
+  
+  // Scalar multiplication
+  auto E = A * 5;
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_EQ(E[i], 5);
+  }
+}
+
+TEST(MatrixNDTests, DotProduct3D)
+{
+  Matrix<float, 2, 2, 2> A;
+  Matrix<float, 2, 2, 2> B;
+  
+  // Initialize with sequential values
+  for (size_t i = 0; i < 8; ++i) {
+    A[i] = static_cast<float>(i);
+    B[i] = static_cast<float>(i * 2);
+  }
+  
+  // Dot product: sum(A[i] * B[i]) = sum(i * i*2) = 2 * sum(i^2)
+  // = 2 * (0 + 1 + 4 + 9 + 16 + 25 + 36 + 49) = 2 * 140 = 280
+  float dot = A.dot(B);
+  EXPECT_FLOAT_EQ(dot, 280.0f);
+}
+
+TEST(MatrixNDTests, Norm3D)
+{
+  Matrix<float, 2, 2, 2> A;
+  
+  // Initialize: A[i] = i
+  for (size_t i = 0; i < 8; ++i) {
+    A[i] = static_cast<float>(i);
+  }
+  
+  // Norm = sqrt(sum(i^2)) = sqrt(0 + 1 + 4 + 9 + 16 + 25 + 36 + 49) = sqrt(140)
+  float expected_norm = std::sqrt(140.0f);
+  EXPECT_NEAR(A.norm(), expected_norm, 1e-6f);
 }
 
 // ========================================================================

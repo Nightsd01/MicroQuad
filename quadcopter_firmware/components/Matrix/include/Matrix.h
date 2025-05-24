@@ -1,168 +1,270 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <cmath>    // for std::fabs, std::sqrt
 #include <cstring>  // for std::memset
+#include <cstdint>  // for int16_t, int32_t, etc.
+#include <concepts>
 #include <initializer_list>
 #include <iomanip>
 #include <ostream>
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <utility>
+
+// C++20 concepts for type constraints
+template<typename T>
+concept Numeric = std::is_arithmetic_v<T>;
+
+template<typename T>
+concept FloatingPoint = std::is_floating_point_v<T>;
+
+// Helper to calculate total size from dimensions
+template<size_t... Dims>
+constexpr size_t product() {
+    return (Dims * ...);
+}
+
+// Helper to get the Nth element from a parameter pack
+template<size_t N, size_t First, size_t... Rest>
+struct nth_element {
+    static constexpr size_t value = nth_element<N-1, Rest...>::value;
+};
+
+template<size_t First, size_t... Rest>
+struct nth_element<0, First, Rest...> {
+    static constexpr size_t value = First;
+};
+
+// Helper to count dimensions
+template<size_t... Dims>
+constexpr size_t dimension_count() {
+    return sizeof...(Dims);
+}
 
 /**
- * @brief A simple templated matrix class
+ * @brief A templated N-dimensional matrix/tensor class
  *
  * Template parameters:
  *   T: any numeric type
- *   ROWS: number of rows
- *   COLS: number of columns
+ *   Dims...: dimensions of the matrix (e.g., Matrix<float, 3, 4, 5> is a 3x4x5 tensor)
  *
- * Storage is row-major: data[row*COLS + col]
+ * Storage is row-major for 2D, generalized to lexicographic order for N-D
  */
-template <typename T, size_t ROWS, size_t COLS>
+template <Numeric T, size_t... Dims>
 class Matrix
 {
- public:
-  T data[ROWS * COLS];
+    static_assert(sizeof...(Dims) > 0, "Matrix must have at least one dimension");
+    static_assert(((Dims > 0) && ...), "All dimensions must be greater than zero");
 
-  // Default constructor (zero-initialized)
-  Matrix(void);
+public:
+    static constexpr size_t ndims = sizeof...(Dims);
+    static constexpr size_t total_size = product<Dims...>();
+    static constexpr std::array<size_t, ndims> dimensions = {Dims...};
+    
+    T data[total_size];
 
-  // Constructor from nested initializer_list
-  Matrix(std::initializer_list<std::initializer_list<T>> init);
+    // Default constructor (zero-initialized)
+    Matrix() {
+        std::memset(data, 0, sizeof(data));
+    }
 
-  // Constructor (initialize all elements to a specific value)
-  Matrix(const T& value);
+    // Constructor (initialize all elements to a specific value)
+    explicit Matrix(const T& value) {
+        std::fill(std::begin(data), std::end(data), value);
+    }
 
-  // Initialize from C array (in row-major order)
-  Matrix(T values[ROWS * COLS]);
+    // Initialize from C array (in row-major/lexicographic order)
+    explicit Matrix(const T (&values)[total_size]) {
+        std::copy(std::begin(values), std::end(values), std::begin(data));
+    }
 
-  std::string description(void) const;
+    // Initialize from pointer (for backward compatibility)
+    explicit Matrix(const T* values) {
+        std::copy(values, values + total_size, std::begin(data));
+    }
 
-  // Access element (row, col)
-  inline T& operator()(size_t row, size_t col) __attribute__((always_inline));
+    // For 2D matrices, support nested initializer_list (backward compatibility)
+    Matrix(std::initializer_list<std::initializer_list<T>> init) requires (ndims == 2) {
+        constexpr size_t rows = nth_element<0, Dims...>::value;
+        constexpr size_t cols = nth_element<1, Dims...>::value;
+        
+        if (init.size() != rows) {
+            throw std::runtime_error("Incorrect number of row initializers");
+        }
 
-  // Const version
-  inline const T& operator()(size_t row, size_t col) const __attribute__((always_inline));
+        size_t i = 0;
+        for (auto& rowList : init) {
+            if (rowList.size() != cols) {
+                throw std::runtime_error("Incorrect number of column initializers");
+            }
+            size_t j = 0;
+            for (auto& val : rowList) {
+                data[i * cols + j] = val;
+                j++;
+            }
+            i++;
+        }
+    }
 
-  inline void zeros(void) __attribute__((always_inline)) { std::memset(data, 0, sizeof(data)); }
+    // General element access using variadic indices
+    template<typename... Indices>
+    T& operator()(Indices... indices) requires (sizeof...(indices) == ndims) {
+        return data[linear_index(indices...)];
+    }
 
-  inline T norm(void) const __attribute__((always_inline));
+    template<typename... Indices>
+    const T& operator()(Indices... indices) const requires (sizeof...(indices) == ndims) {
+        return data[linear_index(indices...)];
+    }
 
-  inline Matrix<T, COLS, ROWS> transpose(void) const __attribute__((always_inline));
+    // For backward compatibility with 2D matrices
+    T& operator()(size_t row, size_t col) requires (ndims == 2) {
+        constexpr size_t cols = nth_element<1, Dims...>::value;
+        return data[row * cols + col];
+    }
 
-  inline T dot(const Matrix<T, ROWS, COLS>& rhs) const __attribute__((always_inline));
+    const T& operator()(size_t row, size_t col) const requires (ndims == 2) {
+        constexpr size_t cols = nth_element<1, Dims...>::value;
+        return data[row * cols + col];
+    }
 
-  // Method to invert the matrix (only valid for square matrices)
-  inline Matrix<T, ROWS, COLS> invert(void) const __attribute__((always_inline));
+    // Linear indexing (direct array access)
+    T& operator[](size_t idx) {
+        return data[idx];
+    }
 
-  // Static method to create an Identity matrix (only if square)
-  static Matrix<T, ROWS, COLS> identity(void);
+    const T& operator[](size_t idx) const {
+        return data[idx];
+    }
 
-  // Access sub-matrix copy (row, col)
-  template <size_t SUBROWS, size_t SUBCOLS>
-  inline Matrix<T, SUBROWS, SUBCOLS> slice(size_t row, size_t col) const __attribute__((always_inline));
+    void zeros() {
+        std::memset(data, 0, sizeof(data));
+    }
 
-  // Access sub-matrix copy (row, col)
-  template <size_t SUBROWS, size_t SUBCOLS>
-  inline void setSlice(size_t row, size_t col, Matrix<T, SUBROWS, SUBCOLS> sub) __attribute__((always_inline));
+    T norm() const;
+    
+    std::string description() const;
 
-  inline T determinant(void) const __attribute__((always_inline));
+    // Transpose for 2D matrices (backward compatibility)
+    auto transpose() const requires (ndims == 2);
 
- private:
-  /**
-   * @brief Creates a submatrix by removing a specified row and column.
-   * @details Used internally for calculating the determinant (finding minors).
-   * Assumes ROWS > 0 and COLS > 0. Template parameters ensure return type
-   * matches the submatrix dimensions. Only sensible if ROWS > 1 and COLS > 1.
-   * @param skip_row The index of the row to exclude.
-   * @param skip_col The index of the column to exclude.
-   * @return A Matrix<T, ROWS-1, COLS-1> which is the minor matrix.
-   */
-  inline Matrix<T, ROWS - 1, COLS - 1> _createSubmatrix(size_t skip_row, size_t skip_col) const
-      __attribute__((always_inline));
+    // General axis swapping for N-D tensors
+    template<size_t Axis1, size_t Axis2>
+    auto swap_axes() const;
+
+    // Dot product (element-wise multiplication and sum)
+    T dot(const Matrix<T, Dims...>& rhs) const;
+
+    // Matrix inversion for square 2D matrices
+    Matrix<T, Dims...> invert() const requires (ndims == 2 && nth_element<0, Dims...>::value == nth_element<1, Dims...>::value);
+
+    // Identity matrix for square 2D matrices
+    static Matrix<T, Dims...> identity() requires (ndims == 2 && nth_element<0, Dims...>::value == nth_element<1, Dims...>::value);
+
+    // Slicing operations - for 2D matrices only
+    template<size_t SubRows, size_t SubCols>
+    auto slice(size_t startRow, size_t startCol) const -> Matrix<T, SubRows, SubCols> requires (ndims == 2);
+
+    template<size_t SubRows, size_t SubCols>
+    void setSlice(size_t row, size_t col, const Matrix<T, SubRows, SubCols>& sub) requires (ndims == 2);
+
+    // Determinant for square 2D matrices
+    T determinant() const requires (ndims == 2 && nth_element<0, Dims...>::value == nth_element<1, Dims...>::value);
+
+private:
+    // Convert multi-dimensional indices to linear index
+    template<typename... Indices>
+    size_t linear_index(Indices... indices) const {
+        size_t idx = 0;
+        size_t stride = 1;
+        size_t index_array[] = {static_cast<size_t>(indices)...};
+        
+        for (int i = ndims - 1; i >= 0; --i) {
+            idx += index_array[i] * stride;
+            stride *= dimensions[i];
+        }
+        return idx;
+    }
+
+    // Helper for determinant calculation
+    auto _createSubmatrix(size_t skip_row, size_t skip_col) const requires (ndims == 2);
 };
 
-// -----------------------------------------------------------------------------
-// Operator Overloads
-// -----------------------------------------------------------------------------
+// Type aliases for common cases
+template<Numeric T>
+using Vector = Matrix<T, 1>;
 
-template <typename T, size_t R, size_t C>
-inline std::ostream& operator<<(std::ostream& os, const Matrix<T, R, C>& matrix) __attribute__((always_inline));
+template<Numeric T, size_t N>
+using SquareMatrix = Matrix<T, N, N>;
 
-// Matrix + Matrix
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator+(const Matrix<T, R, C>& A, const Matrix<T, R, C>& B) __attribute__((always_inline));
+// Operator overloads
+template <Numeric T, size_t... Dims>
+std::ostream& operator<<(std::ostream& os, const Matrix<T, Dims...>& matrix);
 
-// Matrix + Scalar
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator+(const Matrix<T, R, C>& A, const T& B) __attribute__((always_inline));
+// Element-wise operations
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator+(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B);
 
-// Scalar + Matrix
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator+(const T& A, const Matrix<T, R, C>& B) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator+(const Matrix<T, Dims...>& A, const T& B);
 
-// Matrix - Matrix
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator-(const Matrix<T, R, C>& A, const Matrix<T, R, C>& B) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator+(const T& A, const Matrix<T, Dims...>& B);
 
-// Matrix negation
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator-(const Matrix<T, R, C>& A) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B);
 
-// Matrix - Scalar
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator-(const Matrix<T, R, C>& A, const T& B) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A);
 
-// Scalar - Matrix
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator-(const T& A, const Matrix<T, R, C>& B) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A, const T& B);
 
-// Multiplication
-// IMPORTANT NOTE: The following two functions are elementwise multiplication
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator*(T scalar, const Matrix<T, R, C>& A) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator-(const T& A, const Matrix<T, Dims...>& B);
 
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator*(const Matrix<T, R, C>& A, T scalar) __attribute__((always_inline));
+// Scalar multiplication
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator*(T scalar, const Matrix<T, Dims...>& A);
 
-// IMPORTANT NOTE: The following function is matrix multiplication (not elementwise)
-template <typename T, size_t R, size_t C, size_t K>
-inline Matrix<T, R, K> operator*(const Matrix<T, R, C>& A, const Matrix<T, C, K>& B) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator*(const Matrix<T, Dims...>& A, T scalar);
 
-// Element-wise multiplication (matrix)
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C> operator%(const Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs) __attribute__((always_inline));
+// Matrix multiplication for 2D matrices
+template <Numeric T, size_t R, size_t C, size_t K>
+Matrix<T, R, K> operator*(const Matrix<T, R, C>& A, const Matrix<T, C, K>& B);
 
-// matrix += matrix
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C>& operator+=(Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs) __attribute__((always_inline));
+// Element-wise multiplication
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator%(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs);
 
-// matrix -= matrix
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C>& operator-=(Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs) __attribute__((always_inline));
+// Compound assignment operators
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator+=(Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs);
 
-// matrix += scalar
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C>& operator+=(Matrix<T, R, C>& lhs, const T& rhs) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator-=(Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs);
 
-// matrix -= scalar
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C>& operator-=(Matrix<T, R, C>& lhs, const T& rhs) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator+=(Matrix<T, Dims...>& lhs, const T& rhs);
 
-// matrix *= scalar - elementwise
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C>& operator*=(Matrix<T, R, C>& lhs, const T& rhs) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator-=(Matrix<T, Dims...>& lhs, const T& rhs);
 
-// matrix /= scalar - elementwise
-template <typename T, size_t R, size_t C>
-inline Matrix<T, R, C>& operator/=(Matrix<T, R, C>& lhs, const T& rhs) __attribute__((always_inline));
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator*=(Matrix<T, Dims...>& lhs, const T& rhs);
 
-// matrix equality
-template <typename T, size_t R, size_t C>
-bool operator==(const Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs);
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator/=(Matrix<T, Dims...>& lhs, const T& rhs);
 
-template <typename T, size_t R, size_t C>
-bool operator!=(const Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs);
+// Comparison operators
+template <Numeric T, size_t... Dims>
+bool operator==(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs);
+
+template <Numeric T, size_t... Dims>
+bool operator!=(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs);
 
 #include <Matrix_Imp.h>
