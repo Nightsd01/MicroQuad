@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.14)
 project(MatrixNativeTests LANGUAGES CXX) # Project name for the test build
 
-set(CMAKE_CXX_STANDARD 17) # Or your desired C++ standard
+set(CMAKE_CXX_STANDARD 20) # Updated to C++20 for concepts and other features
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 

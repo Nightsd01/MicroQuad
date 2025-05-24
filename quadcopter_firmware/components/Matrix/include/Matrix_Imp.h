@@ -1,541 +1,503 @@
 #pragma once
 
-#include <stdexcept>  // <--- ADD THIS LINE
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
+#include <cmath>
+#include <algorithm>
 
 #include "Matrix_AccelerationImp.h"
 
-template <typename T, size_t ROWS, size_t COLS>
-Matrix<T, ROWS, COLS>::Matrix(void)
+// Helper to generate index sequence for N-D operations
+template<size_t... Is>
+struct index_sequence {};
+
+template<size_t N, size_t... Is>
+struct make_index_sequence : make_index_sequence<N-1, N-1, Is...> {};
+
+template<size_t... Is>
+struct make_index_sequence<0, Is...> {
+    using type = index_sequence<Is...>;
+};
+
+// Description method
+template <Numeric T, size_t... Dims>
+std::string Matrix<T, Dims...>::description() const
 {
-  std::memset(data, 0, sizeof(data));
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-Matrix<T, ROWS, COLS>::Matrix(std::initializer_list<std::initializer_list<T>> init)
-{
-  // Check that the number of rows in 'init' matches ROWS
-  if (init.size() != ROWS) throw std::runtime_error("Incorrect number of row initializers");
-
-  // Copy the data
-  size_t i = 0;
-  for (auto& rowList : init) {
-    if (rowList.size() != COLS) throw std::runtime_error("Incorrect number of column initializers");
-
-    size_t j = 0;
-    for (auto& val : rowList) {
-      data[i * COLS + j] = val;
-      j++;
-    }
-    i++;
-  }
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-Matrix<T, ROWS, COLS>::Matrix(const T& value)
-{
-  for (size_t i = 0; i < ROWS * COLS; ++i) {
-    data[i] = value;
-  }
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-Matrix<T, ROWS, COLS>::Matrix(T values[ROWS * COLS])
-{
-  // Copy the data from the array to the matrix
-  for (size_t i = 0; i < ROWS * COLS; ++i) {
-    data[i] = values[i];
-  }
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-std::string Matrix<T, ROWS, COLS>::description(void) const
-{
-  std::ostringstream oss;
-
-  oss << "[\n";  // Opening bracket for the matrix
-
-  for (size_t r = 0; r < ROWS; ++r) {
-    // indentation
-    for (size_t i = 0; i < r; ++i) {
-      oss << "  ";  // Two spaces for indentation
-    }
-    oss << "[";  // Opening bracket for the row
-    for (size_t c = 0; c < COLS; ++c) {
-      // Apply formatting if T is a floating-point type
-      // Conditionally compile this formatting part
-      if constexpr (std::is_floating_point_v<T>) {
-        oss << std::fixed << std::setprecision(4);
-      }
-
-      // Access element using the const version of operator()
-      oss << (*this)(r, c);
-
-      // Add separator if not the last element in the row
-      if (c < COLS - 1) {
-        oss << ", ";
-      }
-    }
-    oss << "]";  // Closing bracket for the row
-
-    // Add newline if not the last row
-    if (r < ROWS - 1) {
-      oss << ",\n";
-    } else {
-      oss << "\n";  // Newline for the last row
-    }
-  }
-  oss << "]";  // Closing bracket for the matrix
-  return oss.str();
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-T& Matrix<T, ROWS, COLS>::operator()(size_t row, size_t col)
-{
-  return data[row * COLS + col];
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-const T& Matrix<T, ROWS, COLS>::operator()(size_t row, size_t col) const
-{
-  return data[row * COLS + col];
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-T Matrix<T, ROWS, COLS>::norm() const
-{                       // Mark function as const as it doesn't modify the matrix
-  double sum_sq = 0.0;  // Use double for accumulation
-
-  // Iterate through all elements in the flat data array
-  for (size_t i = 0; i < ROWS * COLS; ++i) {
-    // Cast the element to double for the sum-of-squares calculation
-    double element_d = static_cast<double>(data[i]);
-    sum_sq += element_d * element_d;
-  }
-
-  // Calculate the square root (which returns a double)
-  double norm_d = std::sqrt(sum_sq);
-
-  // Cast the final result back to the requested type T
-  return static_cast<T>(norm_d);
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-Matrix<T, COLS, ROWS> Matrix<T, ROWS, COLS>::transpose(void) const
-{
-  Matrix<T, COLS, ROWS> result;
-  for (size_t i = 0; i < ROWS; i++) {
-    for (size_t j = 0; j < COLS; j++) {
-      result(j, i) = data[i * COLS + j];
-    }
-  }
-  return result;
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-T Matrix<T, ROWS, COLS>::dot(const Matrix<T, ROWS, COLS>& rhs) const
-{
-  T sum = T{};
-  for (size_t i = 0; i < ROWS * COLS; i++) {
-    sum += this->data[i] * rhs.data[i];
-  }
-  return sum;
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-Matrix<T, ROWS, COLS> Matrix<T, ROWS, COLS>::invert(void) const
-{
-  static_assert(ROWS == COLS, "Matrix inversion requires a square matrix.");
-  static_assert(
-      std::is_floating_point_v<T>,
-      "Matrix inversion is numerically stable primarily for floating-point types (float, double) due to required "
-      "divisions. Integer inversion may produce truncated/incorrect results.");
-
-  const size_t N = ROWS;
-
-  Matrix<T, N, N> tempA = *this;
-  Matrix<T, N, N> inv = Matrix<T, N, N>::identity();
-
-  // Perform Gauss-Jordan elimination with partial pivoting
-  T tolerance = static_cast<T>(1e-8);
-  if constexpr (std::is_same_v<T, float>) {
-    tolerance = 1e-6f;  // Use a slightly looser tolerance for single precision
-  }
-
-  for (size_t j = 0; j < N; ++j) {
-    // Iterate through columns (and pivot rows)
-    size_t pivot_row = j;
-    T max_val = std::abs(tempA(j, j));
-
-    for (size_t k = j + 1; k < N; ++k) {
-      T current_abs = std::abs(tempA(k, j));
-      if (current_abs > max_val) {
-        max_val = current_abs;
-        pivot_row = k;
-      }
-    }
-
-    // Check for singularity: If the largest element in the column is close to zero,
-    // the matrix is singular (or numerically close to singular).
-    if (max_val < tolerance) {
-      throw std::runtime_error("Matrix is singular or nearly singular; cannot invert.");
-    }
-
-    if (pivot_row != j) {
-      for (size_t k = 0; k < N; ++k) {
-        std::swap(tempA(j, k), tempA(pivot_row, k));
-        std::swap(inv(j, k), inv(pivot_row, k));
-      }
-    }
-
-    // Normalization
-    T pivot_val = tempA(j, j);
-    for (size_t k = 0; k < N; ++k) {
-      if (k >= j) {
-        tempA(j, k) /= pivot_val;
-      }
-      inv(j, k) /= pivot_val;
-    }
-
-    // Elimination
-    for (size_t i = 0; i < N; ++i) {
-      if (i != j) {
-        T factor = tempA(i, j);
-
-        for (size_t k = 0; k < N; ++k) {
-          if (k >= j) {
-            tempA(i, k) -= factor * tempA(j, k);
-          }
-          inv(i, k) -= factor * inv(j, k);
+    std::ostringstream oss;
+    
+    if constexpr (ndims == 1) {
+        // Vector case
+        oss << "[";
+        for (size_t i = 0; i < total_size; ++i) {
+            if constexpr (std::is_floating_point_v<T>) {
+                oss << std::fixed << std::setprecision(4);
+            }
+            oss << data[i];
+            if (i < total_size - 1) oss << ", ";
         }
-      }
+        oss << "]";
+    } else if constexpr (ndims == 2) {
+        // 2D matrix case - maintain backward compatibility
+        constexpr size_t rows = dimensions[0];
+        constexpr size_t cols = dimensions[1];
+        
+        oss << "[\n";
+        for (size_t r = 0; r < rows; ++r) {
+            // indentation
+            for (size_t i = 0; i < r; ++i) {
+                oss << "  ";
+            }
+            oss << "[";
+            for (size_t c = 0; c < cols; ++c) {
+                if constexpr (std::is_floating_point_v<T>) {
+                    oss << std::fixed << std::setprecision(4);
+                }
+                oss << (*this)(r, c);
+                if (c < cols - 1) {
+                    oss << ", ";
+                }
+            }
+            oss << "]";
+            if (r < rows - 1) {
+                oss << ",\n";
+            } else {
+                oss << "\n";
+            }
+        }
+        oss << "]";
+    } else {
+        // N-D tensor case - avoid using typeid for RTTI-disabled builds
+        oss << "Tensor<";
+        if constexpr (std::is_same_v<T, float>) {
+            oss << "float";
+        } else if constexpr (std::is_same_v<T, double>) {
+            oss << "double";
+        } else if constexpr (std::is_same_v<T, int>) {
+            oss << "int";
+        } else if constexpr (std::is_same_v<T, int16_t>) {
+            oss << "int16_t";
+        } else if constexpr (std::is_same_v<T, int32_t>) {
+            oss << "int32_t";
+        } else if constexpr (std::is_same_v<T, uint8_t>) {
+            oss << "uint8_t";
+        } else if constexpr (std::is_same_v<T, uint16_t>) {
+            oss << "uint16_t";
+        } else if constexpr (std::is_same_v<T, uint32_t>) {
+            oss << "uint32_t";
+        } else {
+            oss << "numeric";
+        }
+        oss << ", ";
+        for (size_t i = 0; i < ndims; ++i) {
+            oss << dimensions[i];
+            if (i < ndims - 1) oss << ", ";
+        }
+        oss << "> with " << total_size << " elements";
     }
-  }
-
-  return inv;
+    
+    return oss.str();
 }
 
-template <typename T, size_t ROWS, size_t COLS>
-template <size_t SUBROWS, size_t SUBCOLS>
-Matrix<T, SUBROWS, SUBCOLS> Matrix<T, ROWS, COLS>::slice(size_t row, size_t col) const
+// Norm method
+template <Numeric T, size_t... Dims>
+T Matrix<T, Dims...>::norm() const
 {
-  static_assert(SUBROWS <= ROWS, "Slice rows exceed original matrix rows");
-  static_assert(SUBCOLS <= COLS, "Slice columns exceed original matrix columns");
-  static_assert(SUBROWS > 0, "Slice rows must be greater than zero");
-  static_assert(SUBCOLS > 0, "Slice columns must be greater than zero");
-  Matrix<T, SUBROWS, SUBCOLS> subMatrix;
-  if (row + SUBROWS > ROWS || col + SUBCOLS > COLS) {
-    throw std::out_of_range("Slice exceeds original matrix bounds");
-  }
-  for (size_t i = 0; i < SUBROWS; i++) {
-    for (size_t j = 0; j < SUBCOLS; j++) {
-      subMatrix(i, j) = data[(row + i) * COLS + (col + j)];
+    double sum_sq = 0.0;
+    
+    for (size_t i = 0; i < total_size; ++i) {
+        double element_d = static_cast<double>(data[i]);
+        sum_sq += element_d * element_d;
     }
-  }
-  return subMatrix;
+    
+    double norm_d = std::sqrt(sum_sq);
+    return static_cast<T>(norm_d);
 }
 
-template <typename T, size_t ROWS, size_t COLS>
-template <size_t SUBROWS, size_t SUBCOLS>
-void Matrix<T, ROWS, COLS>::setSlice(size_t row, size_t col, Matrix<T, SUBROWS, SUBCOLS> sub)
+// Transpose for 2D matrices
+template <Numeric T, size_t... Dims>
+auto Matrix<T, Dims...>::transpose() const requires (ndims == 2)
 {
-  static_assert(SUBROWS <= ROWS, "Slice rows exceed original matrix rows");
-  static_assert(SUBCOLS <= COLS, "Slice columns exceed original matrix columns");
-  static_assert(SUBROWS > 0, "Slice rows must be greater than zero");
-  static_assert(SUBCOLS > 0, "Slice columns must be greater than zero");
-  if (row + SUBROWS > ROWS || col + SUBCOLS > COLS) {
-    throw std::out_of_range("Slice exceeds original matrix bounds");
-  }
-  for (size_t i = 0; i < SUBROWS; i++) {
-    for (size_t j = 0; j < SUBCOLS; j++) {
-      data[(row + i) * COLS + (col + j)] = sub(i, j);
+    constexpr size_t rows = dimensions[0];
+    constexpr size_t cols = dimensions[1];
+    
+    Matrix<T, cols, rows> result;
+    for (size_t i = 0; i < rows; ++i) {
+        for (size_t j = 0; j < cols; ++j) {
+            result(j, i) = (*this)(i, j);
+        }
     }
-  }
+    return result;
 }
 
-template <typename T, size_t ROWS, size_t COLS>
-Matrix<T, ROWS, COLS> Matrix<T, ROWS, COLS>::identity(void)
+// Dot product
+template <Numeric T, size_t... Dims>
+T Matrix<T, Dims...>::dot(const Matrix<T, Dims...>& rhs) const
 {
-  static_assert(ROWS == COLS, "Identity only valid for square matrix");
-  Matrix<T, ROWS, COLS> I;
-  for (size_t i = 0; i < ROWS; i++) {
-    for (size_t j = 0; j < COLS; j++) {
-      I(i, j) = (i == j) ? 1.0f : 0.0f;
+    T sum = T{};
+    for (size_t i = 0; i < total_size; ++i) {
+        sum += this->data[i] * rhs.data[i];
     }
-  }
-  return I;
+    return sum;
 }
 
-template <typename T, size_t ROWS, size_t COLS>
-inline T Matrix<T, ROWS, COLS>::determinant(void) const
+// Matrix inversion for square 2D matrices
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> Matrix<T, Dims...>::invert() const requires (ndims == 2 && nth_element<0, Dims...>::value == nth_element<1, Dims...>::value)
 {
-  // Determinant is only defined for square matrices.
-  // Use static_assert for compile-time check.
-  static_assert(ROWS == COLS, "Determinant is only defined for square matrices.");
-
-  constexpr size_t N = ROWS;  // The order of the square matrix
-
-  // Base case: 1x1 matrix
-  // Use 'if constexpr' (C++17) for compile-time evaluation of branches.
-  // If not using C++17, regular 'if' works but might compile unused branches.
-  if constexpr (N == 1) {
-    return (*this)(0, 0);
-  }
-  // Base case: 2x2 matrix (direct calculation is faster)
-  else if constexpr (N == 2) {
-    return ((*this)(0, 0) * (*this)(1, 1)) - ((*this)(0, 1) * (*this)(1, 0));
-  }
-  // Recursive step: NxN matrix (N > 2)
-  // Using cofactor expansion along the first row (row 0)
-  else {
-    T det = T{0};   // Initialize determinant result. Use T{} for zero initialization.
-    T sign = T{1};  // Sign for cofactor term, starts positive for (0,0) element.
-
-    for (size_t j = 0; j < N; ++j) {  // Iterate through columns of the first row
-      // Calculate the minor matrix by removing row 0 and column j
-      Matrix<T, N - 1, N - 1> minor_matrix = _createSubmatrix(0, j);
-
-      // Recursively find the determinant of the minor
-      T minor_determinant = minor_matrix.determinant();
-
-      // Add the term: (-1)^(0+j) * element(0,j) * det(minor)
-      det += sign * (*this)(0, j) * minor_determinant;
-
-      // Flip the sign for the next element in the row expansion
-      sign = -sign;
+    static_assert(FloatingPoint<T>, 
+        "Matrix inversion is numerically stable primarily for floating-point types");
+    
+    constexpr size_t N = dimensions[0];
+    
+    Matrix<T, N, N> tempA = *this;
+    Matrix<T, N, N> inv = Matrix<T, N, N>::identity();
+    
+    T tolerance = static_cast<T>(1e-8);
+    if constexpr (std::is_same_v<T, float>) {
+        tolerance = 1e-6f;
     }
-    return det;
-  }
-}
-
-template <typename T, size_t ROWS, size_t COLS>
-inline Matrix<T, ROWS - 1, COLS - 1> Matrix<T, ROWS, COLS>::_createSubmatrix(size_t skip_row, size_t skip_col) const
-{
-  Matrix<T, ROWS - 1, COLS - 1> sub;  // Resulting submatrix
-  size_t sub_r = 0;                   // Current row in the submatrix
-
-  for (size_t r = 0; r < ROWS; ++r) {
-    if (r == skip_row) {
-      continue;  // Skip the specified row
+    
+    for (size_t j = 0; j < N; ++j) {
+        size_t pivot_row = j;
+        T max_val = std::abs(tempA(j, j));
+        
+        for (size_t k = j + 1; k < N; ++k) {
+            T current_abs = std::abs(tempA(k, j));
+            if (current_abs > max_val) {
+                max_val = current_abs;
+                pivot_row = k;
+            }
+        }
+        
+        if (max_val < tolerance) {
+            throw std::runtime_error("Matrix is singular or nearly singular; cannot invert.");
+        }
+        
+        if (pivot_row != j) {
+            for (size_t k = 0; k < N; ++k) {
+                std::swap(tempA(j, k), tempA(pivot_row, k));
+                std::swap(inv(j, k), inv(pivot_row, k));
+            }
+        }
+        
+        T pivot_val = tempA(j, j);
+        for (size_t k = 0; k < N; ++k) {
+            if (k >= j) {
+                tempA(j, k) /= pivot_val;
+            }
+            inv(j, k) /= pivot_val;
+        }
+        
+        for (size_t i = 0; i < N; ++i) {
+            if (i != j) {
+                T factor = tempA(i, j);
+                
+                for (size_t k = 0; k < N; ++k) {
+                    if (k >= j) {
+                        tempA(i, k) -= factor * tempA(j, k);
+                    }
+                    inv(i, k) -= factor * inv(j, k);
+                }
+            }
+        }
     }
+    
+    return inv;
+}
 
-    size_t sub_c = 0;  // Current column in the submatrix
-    for (size_t c = 0; c < COLS; ++c) {
-      if (c == skip_col) {
-        continue;  // Skip the specified column
-      }
-      // Copy element to the submatrix
-      sub(sub_r, sub_c) = (*this)(r, c);
-      sub_c++;  // Move to the next column in the submatrix
+// Identity matrix for square 2D matrices
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> Matrix<T, Dims...>::identity() requires (ndims == 2 && nth_element<0, Dims...>::value == nth_element<1, Dims...>::value)
+{
+    constexpr size_t N = dimensions[0];
+    Matrix<T, N, N> I;
+    
+    for (size_t i = 0; i < N; ++i) {
+        for (size_t j = 0; j < N; ++j) {
+            I(i, j) = (i == j) ? T{1} : T{0};
+        }
     }
-    sub_r++;  // Move to the next row in the submatrix
-  }
-  return sub;
+    return I;
 }
 
-template <typename T, size_t ROWS, size_t COLS>
-std::ostream& operator<<(std::ostream& os, const Matrix<T, ROWS, COLS>& matrix)
+// Slicing for 2D matrices (backward compatibility)
+template <Numeric T, size_t... Dims>
+template <size_t SubRows, size_t SubCols>
+auto Matrix<T, Dims...>::slice(size_t startRow, size_t startCol) const -> Matrix<T, SubRows, SubCols> requires (ndims == 2)
 {
-  // Delegate to your existing description method
-  os << matrix.description();
-  return os;
+    if (startRow + SubRows > dimensions[0] || startCol + SubCols > dimensions[1]) {
+        throw std::out_of_range("Slice exceeds original matrix bounds");
+    }
+    
+    Matrix<T, SubRows, SubCols> result;
+    
+    for (size_t i = 0; i < SubRows; ++i) {
+        for (size_t j = 0; j < SubCols; ++j) {
+            result(i, j) = (*this)(startRow + i, startCol + j);
+        }
+    }
+    
+    return result;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator+(const Matrix<T, R, C>& A, const Matrix<T, R, C>& B)
+// Set slice for 2D matrices (backward compatibility)
+template <Numeric T, size_t... Dims>
+template <size_t SubRows, size_t SubCols>
+void Matrix<T, Dims...>::setSlice(size_t row, size_t col, const Matrix<T, SubRows, SubCols>& sub) requires (ndims == 2)
 {
-  Matrix<T, R, C> result;
-  for (size_t i = 0; i < R * C; i++) {
-    result.data[i] = A.data[i] + B.data[i];
-  }
-  return result;
+    if (row + SubRows > dimensions[0] || col + SubCols > dimensions[1]) {
+        throw std::out_of_range("Slice exceeds original matrix bounds");
+    }
+    
+    for (size_t i = 0; i < SubRows; ++i) {
+        for (size_t j = 0; j < SubCols; ++j) {
+            (*this)(row + i, col + j) = sub(i, j);
+        }
+    }
 }
 
-// Matrix + Scalar
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator+(const Matrix<T, R, C>& A, const T& B)
+// Determinant for square 2D matrices
+template <Numeric T, size_t... Dims>
+T Matrix<T, Dims...>::determinant() const requires (ndims == 2 && nth_element<0, Dims...>::value == nth_element<1, Dims...>::value)
 {
-  Matrix<T, R, C> result;
-  for (size_t i = 0; i < R * C; i++) {
-    result.data[i] = A.data[i] + B;
-  }
-  return result;
+    constexpr size_t N = dimensions[0];
+    
+    if constexpr (N == 1) {
+        return (*this)(0, 0);
+    } else if constexpr (N == 2) {
+        return ((*this)(0, 0) * (*this)(1, 1)) - ((*this)(0, 1) * (*this)(1, 0));
+    } else {
+        T det = T{0};
+        T sign = T{1};
+        
+        for (size_t j = 0; j < N; ++j) {
+            Matrix<T, N-1, N-1> minor_matrix = _createSubmatrix(0, j);
+            T minor_determinant = minor_matrix.determinant();
+            det += sign * (*this)(0, j) * minor_determinant;
+            sign = -sign;
+        }
+        return det;
+    }
 }
 
-// Scalar + Matrix
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator+(const T& A, const Matrix<T, R, C>& B)
+// Helper for determinant
+template <Numeric T, size_t... Dims>
+auto Matrix<T, Dims...>::_createSubmatrix(size_t skip_row, size_t skip_col) const requires (ndims == 2)
 {
-  Matrix<T, R, C> result;
-  for (size_t i = 0; i < R * C; i++) {
-    result.data[i] = B.data[i] + A;
-  }
-  return result;
+    constexpr size_t N = dimensions[0];
+    Matrix<T, N-1, N-1> sub;
+    size_t sub_r = 0;
+    
+    for (size_t r = 0; r < N; ++r) {
+        if (r == skip_row) continue;
+        
+        size_t sub_c = 0;
+        for (size_t c = 0; c < N; ++c) {
+            if (c == skip_col) continue;
+            sub(sub_r, sub_c) = (*this)(r, c);
+            sub_c++;
+        }
+        sub_r++;
+    }
+    return sub;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator-(const Matrix<T, R, C>& A, const Matrix<T, R, C>& B)
+// Operator<< implementation
+template <Numeric T, size_t... Dims>
+std::ostream& operator<<(std::ostream& os, const Matrix<T, Dims...>& matrix)
 {
-  Matrix<T, R, C> result;
-  for (size_t i = 0; i < R * C; i++) {
-    result.data[i] = A.data[i] - B.data[i];
-  }
-  return result;
+    os << matrix.description();
+    return os;
 }
 
-// Matrix negation
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator-(const Matrix<T, R, C>& A)
+// Element-wise operations
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator+(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B)
 {
-  Matrix<T, R, C> result;
-  for (size_t i = 0; i < R * C; i++) {
-    result.data[i] = -A.data[i];
-  }
-  return result;
+    Matrix<T, Dims...> result;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        result.data[i] = A.data[i] + B.data[i];
+    }
+    return result;
 }
 
-// Matrix - Scalar
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator-(const Matrix<T, R, C>& A, const T& B)
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator+(const Matrix<T, Dims...>& A, const T& B)
 {
-  Matrix<T, R, C> result;
-  for (size_t i = 0; i < R * C; i++) {
-    result.data[i] = A.data[i] - B;
-  }
-  return result;
+    Matrix<T, Dims...> result;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        result.data[i] = A.data[i] + B;
+    }
+    return result;
 }
 
-// Scalar + Matrix
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator-(const T& A, const Matrix<T, R, C>& B)
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator+(const T& A, const Matrix<T, Dims...>& B)
 {
-  Matrix<T, R, C> result;
-  for (size_t i = 0; i < R * C; i++) {
-    result.data[i] = A - B.data[i];
-  }
-  return result;
+    return B + A;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator*(T scalar, const Matrix<T, R, C>& A)
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B)
 {
-  Matrix<T, R, C> result;
-  for (size_t i = 0; i < R * C; i++) {
-    result.data[i] = scalar * A.data[i];
-  }
-  return result;
+    Matrix<T, Dims...> result;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        result.data[i] = A.data[i] - B.data[i];
+    }
+    return result;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator*(const Matrix<T, R, C>& A, T scalar)
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A)
 {
-  return scalar * A;
+    Matrix<T, Dims...> result;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        result.data[i] = -A.data[i];
+    }
+    return result;
 }
 
-template <typename T, size_t R, size_t C, size_t K>
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A, const T& B)
+{
+    Matrix<T, Dims...> result;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        result.data[i] = A.data[i] - B;
+    }
+    return result;
+}
+
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator-(const T& A, const Matrix<T, Dims...>& B)
+{
+    Matrix<T, Dims...> result;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        result.data[i] = A - B.data[i];
+    }
+    return result;
+}
+
+// Scalar multiplication
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator*(T scalar, const Matrix<T, Dims...>& A)
+{
+    Matrix<T, Dims...> result;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        result.data[i] = scalar * A.data[i];
+    }
+    return result;
+}
+
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator*(const Matrix<T, Dims...>& A, T scalar)
+{
+    return scalar * A;
+}
+
+// Matrix multiplication for 2D matrices
+template <Numeric T, size_t R, size_t C, size_t K>
 Matrix<T, R, K> operator*(const Matrix<T, R, C>& A, const Matrix<T, C, K>& B)
 {
-  Matrix<T, R, K> result;
-
+    Matrix<T, R, K> result;
+    
 #ifdef USE_ACCELERATION
-  if constexpr (std::is_same_v<T, float> || std::is_same_v<T, int16_t>) {
-    performMultiplication<T, R, C, K>(A.data, B.data, result.data);
-    return result;
-  }
-#endif  // USE_ACCELERATION
-
-  for (size_t i = 0; i < R; i++) {
-    for (size_t j = 0; j < K; j++) {
-      T sum = 0.0f;
-      for (size_t m = 0; m < C; m++) {
-        sum += A(i, m) * B(m, j);
-      }
-      result(i, j) = sum;
+    if constexpr (std::is_same_v<T, float> || std::is_same_v<T, int16_t>) {
+        performMultiplication<T, R, C, K>(A.data, B.data, result.data);
+        return result;
     }
-  }
-  return result;
+#endif
+    
+    for (size_t i = 0; i < R; ++i) {
+        for (size_t j = 0; j < K; ++j) {
+            T sum = T{0};
+            for (size_t m = 0; m < C; ++m) {
+                sum += A(i, m) * B(m, j);
+            }
+            result(i, j) = sum;
+        }
+    }
+    return result;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C> operator%(const Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs)
+// Element-wise multiplication
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...> operator%(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs)
 {
-  Matrix<T, R, C> result;
-  for (size_t i = 0; i < R * C; i++) {
-    result.data[i] = lhs.data[i] * rhs.data[i];
-  }
-  return result;
+    Matrix<T, Dims...> result;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        result.data[i] = lhs.data[i] * rhs.data[i];
+    }
+    return result;
 }
 
-template <typename T, size_t R, size_t C, size_t K>
-Matrix<T, R, C>& operator*=(Matrix<T, R, C>& lhs, const Matrix<T, C, K>& rhs)
+// Compound assignment operators
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator+=(Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs)
 {
-  lhs = lhs * rhs;
-  return lhs;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        lhs.data[i] += rhs.data[i];
+    }
+    return lhs;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C>& operator/=(Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs)
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator-=(Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs)
 {
-  lhs = lhs / rhs;
-  return lhs;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        lhs.data[i] -= rhs.data[i];
+    }
+    return lhs;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C>& operator+=(Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs)
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator+=(Matrix<T, Dims...>& lhs, const T& rhs)
 {
-  for (size_t i = 0; i < R * C; i++) lhs.data[i] += rhs.data[i];
-  return lhs;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        lhs.data[i] += rhs;
+    }
+    return lhs;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C>& operator-=(Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs)
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator-=(Matrix<T, Dims...>& lhs, const T& rhs)
 {
-  for (size_t i = 0; i < R * C; i++) lhs.data[i] -= rhs.data[i];
-  return lhs;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        lhs.data[i] -= rhs;
+    }
+    return lhs;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C>& operator+=(Matrix<T, R, C>& lhs, const T& rhs)
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator*=(Matrix<T, Dims...>& lhs, const T& rhs)
 {
-  for (size_t i = 0; i < R * C; i++) lhs.data[i] += rhs;
-  return lhs;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        lhs.data[i] *= rhs;
+    }
+    return lhs;
 }
 
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C>& operator-=(Matrix<T, R, C>& lhs, const T& rhs)
+template <Numeric T, size_t... Dims>
+Matrix<T, Dims...>& operator/=(Matrix<T, Dims...>& lhs, const T& rhs)
 {
-  for (size_t i = 0; i < R * C; i++) lhs.data[i] -= rhs;
-  return lhs;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        lhs.data[i] /= rhs;
+    }
+    return lhs;
 }
 
-// matrix += scalar
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C>& operator*=(Matrix<T, R, C>& lhs, const T& rhs)
+// Comparison operators
+template <Numeric T, size_t... Dims>
+bool operator==(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs)
 {
-  for (size_t i = 0; i < R * C; i++) lhs.data[i] *= rhs;
-  return lhs;
+    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
+        if (lhs.data[i] != rhs.data[i]) return false;
+    }
+    return true;
 }
 
-// matrix -= scalar
-template <typename T, size_t R, size_t C>
-Matrix<T, R, C>& operator/=(Matrix<T, R, C>& lhs, const T& rhs)
+template <Numeric T, size_t... Dims>
+bool operator!=(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs)
 {
-  for (size_t i = 0; i < R * C; i++) lhs.data[i] /= rhs;
-  return lhs;
-}
-
-template <typename T, size_t R, size_t C>
-bool operator==(const Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs)
-{
-  for (size_t i = 0; i < R * C; i++) {
-    if (lhs.data[i] != rhs.data[i]) return false;
-  }
-  return true;
-}
-
-template <typename T, size_t R, size_t C>
-bool operator!=(const Matrix<T, R, C>& lhs, const Matrix<T, R, C>& rhs)
-{
-  return !(lhs == rhs);
+    return !(lhs == rhs);
 }
