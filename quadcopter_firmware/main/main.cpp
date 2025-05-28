@@ -1,5 +1,3 @@
-
-
 #ifndef MATLAB_SIM
 
 #include <DebugHelper.h>
@@ -23,6 +21,7 @@
 #include "ExtendedKalmanFilter.h"
 #include "Filters/KalmanFilter.h"
 #include "Filters/MedianFilter.h"
+#include "GPSService.h"
 #include "IMU.h"
 #include "LEDController.h"
 #include "Logger.h"
@@ -119,6 +118,8 @@ static MagnetometerCalibrator *_magCalibrator;
 static Barometer _barometer;
 static bool _receivedAltitudeUpdate = false;
 static float _relativeAltitudeMeters = 0.0f;
+
+static GPSService* _gpsService = nullptr;
 
 MotorMagCompensationHandler *_motorMagCompensationHandler;
 
@@ -611,6 +612,25 @@ void setup()
       0x29 /* i2c bus address */,
       &Wire);
 
+  LOG_INFO("Initializing GPS service");
+  _gpsService = new GPSService(GPS_RX_PIN, GPS_TX_PIN, [&](const gps_fix_info_t& fix) {
+    // GPS fix callback
+    static uint32_t lastGPSLogMs = 0;
+    uint32_t currentMs = millis();
+    
+    // Log GPS fix periodically (every 5 seconds)
+    if (currentMs - lastGPSLogMs > 5000) {
+      lastGPSLogMs = currentMs;
+      LOG_INFO("GPS Fix: Lat=%.6f, Lon=%.6f, Alt=%.1fm, Sats=%d, HDOP=%.1f",
+               fix.latitude, fix.longitude, fix.altitude, fix.satellites, fix.hdop);
+    }
+    
+    // Always send telemetry data
+    gps_telem_event_t telemData = _gpsService->getTelemetryData();
+    _telemetryController->updateTelemetryEvent(TelemetryEvent::GPSFixData, &telemData, sizeof(gps_telem_event_t));
+  });
+  _gpsService->begin();
+
   LOG_INFO("Initializing battery controller");
   _batteryController = new BatteryController(_telemetryController, &_bluetoothController, _helper);
 
@@ -805,6 +825,11 @@ void loop()
   _batteryController->loopHandler();
   _barometer.loopHandler();
   _vl53Manager.loopHandler();
+  
+  if (_gpsService) {
+    _gpsService->loopHandler();
+    
+  }
 
   _handleFirstStagePreCalibrationIfNeeded();
 

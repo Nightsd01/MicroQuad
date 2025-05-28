@@ -19,4 +19,5 @@ CROSS_PLATFORM_ENUM(uint8_t, TelemetryEvent){
     VL53L1XEstimatedAltitudeUpdate = 13,
     EKFAltitudeEstimate = 14,
     EKFVerticalVelocityEstimate = 15,
+    GPSFixData = 16,
 };

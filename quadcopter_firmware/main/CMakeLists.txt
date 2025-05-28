@@ -42,6 +42,7 @@ idf_component_register(
     REQUIRES Adafruit_BME280
     REQUIRES esp-dsp
     REQUIRES VL53L1X
+    REQUIRES TinyGPSPlus
 )
 
 target_compile_definitions(${COMPONENT_TARGET} PUBLIC "-DENABLE_EMERGENCY_MODE")
