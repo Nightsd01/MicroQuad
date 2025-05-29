@@ -18,6 +18,37 @@ struct BLEStatusView: View {
     self.armStatusController = armStatusController
   }
   
+  // Convert decimal degrees to degrees/minutes/seconds format
+  private func formatCoordinate(_ decimal: Float32, isLatitude: Bool) -> String {
+    let absDecimal = abs(decimal)
+    let degrees = Int(absDecimal)
+    let minutesDecimal = (absDecimal - Float32(degrees)) * 60
+    let minutes = Int(minutesDecimal)
+    let secondsDecimal = (minutesDecimal - Float32(minutes)) * 60
+    let seconds = Int(secondsDecimal)
+    
+    let direction = if isLatitude {
+      decimal >= 0 ? "N" : "S"
+    } else {
+      decimal >= 0 ? "E" : "W"
+    }
+    
+    return "\(direction)\(degrees)°\(minutes)'\(seconds)\""
+  }
+  
+  // Get appropriate emoji for HDOP quality
+  private func hdopEmoji(_ hdop: Float32, fixQuality: UInt8) -> String {
+    if fixQuality == 0 {
+      return "❌"  // No fix
+    } else if hdop <= 2.0 {
+      return "✅"  // Excellent
+    } else if hdop <= 5.0 {
+      return "⚠️"  // Good/moderate
+    } else {
+      return "❌"  // Poor
+    }
+  }
+  
   var body: some View {
     VStack {
       VStack {
@@ -81,6 +112,27 @@ struct BLEStatusView: View {
           }
         } else {
           Text("No Mag").bold()
+        }
+        if let gps = status.gpsData {
+          HStack {
+            Text("GPS: ").bold()
+            if gps.fixQuality > 0 && (gps.latitude != 0.0 || gps.longitude != 0.0) {
+              // Valid fix with coordinates
+              Text("\(formatCoordinate(gps.latitude, isLatitude: true)) \(formatCoordinate(gps.longitude, isLatitude: false))  🛰️\(gps.satellites)  \(hdopEmoji(gps.hdop, fixQuality: gps.fixQuality))\(String(format: "%.1fm", gps.hdop))")
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            } else {
+              // No valid fix but GPS is responding
+              Text("Searching...  🛰️\(gps.satellites)  \(hdopEmoji(gps.hdop, fixQuality: gps.fixQuality))\(gps.fixQuality != 0 ? String(format: "%.1fm", gps.hdop) : "")")
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            }
+          }
+        } else {
+          HStack {
+            Text("GPS: ").bold()
+            Text("No GPS")
+          }
         }
       }
       Spacer()

@@ -18,6 +18,16 @@ public struct MemoryStatus {
   let totalHeapSizeByteCount : UInt32
 }
 
+// GPS telemetry data structure matching gps_telem_event_t
+public struct GPSData {
+  let latitude: Float32       // 4 bytes
+  let longitude: Float32      // 4 bytes
+  let altitude: Float32       // 4 bytes
+  let hdop: Float32          // 4 bytes
+  let satellites: UInt8      // 1 byte
+  let fixQuality: UInt8      // 1 byte
+}
+
 public class QuadStatus : ObservableObject {
   @Published var rssi : Double?
   @Published var connected = false
@@ -38,6 +48,7 @@ public class QuadStatus : ObservableObject {
   @Published var memoryStatus : MemoryStatus?
   @Published var loopUpdateRateHz : UInt64?
   @Published var imuUpdateRateHz : UInt64?
+  @Published var gpsData : GPSData?
   
   public weak var armStatusListener : ArmStatusListener?
   
@@ -198,6 +209,31 @@ public class QuadStatus : ObservableObject {
           return
         }
         self.verticalVelocityEstimate = Double(values[0])
+        break
+      case .GPSFixData:
+        // Parse GPS data structure with mixed types
+        guard payload.count >= 18 else {
+          print("ERROR: Received invalid \(type) update - insufficient data")
+          return
+        }
+        
+        payload.withUnsafeBytes { (pointer: UnsafeRawBufferPointer) in
+          let latitude = pointer.load(fromByteOffset: 0, as: Float32.self)
+          let longitude = pointer.load(fromByteOffset: 4, as: Float32.self)
+          let altitude = pointer.load(fromByteOffset: 8, as: Float32.self)
+          let hdop = pointer.load(fromByteOffset: 12, as: Float32.self)
+          let satellites = pointer.load(fromByteOffset: 16, as: UInt8.self)
+          let fixQuality = pointer.load(fromByteOffset: 17, as: UInt8.self)
+          
+          self.gpsData = GPSData(
+            latitude: latitude,
+            longitude: longitude,
+            altitude: altitude,
+            hdop: hdop,
+            satellites: satellites,
+            fixQuality: fixQuality
+          )
+        }
         break
       default:
         print("ERROR: Received invalid \(type) update case")

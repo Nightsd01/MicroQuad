@@ -20,6 +20,16 @@ Ultimately, this project will be broken up into components that will make it eas
 - Run `idf.py build` to check if the project builds
 - Run `idf.py flash` to flash to a connected ESP32
 
+### To Build iOS
+- Run the following command and make sure it emits `"BUILD SUCCEEDED"`:
+```
+xcodebuild build \
+  -project QuadController.xcodeproj \
+  -scheme QuadController \
+  -sdk iphonesimulator \
+  -configuration Debug 
+```
+
 ### To Debug in VS Code 
 - Launch OpenOCD using the command `idf.py openocd`
 - In VS Code's debug menu click 'Start Debugging' with the [Eclipse CDT Remote](https://github.com/espressif/vscode-esp-idf-extension/blob/master/docs/DEBUGGING.md) target
