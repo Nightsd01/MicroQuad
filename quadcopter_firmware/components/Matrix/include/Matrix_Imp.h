@@ -311,88 +311,60 @@ std::ostream& operator<<(std::ostream& os, const Matrix<T, Dims...>& matrix)
     return os;
 }
 
-// Element-wise operations
+// Element-wise operations - now return expression templates
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator+(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B)
+auto operator+(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B) -> AddExpr<MatrixExpr<T, Dims...>, MatrixExpr<T, Dims...>>
 {
-    Matrix<T, Dims...> result;
-    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
-        result.data[i] = A.data[i] + B.data[i];
-    }
-    return result;
+    return AddExpr<MatrixExpr<T, Dims...>, MatrixExpr<T, Dims...>>(MatrixExpr<T, Dims...>(A), MatrixExpr<T, Dims...>(B));
 }
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator+(const Matrix<T, Dims...>& A, const T& B)
+auto operator+(const Matrix<T, Dims...>& A, const T& B) -> ScalarAddExpr<MatrixExpr<T, Dims...>>
 {
-    Matrix<T, Dims...> result;
-    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
-        result.data[i] = A.data[i] + B;
-    }
-    return result;
+    return ScalarAddExpr<MatrixExpr<T, Dims...>>(MatrixExpr<T, Dims...>(A), B);
 }
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator+(const T& A, const Matrix<T, Dims...>& B)
+auto operator+(const T& A, const Matrix<T, Dims...>& B) -> ScalarAddExpr<MatrixExpr<T, Dims...>>
 {
-    return B + A;
+    return ScalarAddExpr<MatrixExpr<T, Dims...>>(MatrixExpr<T, Dims...>(B), A);
 }
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B)
+auto operator-(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B) -> SubExpr<MatrixExpr<T, Dims...>, MatrixExpr<T, Dims...>>
 {
-    Matrix<T, Dims...> result;
-    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
-        result.data[i] = A.data[i] - B.data[i];
-    }
-    return result;
+    return SubExpr<MatrixExpr<T, Dims...>, MatrixExpr<T, Dims...>>(MatrixExpr<T, Dims...>(A), MatrixExpr<T, Dims...>(B));
 }
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A)
+auto operator-(const Matrix<T, Dims...>& A) -> NegExpr<MatrixExpr<T, Dims...>>
 {
-    Matrix<T, Dims...> result;
-    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
-        result.data[i] = -A.data[i];
-    }
-    return result;
+    return NegExpr<MatrixExpr<T, Dims...>>(MatrixExpr<T, Dims...>(A));
 }
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A, const T& B)
+auto operator-(const Matrix<T, Dims...>& A, const T& B) -> ScalarSubExpr<MatrixExpr<T, Dims...>>
 {
-    Matrix<T, Dims...> result;
-    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
-        result.data[i] = A.data[i] - B;
-    }
-    return result;
+    return ScalarSubExpr<MatrixExpr<T, Dims...>>(MatrixExpr<T, Dims...>(A), B);
 }
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator-(const T& A, const Matrix<T, Dims...>& B)
+auto operator-(const T& A, const Matrix<T, Dims...>& B) -> ReverseScalarSubExpr<MatrixExpr<T, Dims...>>
 {
-    Matrix<T, Dims...> result;
-    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
-        result.data[i] = A - B.data[i];
-    }
-    return result;
+    return ReverseScalarSubExpr<MatrixExpr<T, Dims...>>(A, MatrixExpr<T, Dims...>(B));
 }
 
 // Scalar multiplication
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator*(T scalar, const Matrix<T, Dims...>& A)
+auto operator*(T scalar, const Matrix<T, Dims...>& A) -> ScalarMulExpr<MatrixExpr<T, Dims...>>
 {
-    Matrix<T, Dims...> result;
-    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
-        result.data[i] = scalar * A.data[i];
-    }
-    return result;
+    return ScalarMulExpr<MatrixExpr<T, Dims...>>(MatrixExpr<T, Dims...>(A), scalar);
 }
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator*(const Matrix<T, Dims...>& A, T scalar)
+auto operator*(const Matrix<T, Dims...>& A, T scalar) -> ScalarMulExpr<MatrixExpr<T, Dims...>>
 {
-    return scalar * A;
+    return ScalarMulExpr<MatrixExpr<T, Dims...>>(MatrixExpr<T, Dims...>(A), scalar);
 }
 
 // Matrix multiplication for 2D matrices
@@ -422,13 +394,9 @@ Matrix<T, R, K> operator*(const Matrix<T, R, C>& A, const Matrix<T, C, K>& B)
 
 // Element-wise multiplication
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator%(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs)
+auto operator%(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs) -> MulExpr<MatrixExpr<T, Dims...>, MatrixExpr<T, Dims...>>
 {
-    Matrix<T, Dims...> result;
-    for (size_t i = 0; i < Matrix<T, Dims...>::total_size; ++i) {
-        result.data[i] = lhs.data[i] * rhs.data[i];
-    }
-    return result;
+    return MulExpr<MatrixExpr<T, Dims...>, MatrixExpr<T, Dims...>>(MatrixExpr<T, Dims...>(lhs), MatrixExpr<T, Dims...>(rhs));
 }
 
 // Compound assignment operators
@@ -500,4 +468,203 @@ template <Numeric T, size_t... Dims>
 bool operator!=(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs)
 {
     return !(lhs == rhs);
+}
+
+// Expression template operators for chaining
+template<typename LHS, typename RHS>
+auto operator+(const LHS& lhs, const RHS& rhs) -> AddExpr<LHS, RHS>
+requires requires {
+    typename LHS::value_type;
+    typename RHS::value_type;
+    { LHS::total_size } -> std::convertible_to<size_t>;
+    { RHS::total_size } -> std::convertible_to<size_t>;
+    { lhs.eval(size_t{}) } -> std::convertible_to<typename LHS::value_type>;
+    { rhs.eval(size_t{}) } -> std::convertible_to<typename RHS::value_type>;
+}
+{
+    return AddExpr<LHS, RHS>(lhs, rhs);
+}
+
+template<typename LHS, typename RHS>
+auto operator-(const LHS& lhs, const RHS& rhs) -> SubExpr<LHS, RHS>
+requires requires {
+    typename LHS::value_type;
+    typename RHS::value_type;
+    { LHS::total_size } -> std::convertible_to<size_t>;
+    { RHS::total_size } -> std::convertible_to<size_t>;
+    { lhs.eval(size_t{}) } -> std::convertible_to<typename LHS::value_type>;
+    { rhs.eval(size_t{}) } -> std::convertible_to<typename RHS::value_type>;
+}
+{
+    return SubExpr<LHS, RHS>(lhs, rhs);
+}
+
+template<typename LHS, typename RHS>
+auto operator%(const LHS& lhs, const RHS& rhs) -> MulExpr<LHS, RHS>
+requires requires {
+    typename LHS::value_type;
+    typename RHS::value_type;
+    { LHS::total_size } -> std::convertible_to<size_t>;
+    { RHS::total_size } -> std::convertible_to<size_t>;
+    { lhs.eval(size_t{}) } -> std::convertible_to<typename LHS::value_type>;
+    { rhs.eval(size_t{}) } -> std::convertible_to<typename RHS::value_type>;
+}
+{
+    return MulExpr<LHS, RHS>(lhs, rhs);
+}
+
+template<typename Operand>
+auto operator-(const Operand& operand) -> NegExpr<Operand>
+requires requires {
+    typename Operand::value_type;
+    { Operand::total_size } -> std::convertible_to<size_t>;
+    { operand.eval(size_t{}) } -> std::convertible_to<typename Operand::value_type>;
+}
+{
+    return NegExpr<Operand>(operand);
+}
+
+// Mixed Matrix + Expression operators
+template <Numeric T, size_t... Dims, typename Expr>
+auto operator+(const Matrix<T, Dims...>& A, const Expr& B) -> AddExpr<MatrixExpr<T, Dims...>, Expr>
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { B.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == Matrix<T, Dims...>::total_size) && std::is_same_v<typename Expr::value_type, T>
+{
+    return AddExpr<MatrixExpr<T, Dims...>, Expr>(MatrixExpr<T, Dims...>(A), B);
+}
+
+template <Numeric T, size_t... Dims, typename Expr>
+auto operator+(const Expr& A, const Matrix<T, Dims...>& B) -> AddExpr<Expr, MatrixExpr<T, Dims...>>
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { A.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == Matrix<T, Dims...>::total_size) && std::is_same_v<typename Expr::value_type, T>
+{
+    return AddExpr<Expr, MatrixExpr<T, Dims...>>(A, MatrixExpr<T, Dims...>(B));
+}
+
+// Mixed Matrix - Expression operators
+template <Numeric T, size_t... Dims, typename Expr>
+auto operator-(const Matrix<T, Dims...>& A, const Expr& B) -> SubExpr<MatrixExpr<T, Dims...>, Expr>
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { B.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == Matrix<T, Dims...>::total_size) && std::is_same_v<typename Expr::value_type, T>
+{
+    return SubExpr<MatrixExpr<T, Dims...>, Expr>(MatrixExpr<T, Dims...>(A), B);
+}
+
+template <Numeric T, size_t... Dims, typename Expr>
+auto operator-(const Expr& A, const Matrix<T, Dims...>& B) -> SubExpr<Expr, MatrixExpr<T, Dims...>>
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { A.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == Matrix<T, Dims...>::total_size) && std::is_same_v<typename Expr::value_type, T>
+{
+    return SubExpr<Expr, MatrixExpr<T, Dims...>>(A, MatrixExpr<T, Dims...>(B));
+}
+
+// Matrix multiplication with expressions - convert expression to Matrix first
+template <Numeric T, size_t R, size_t C, size_t K, typename Expr>
+Matrix<T, R, K> operator*(const Matrix<T, R, C>& A, const Expr& B)
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { B.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == C * K) && std::is_same_v<typename Expr::value_type, T>
+{
+    // Convert expression to Matrix first, then multiply
+    Matrix<T, C, K> B_matrix;
+    for (size_t i = 0; i < C * K; ++i) {
+        B_matrix.data[i] = B.eval(i);
+    }
+    return A * B_matrix;
+}
+
+template <Numeric T, size_t R, size_t C, size_t K, typename Expr>
+Matrix<T, R, K> operator*(const Expr& A, const Matrix<T, C, K>& B)
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { A.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == R * C) && std::is_same_v<typename Expr::value_type, T>
+{
+    // Convert expression to Matrix first, then multiply
+    Matrix<T, R, C> A_matrix;
+    for (size_t i = 0; i < R * C; ++i) {
+        A_matrix.data[i] = A.eval(i);
+    }
+    return A_matrix * B;
+}
+
+// Specific overloads for common matrix-vector multiplications
+template <Numeric T, typename Expr>
+Matrix<T, 3, 1> operator*(const Matrix<T, 3, 3>& A, const Expr& B)
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { B.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == 3) && std::is_same_v<typename Expr::value_type, T>
+{
+    // Convert expression to Matrix first, then multiply
+    Matrix<T, 3, 1> B_matrix;
+    for (size_t i = 0; i < 3; ++i) {
+        B_matrix.data[i] = B.eval(i);
+    }
+    return A * B_matrix;
+}
+
+template <Numeric T, typename Expr>
+Matrix<T, 4, 1> operator*(const Matrix<T, 4, 4>& A, const Expr& B)
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { B.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == 4) && std::is_same_v<typename Expr::value_type, T>
+{
+    // Convert expression to Matrix first, then multiply
+    Matrix<T, 4, 1> B_matrix;
+    for (size_t i = 0; i < 4; ++i) {
+        B_matrix.data[i] = B.eval(i);
+    }
+    return A * B_matrix;
+}
+
+template <Numeric T, typename Expr>
+Matrix<T, 10, 1> operator*(const Matrix<T, 10, 10>& A, const Expr& B)
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { B.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == 10) && std::is_same_v<typename Expr::value_type, T>
+{
+    // Convert expression to Matrix first, then multiply
+    Matrix<T, 10, 1> B_matrix;
+    for (size_t i = 0; i < 10; ++i) {
+        B_matrix.data[i] = B.eval(i);
+    }
+    return A * B_matrix;
+}
+
+// Expression * Matrix multiplication for common cases
+template <Numeric T, typename Expr>
+Matrix<T, 10, 10> operator*(const Expr& A, const Matrix<T, 1, 10>& B)
+requires requires {
+    typename Expr::value_type;
+    { Expr::total_size } -> std::convertible_to<size_t>;
+    { A.eval(size_t{}) } -> std::convertible_to<T>;
+} && (Expr::total_size == 10) && std::is_same_v<typename Expr::value_type, T>
+{
+    // Convert expression to Matrix first, then multiply
+    Matrix<T, 10, 1> A_matrix;
+    for (size_t i = 0; i < 10; ++i) {
+        A_matrix.data[i] = A.eval(i);
+    }
+    return A_matrix * B;
 }

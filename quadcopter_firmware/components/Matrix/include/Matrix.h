@@ -109,6 +109,37 @@ public:
         }
     }
 
+    // Expression template assignment operator
+    template<typename Expr>
+    Matrix& operator=(const Expr& expr) requires requires {
+        typename Expr::value_type;
+        { Expr::total_size } -> std::convertible_to<size_t>;
+        { expr.eval(size_t{}) } -> std::convertible_to<T>;
+    } {
+        static_assert(Expr::total_size == total_size, "Expression and matrix dimensions must match");
+        static_assert(std::is_convertible_v<typename Expr::value_type, T>, "Expression value type must be convertible to matrix element type");
+        
+        for (size_t i = 0; i < total_size; ++i) {
+            data[i] = expr.eval(i);
+        }
+        return *this;
+    }
+
+    // Expression template constructor
+    template<typename Expr>
+    Matrix(const Expr& expr) requires requires {
+        typename Expr::value_type;
+        { Expr::total_size } -> std::convertible_to<size_t>;
+        { expr.eval(size_t{}) } -> std::convertible_to<T>;
+    } {
+        static_assert(Expr::total_size == total_size, "Expression and matrix dimensions must match");
+        static_assert(std::is_convertible_v<typename Expr::value_type, T>, "Expression value type must be convertible to matrix element type");
+        
+        for (size_t i = 0; i < total_size; ++i) {
+            data[i] = expr.eval(i);
+        }
+    }
+
     // General element access using variadic indices
     template<typename... Indices>
     T& operator()(Indices... indices) requires (sizeof...(indices) == ndims) {
@@ -200,46 +231,91 @@ using Vector = Matrix<T, 1>;
 template<Numeric T, size_t N>
 using SquareMatrix = Matrix<T, N, N>;
 
+// Include expression templates
+#include "Matrix_ExpressionTemplates.h"
+
 // Operator overloads
 template <Numeric T, size_t... Dims>
 std::ostream& operator<<(std::ostream& os, const Matrix<T, Dims...>& matrix);
 
-// Element-wise operations
+// Element-wise operations - now return expression templates
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator+(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B);
+auto operator+(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B) -> AddExpr<MatrixExpr<T, Dims...>, MatrixExpr<T, Dims...>>;
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator+(const Matrix<T, Dims...>& A, const T& B);
+auto operator+(const Matrix<T, Dims...>& A, const T& B) -> ScalarAddExpr<MatrixExpr<T, Dims...>>;
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator+(const T& A, const Matrix<T, Dims...>& B);
+auto operator+(const T& A, const Matrix<T, Dims...>& B) -> ScalarAddExpr<MatrixExpr<T, Dims...>>;
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B);
+auto operator-(const Matrix<T, Dims...>& A, const Matrix<T, Dims...>& B) -> SubExpr<MatrixExpr<T, Dims...>, MatrixExpr<T, Dims...>>;
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A);
+auto operator-(const Matrix<T, Dims...>& A) -> NegExpr<MatrixExpr<T, Dims...>>;
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator-(const Matrix<T, Dims...>& A, const T& B);
+auto operator-(const Matrix<T, Dims...>& A, const T& B) -> ScalarSubExpr<MatrixExpr<T, Dims...>>;
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator-(const T& A, const Matrix<T, Dims...>& B);
+auto operator-(const T& A, const Matrix<T, Dims...>& B) -> ReverseScalarSubExpr<MatrixExpr<T, Dims...>>;
 
 // Scalar multiplication
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator*(T scalar, const Matrix<T, Dims...>& A);
+auto operator*(T scalar, const Matrix<T, Dims...>& A) -> ScalarMulExpr<MatrixExpr<T, Dims...>>;
 
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator*(const Matrix<T, Dims...>& A, T scalar);
+auto operator*(const Matrix<T, Dims...>& A, T scalar) -> ScalarMulExpr<MatrixExpr<T, Dims...>>;
 
-// Matrix multiplication for 2D matrices
+// Matrix multiplication for 2D matrices - still returns Matrix (not lazy for now)
 template <Numeric T, size_t R, size_t C, size_t K>
 Matrix<T, R, K> operator*(const Matrix<T, R, C>& A, const Matrix<T, C, K>& B);
 
 // Element-wise multiplication
 template <Numeric T, size_t... Dims>
-Matrix<T, Dims...> operator%(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs);
+auto operator%(const Matrix<T, Dims...>& lhs, const Matrix<T, Dims...>& rhs) -> MulExpr<MatrixExpr<T, Dims...>, MatrixExpr<T, Dims...>>;
+
+// Expression template operators for chaining
+template<typename LHS, typename RHS>
+auto operator+(const LHS& lhs, const RHS& rhs) -> AddExpr<LHS, RHS>
+requires requires {
+    typename LHS::value_type;
+    typename RHS::value_type;
+    { LHS::total_size } -> std::convertible_to<size_t>;
+    { RHS::total_size } -> std::convertible_to<size_t>;
+    { lhs.eval(size_t{}) } -> std::convertible_to<typename LHS::value_type>;
+    { rhs.eval(size_t{}) } -> std::convertible_to<typename RHS::value_type>;
+};
+
+template<typename LHS, typename RHS>
+auto operator-(const LHS& lhs, const RHS& rhs) -> SubExpr<LHS, RHS>
+requires requires {
+    typename LHS::value_type;
+    typename RHS::value_type;
+    { LHS::total_size } -> std::convertible_to<size_t>;
+    { RHS::total_size } -> std::convertible_to<size_t>;
+    { lhs.eval(size_t{}) } -> std::convertible_to<typename LHS::value_type>;
+    { rhs.eval(size_t{}) } -> std::convertible_to<typename RHS::value_type>;
+};
+
+template<typename LHS, typename RHS>
+auto operator%(const LHS& lhs, const RHS& rhs) -> MulExpr<LHS, RHS>
+requires requires {
+    typename LHS::value_type;
+    typename RHS::value_type;
+    { LHS::total_size } -> std::convertible_to<size_t>;
+    { RHS::total_size } -> std::convertible_to<size_t>;
+    { lhs.eval(size_t{}) } -> std::convertible_to<typename LHS::value_type>;
+    { rhs.eval(size_t{}) } -> std::convertible_to<typename RHS::value_type>;
+};
+
+template<typename Operand>
+auto operator-(const Operand& operand) -> NegExpr<Operand>
+requires requires {
+    typename Operand::value_type;
+    { Operand::total_size } -> std::convertible_to<size_t>;
+    { operand.eval(size_t{}) } -> std::convertible_to<typename Operand::value_type>;
+};
 
 // Compound assignment operators
 template <Numeric T, size_t... Dims>
