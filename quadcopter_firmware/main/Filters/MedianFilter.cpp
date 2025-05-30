@@ -20,16 +20,13 @@ template <typename T>
 void MedianFilter<T>::addValue(const T& value)
 {
   // Insert (value, index) into one of the heaps
-  if (_maxHeap.empty() || value <= _maxHeap.top().first) {
+  if (_maxHeap.empty() || value <= getMaxHeapTop()) {
     _maxHeap.push(std::make_pair(value, _index));
   } else {
     _minHeap.push(std::make_pair(value, _index));
   }
 
   _window.emplace_back(value, _index);
-
-  // Balance after adding the new element
-  rebalanceHeaps();
 
   // If the window is too large, remove the oldest element
   if (_window.size() > _windowSize) {
@@ -38,14 +35,10 @@ void MedianFilter<T>::addValue(const T& value)
 
     // Mark old element for delayed removal
     _delayedElements.insert(old.second);
-
-    // Clean up any delayed elements now at the top
-    removeDelayedElements(_maxHeap, true);
-    removeDelayedElements(_minHeap, false);
-
-    // Rebalance again if needed after removals
-    rebalanceHeaps();
   }
+
+  // Clean up delayed elements and rebalance
+  cleanupAndRebalance();
 
   ++_index;
 }
@@ -53,31 +46,66 @@ void MedianFilter<T>::addValue(const T& value)
 template <typename T>
 T MedianFilter<T>::getMedian() const
 {
-  if (_maxHeap.empty() && _minHeap.empty()) {
+  if (getValidMaxHeapSize() == 0 && getValidMinHeapSize() == 0) {
     throw std::runtime_error("No data available to compute median.");
   }
 
+  size_t maxSize = getValidMaxHeapSize();
+  size_t minSize = getValidMinHeapSize();
+
   // If sizes are equal, median is average of tops
-  if (_maxHeap.size() == _minHeap.size()) {
-    double val = (static_cast<double>(_maxHeap.top().first) + static_cast<double>(_minHeap.top().first)) / 2.0;
+  if (maxSize == minSize) {
+    double val = (static_cast<double>(getMaxHeapTop()) + static_cast<double>(getMinHeapTop())) / 2.0;
     return static_cast<T>(val);
-  } else if (_maxHeap.size() > _minHeap.size()) {
-    return _maxHeap.top().first;
+  } else if (maxSize > minSize) {
+    return getMaxHeapTop();
   } else {
-    return _minHeap.top().first;
+    return getMinHeapTop();
   }
+}
+
+template <typename T>
+void MedianFilter<T>::cleanupAndRebalance()
+{
+  // Clean up delayed elements from both heaps
+  removeDelayedElements(_maxHeap, true);
+  removeDelayedElements(_minHeap, false);
+
+  // Rebalance heaps to maintain median property
+  rebalanceHeaps();
 }
 
 template <typename T>
 void MedianFilter<T>::rebalanceHeaps()
 {
+  size_t maxSize = getValidMaxHeapSize();
+  size_t minSize = getValidMinHeapSize();
+
   // Ensure heaps differ in size by at most 1
-  if (_maxHeap.size() > _minHeap.size() + 1) {
-    _minHeap.push(_maxHeap.top());
+  while (maxSize > minSize + 1) {
+    // Move from max heap to min heap
+    auto top = getMaxHeapTop();
+    size_t topIndex = getMaxHeapTopIndex();
     _maxHeap.pop();
-  } else if (_minHeap.size() > _maxHeap.size() + 1) {
-    _maxHeap.push(_minHeap.top());
+    removeDelayedElements(_maxHeap, true);  // Clean up after pop
+    
+    _minHeap.push(std::make_pair(top, topIndex));
+    
+    maxSize = getValidMaxHeapSize();
+    minSize = getValidMinHeapSize();
+  }
+  
+  while (minSize > maxSize + 1) {
+    // Move from min heap to max heap
+    auto top = getMinHeapTop();
+    size_t topIndex = getMinHeapTopIndex();
     _minHeap.pop();
+    removeDelayedElements(_minHeap, false);  // Clean up after pop
+    
+    _maxHeap.push(std::make_pair(top, topIndex));
+    
+    maxSize = getValidMaxHeapSize();
+    minSize = getValidMinHeapSize();
   }
 }
 
@@ -102,6 +130,104 @@ void MedianFilter<T>::removeDelayedElements(
     _delayedElements.erase(heap.top().second);
     heap.pop();
   }
+}
+
+template <typename T>
+T MedianFilter<T>::getMaxHeapTop() const
+{
+  // Clean up delayed elements first
+  while (!_maxHeap.empty() && _delayedElements.find(_maxHeap.top().second) != _delayedElements.end()) {
+    const_cast<MedianFilter<T>*>(this)->_delayedElements.erase(_maxHeap.top().second);
+    const_cast<MedianFilter<T>*>(this)->_maxHeap.pop();
+  }
+  
+  if (_maxHeap.empty()) {
+    throw std::runtime_error("Max heap is empty");
+  }
+  
+  return _maxHeap.top().first;
+}
+
+template <typename T>
+T MedianFilter<T>::getMinHeapTop() const
+{
+  // Clean up delayed elements first
+  while (!_minHeap.empty() && _delayedElements.find(_minHeap.top().second) != _delayedElements.end()) {
+    const_cast<MedianFilter<T>*>(this)->_delayedElements.erase(_minHeap.top().second);
+    const_cast<MedianFilter<T>*>(this)->_minHeap.pop();
+  }
+  
+  if (_minHeap.empty()) {
+    throw std::runtime_error("Min heap is empty");
+  }
+  
+  return _minHeap.top().first;
+}
+
+template <typename T>
+size_t MedianFilter<T>::getMaxHeapTopIndex() const
+{
+  // Clean up delayed elements first
+  while (!_maxHeap.empty() && _delayedElements.find(_maxHeap.top().second) != _delayedElements.end()) {
+    const_cast<MedianFilter<T>*>(this)->_delayedElements.erase(_maxHeap.top().second);
+    const_cast<MedianFilter<T>*>(this)->_maxHeap.pop();
+  }
+  
+  if (_maxHeap.empty()) {
+    throw std::runtime_error("Max heap is empty");
+  }
+  
+  return _maxHeap.top().second;
+}
+
+template <typename T>
+size_t MedianFilter<T>::getMinHeapTopIndex() const
+{
+  // Clean up delayed elements first
+  while (!_minHeap.empty() && _delayedElements.find(_minHeap.top().second) != _delayedElements.end()) {
+    const_cast<MedianFilter<T>*>(this)->_delayedElements.erase(_minHeap.top().second);
+    const_cast<MedianFilter<T>*>(this)->_minHeap.pop();
+  }
+  
+  if (_minHeap.empty()) {
+    throw std::runtime_error("Min heap is empty");
+  }
+  
+  return _minHeap.top().second;
+}
+
+template <typename T>
+size_t MedianFilter<T>::getValidMaxHeapSize() const
+{
+  // Count valid elements (not marked for delayed removal)
+  size_t count = 0;
+  auto tempHeap = _maxHeap;
+  
+  while (!tempHeap.empty()) {
+    if (_delayedElements.find(tempHeap.top().second) == _delayedElements.end()) {
+      count++;
+    }
+    tempHeap.pop();
+  }
+  
+  return count;
+}
+
+template <typename T>
+size_t MedianFilter<T>::getValidMinHeapSize() const
+{
+  // Count valid elements (not marked for delayed removal)
+  size_t count = 0;
+  auto tempHeap = _minHeap;
+  
+  while (!tempHeap.empty()) {
+    if (_delayedElements.find(tempHeap.top().second) == _delayedElements.end()) {
+      count++;
+    }
+    tempHeap.pop();
+  }
+  
+  return count;
 }
 
 // Explicit template instantiations as needed

@@ -32,6 +32,13 @@ const gpio_num_t MOTOR_TELEM_PINS[NUM_MOTORS] = {GPIO_NUM_34, GPIO_NUM_33, GPIO_
 #define M_PI_2 1.57079632679489661923f
 #endif
 
+#ifndef PI
+#define PI M_PI
+#endif
+#ifndef TWO_PI
+#define TWO_PI (2.0f * M_PI)
+#endif
+
 // Constant for converting degrees to radians
 #ifndef DEG_TO_RADS
 #define DEG_TO_RADS(x) x * 0.017453292519943295769236907684886f

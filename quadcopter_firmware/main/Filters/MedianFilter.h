@@ -17,12 +17,21 @@ class MedianFilter
   T getMedian() const;
 
  private:
+  void cleanupAndRebalance();
   void rebalanceHeaps();
   void removeDelayedElements(std::priority_queue<std::pair<T, size_t>>& heap, bool isMaxHeap);
   void removeDelayedElements(
       std::priority_queue<std::pair<T, size_t>, std::vector<std::pair<T, size_t>>, std::greater<std::pair<T, size_t>>>&
           heap,
       bool isMaxHeap);
+
+  // Helper methods for safe heap access
+  T getMaxHeapTop() const;
+  T getMinHeapTop() const;
+  size_t getMaxHeapTopIndex() const;
+  size_t getMinHeapTopIndex() const;
+  size_t getValidMaxHeapSize() const;
+  size_t getValidMinHeapSize() const;
 
   size_t _windowSize;
   size_t _index;
