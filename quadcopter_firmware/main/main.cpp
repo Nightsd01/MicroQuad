@@ -637,7 +637,7 @@ void setup()
   _gpsService->begin();
 
   LOG_INFO("Initializing battery controller");
-  _batteryController = new BatteryController(_telemetryController, &_bluetoothController, _helper);
+  _batteryController = new BatteryController(_telemetryController, _helper);
 
   LOG_INFO("Configuring magnetometer");
   _configureMagnetometer();

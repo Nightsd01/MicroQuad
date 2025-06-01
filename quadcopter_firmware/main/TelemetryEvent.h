@@ -4,7 +4,7 @@
 
 CROSS_PLATFORM_ENUM(uint8_t, TelemetryEvent){
     ArmStatusChange = 0,
-    BatteryVoltage = 1,
+    BatteryStatusUpdate = 1,
     EulerYawPitchRoll = 2,
     AccelerometerXYZRaw = 3,
     AccelerometerXYZFiltered = 4,

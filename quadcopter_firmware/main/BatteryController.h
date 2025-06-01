@@ -2,6 +2,8 @@
 
 #ifndef MATLAB_SIM
 
+#include "BatteryStatus.h"
+
 class BLEController;
 class DebugHelper;
 class TelemetryController;
@@ -10,7 +12,7 @@ class BatteryController
 {
  public:
   BatteryController(
-      TelemetryController *telemetryController, BLEController *bluetoothController, DebugHelper *debugHelper);
+      TelemetryController *telemetryController, DebugHelper *debugHelper);
   void loopHandler(void);
   float batteryVoltage(void);
 

@@ -9,8 +9,8 @@ static const char *_eventTypeToString(TelemetryEvent event)
   switch (event) {
     case ArmStatusChange:
       return "ArmStatusChange";
-    case BatteryVoltage:
-      return "BatteryVoltage";
+    case BatteryStatusUpdate:
+      return "BatteryStatusUpdate";
     case EulerYawPitchRoll:
       return "EulerYawPitchRoll";
     case AccelerometerXYZRaw:
