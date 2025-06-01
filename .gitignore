@@ -2,3 +2,4 @@ build/
 build_host/
 sdkconfig
 sdkconfig.old
+.cache
