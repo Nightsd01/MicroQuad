@@ -9,3 +9,4 @@
 
 #import "../../quadcopter_firmware/main/TelemetryEvent.h"
 #import "../../quadcopter_firmware/main/CalibrationEvent.h"
+#import "../../quadcopter_firmware/main/BatteryStatus.h"

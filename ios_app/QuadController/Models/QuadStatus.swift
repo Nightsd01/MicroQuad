@@ -28,6 +28,12 @@ public struct GPSData {
   let fixQuality: UInt8      // 1 byte
 }
 
+// Battery status event structure matching battery_status_event_t
+public struct BatteryStatusData {
+  let voltage: Float32        // 4 bytes
+  let status: BatteryStatus   // 1 byte (UInt8)
+}
+
 public class QuadStatus : ObservableObject {
   @Published var rssi : Double?
   @Published var connected = false
@@ -35,6 +41,7 @@ public class QuadStatus : ObservableObject {
   @Published var motorValues : [Float32]?
   @Published var batteryVoltage : Float32?
   @Published var batteryPercent : Float32?
+  @Published var batteryStatus : BatteryStatus?
   @Published var euler : YawPitchRoll?
   @Published var accelRaw : XYZ?
   @Published var accelFiltered : XYZ?
@@ -125,12 +132,27 @@ public class QuadStatus : ObservableObject {
         }
         self.armed = armUpdate
         break
-      case .BatteryVoltage:
-        guard let values : [Float32] = parseNumericArray(withData: payload, count: 1) else {
-          print("ERROR: Received invalid \(type) update")
+      case .BatteryStatusUpdate:
+        // Parse battery status structure (float voltage + uint8 status)
+        guard payload.count >= 5 else {
+          print("ERROR: Received invalid \(type) update - insufficient data")
           return
         }
-        self.batteryVoltage = values[0]
+        
+        payload.withUnsafeBytes { (pointer: UnsafeRawBufferPointer) in
+          let voltage = pointer.load(fromByteOffset: 0, as: Float32.self)
+          let statusRaw = pointer.load(fromByteOffset: 4, as: UInt8.self)
+          
+          self.batteryVoltage = voltage
+          self.batteryStatus = BatteryStatus(rawValue: statusRaw)
+          
+          // Calculate battery percentage based on voltage
+          // Assuming 3.0V = 0%, 4.2V = 100% for a typical LiPo cell
+          let minVoltage: Float32 = 3.0
+          let maxVoltage: Float32 = 4.2
+          let percentage = (voltage - minVoltage) / (maxVoltage - minVoltage)
+          self.batteryPercent = min(max(percentage, 0.0), 1.0)
+        }
         break
       case .EulerYawPitchRoll:
         self.euler = parseYawPitchRoll(withData: payload, type: type)
