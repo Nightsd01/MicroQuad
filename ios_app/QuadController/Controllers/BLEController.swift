@@ -59,7 +59,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   @Published var bleStatus = "None"
   @Published var debugDataString : String?
   
-  private var calibrationDelegates : [CalibrationType : WeakReference<BLESensorCalibrationDelegate>] = [:]
+  private var calibrationDelegates : [CalibrationType : BLESensorCalibrationDelegate] = [:]
   
   var delegate : BLEControllerDelegate? {
     didSet {
@@ -349,7 +349,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   }
   
   func addCalibrationDelegate(forSensorType type : CalibrationType, calibrationDelegate : BLESensorCalibrationDelegate) {
-    calibrationDelegates[type] = WeakReference(calibrationDelegate)
+    calibrationDelegates[type] = calibrationDelegate
   }
 
   // we unfortunately transmit 10 bytes at a time due to iOS BLE packet size limits....
@@ -370,7 +370,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
         return
       }
       
-      calibrationDelegates[sensorType]?.value?.didGetCalibrationRequest(request)
+      calibrationDelegates[sensorType]?.didGetCalibrationRequest(request)
     } else {
       print("Unable to handle calibration update")
     }

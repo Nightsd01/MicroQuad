@@ -10,7 +10,7 @@ import Foundation
 import SwiftUI
 
 class CalibrationController : ObservableObject, BLESensorCalibrationDelegate {
-  private var bleController : BLEController?
+  private weak var bleController : BLEController?
   
   public let calibrationSensorType : CalibrationType
   
