@@ -40,6 +40,7 @@ xcodebuild build \
 - Currently there are a few hardcoded hacks here:
 - In VS Code's `.vscode/settings.json`, we are currently hardcoding a lot of `esp32` executable paths which is not ideal because it will break whenever versions change
 - Also in `settings.json` we are hard coding the device serial port which is even hackier
+- Please do NOT change any .cpp files in matlab_sim other than mex_gateway.cpp because the source code is simply being symlinked from tge quadcopter_firmware directory... 
 
 ### TODO List
 - [X] Add iOS controller codebase
