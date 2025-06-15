@@ -27,6 +27,10 @@
 #define DEBUG_CHARACTERISTIC_UUID "f0a0afee-0983-4691-adc5-02ee803f5418"
 #define PID_CONSTANTS_CHARACTERISTIC_UUID "58471750-7394-4659-bc69-09331eed05a3"
 
+// Current Time Service (CTS)
+#define CTS_SERVICE_UUID (uint16_t)0x1805
+#define CTS_CURRENT_TIME_CHARACTERISTIC_UUID (uint16_t)0x2A2B
+
 #define DEVINFO_UUID (uint16_t)0x180a
 #define DEVINFO_MANUFACTURER_UUID (uint16_t)0x2a29
 #define DEVINFO_NAME_UUID (uint16_t)0x2a24
@@ -71,6 +75,7 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
 
   // update handlers - these are always called on the main core
   void setControlsUpdateHandler(std::function<void(controls_update_t)> controlsUpdateHandler);
+  void setTimeUpdateHandler(std::function<void(double)> timeUpdateHandler);
   void setArmStatusUpdateHandler(std::function<void(bool)> armStatusUpdateHandler);
   void setResetStatusUpdateHandler(std::function<void(void)> resetHandler);
   void setMotorDebugEnabledUpdateHandler(std::function<void(bool)> motorDebugEnabledUpdateHandler);
@@ -101,8 +106,10 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   BLECharacteristic *_calibrationCharacteristic;
   BLECharacteristic *_debugCharacteristic;
   BLECharacteristic *_pidConstantsCharacteristic;
+  BLECharacteristic *_currentTimeCharacteristic;
 
   std::function<void(controls_update_t)> _controlsUpdateHandler;
+  std::function<void(double)> _timeUpdateHandler;
   std::function<void(bool)> _armStatusUpdateHandler;
   std::function<void(void)> _resetStatusUpdateHandler;
   std::function<void(bool)> _motorDebugEnabledUpdateHandler;

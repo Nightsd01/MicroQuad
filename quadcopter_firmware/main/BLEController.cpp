@@ -138,6 +138,13 @@ void BLEController::beginBluetooth(void)
   _pidConstantsCharacteristic->addDescriptor(new BLE2902());
   _pidConstantsCharacteristic->setWriteNoResponseProperty(true);
 
+  // Add Current Time Service Characteristic
+  _currentTimeCharacteristic = _service->createCharacteristic(
+      CTS_CURRENT_TIME_CHARACTERISTIC_UUID,
+      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_NOTIFY);
+  _currentTimeCharacteristic->setCallbacks(this);
+  _currentTimeCharacteristic->addDescriptor(new BLE2902());
+
   // Set the MTU size
   esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
   if (status != ESP_OK) {
@@ -349,6 +356,25 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
           gains.kI,
           gains.kD);
     }
+  } else if (characteristic->getUUID().equals(_currentTimeCharacteristic->getUUID())) {
+    LOG_INFO_ASYNC_ON_MAIN("Received Current Time update");
+    uint8_t *data = characteristic->getData();
+    size_t length = characteristic->getLength();
+
+    // The timestamp is sent as a Double from iOS, which is 8 bytes.
+    if (length == sizeof(double)) {
+      double timestamp;
+      memcpy(&timestamp, data, sizeof(double));
+
+      if (_timeUpdateHandler) {
+        _timeUpdateHandler(timestamp);
+      }
+    } else {
+      LOG_ERROR_ASYNC_ON_MAIN(
+          "Invalid Current Time data received - expected %zu bytes, got %zu",
+          sizeof(double),
+          length);
+    }
   }
   // TODO: switch this to a mutex
   isProcessingBluetoothTransaction = false;
@@ -523,5 +549,10 @@ void BLEController::setPIDConstantsUpdateHandler(
     std::function<void(ControlAxis, PIDType, gains_t)> pidConstantsUpdateHandler)
 {
   _pidConstantsUpdateHandler = pidConstantsUpdateHandler;
+}
+
+void BLEController::setTimeUpdateHandler(std::function<void(double)> timeUpdateHandler)
+{
+  _timeUpdateHandler = timeUpdateHandler;
 }
 #endif  // MATLAB_SIM

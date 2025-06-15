@@ -27,6 +27,11 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   static let calibrateCharacteristicUUID = "498e876e-0dd2-11ec-82a8-0242ac130003"
   static let debugInfoCharacteristicUUID = "f0a0afee-0983-4691-adc5-02ee803f5418"
   static let pidTuningCharacteristicUUID = "58471750-7394-4659-bc69-09331eed05a3"
+  
+  // Current Time Service (CTS)
+  static let CTS_SERVICE_UUID = "1805"
+  static let CTS_CURRENT_TIME_CHARACTERISTIC_UUID = "2A2B"
+  
   static let maxUpdateFrequencySeconds = 0.1
   
   static let terminationString = "==TERMINATE=="
@@ -44,6 +49,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   var calibrationCharacteristic : CBCharacteristic?
   var debugInfoCharacteristic : CBCharacteristic?
   var pidTuningCharacteristic : CBCharacteristic?
+  var currentTimeCharacteristic: CBCharacteristic?
 
   var lastUpdateTime : TimeInterval?
   var timer : Timer?
@@ -254,8 +260,25 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
         device?.setNotifyValue(true, for: characteristic)
       } else if characteristic.uuid.uuidString.lowercased() == BLEController.pidTuningCharacteristicUUID.lowercased() {
         pidTuningCharacteristic = characteristic
+      } else if characteristic.uuid.uuidString.lowercased() == BLEController.CTS_CURRENT_TIME_CHARACTERISTIC_UUID.lowercased() {
+        currentTimeCharacteristic = characteristic
+        // Once we discover this characteristic, write the current time.
+        writeCurrentTime()
       }
     }
+  }
+
+  func writeCurrentTime() {
+      guard let characteristic = currentTimeCharacteristic else {
+          print("ERROR: Current Time Characteristic not found.")
+          return
+      }
+      
+      var timestamp = Date().timeIntervalSince1970
+      let data = Data(bytes: &timestamp, count: MemoryLayout<Double>.size)
+      
+      print("Writing current time to quadcopter: \(timestamp)")
+      device?.writeValue(data, for: characteristic, type: .withResponse) // Use .withResponse for important one-off writes
   }
 
   func processDebugData(_ data : Data) {

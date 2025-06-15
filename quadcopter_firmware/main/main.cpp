@@ -125,6 +125,11 @@ MotorMagCompensationHandler *_motorMagCompensationHandler;
 
 motor_outputs_t _mostRecentMotorValues = {};
 
+// Time Synchronization Globals
+bool _hasReceivedTimestamp = false;
+double _initialTimestampSeconds = 0.0;
+uint64_t _initialMicros = 0;
+
 static QuadcopterController *_controller;
 static DebugHelper *_helper;
 
@@ -524,6 +529,17 @@ static void _armProcedure(bool arm) { _armed = arm; }
 
 static uint64_t _firstStageSetupCompletionTimeMillis = 0;
 
+// Time Synchronization Function
+double _currentTimestamp(void)
+{
+  if (!_hasReceivedTimestamp) {
+    return 0.0;  // Or some other indicator of invalid time
+  }
+  // Calculate elapsed time in seconds since the initial timestamp was received
+  double elapsedSeconds = (double)(micros() - _initialMicros) / 1000000.0;
+  return _initialTimestampSeconds + elapsedSeconds;
+}
+
 // Initial setup
 void setup()
 {
@@ -575,6 +591,20 @@ void setup()
     _sendDebugData = debugDataUpdate.sendDebugData;
     _recordDebugData = debugDataUpdate.recordDebugData;
     _startedRecordingDebugDataTimeMillis = millis();
+  });
+
+  // Set the handler for when we receive a timestamp from the iOS app
+  _bluetoothController.setTimeUpdateHandler([&](double timestamp) {
+    if (!_hasReceivedTimestamp) {
+      _initialTimestampSeconds = timestamp;
+      _initialMicros = micros();
+      _hasReceivedTimestamp = true;
+      LOG_INFO_ASYNC_ON_MAIN("Received initial timestamp from iOS: %.3f", _initialTimestampSeconds);
+      LOG_INFO_ASYNC_ON_MAIN("Initial micros: %llu", _initialMicros);
+    } else {
+      // Optional: handle subsequent time updates for resynchronization
+      LOG_INFO_ASYNC_ON_MAIN("Received subsequent timestamp update: %.3f", timestamp);
+    }
   });
 
   // Setup BLE Server
