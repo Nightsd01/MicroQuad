@@ -39,6 +39,8 @@ static const char *_eventTypeToString(TelemetryEvent event)
       return "EKFAltitudeEstimate";
     case EKFVerticalVelocityEstimate:
       return "EKFVerticalVelocityEstimate";
+    case GPSFixData:
+      return "GPSFixData";
     default: {
       LOG_ERROR_PERIODIC_MILLIS(500, "Unknown telemetry event %i", event);
       return "Unknown";
