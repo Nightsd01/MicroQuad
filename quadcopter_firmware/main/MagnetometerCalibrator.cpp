@@ -125,9 +125,8 @@ MagnetometerCalibrator::MagnetometerCalibrator(const Config& config, PersistentK
   if (kvStore->hasValueForKey(PersistentKeysCommon::MAG_HARD_IRON_OFFSETS) &&
       kvStore->hasValueForKey(PersistentKeysCommon::MAG_SOFT_IRON_OFFSETS)) {
     // Load hard and soft iron offsets from persistent storage
-    std::vector<float> hardIronOffsets =
-        kvStore->getVectorForKey<float>(PersistentKeysCommon::MAG_HARD_IRON_OFFSETS, 3);
-    std::vector<float> softIronMatrix = kvStore->getVectorForKey<float>(PersistentKeysCommon::MAG_SOFT_IRON_OFFSETS, 9);
+    std::vector<float> hardIronOffsets = kvStore->getValue<float>(PersistentKeysCommon::MAG_HARD_IRON_OFFSETS, 3);
+    std::vector<float> softIronMatrix = kvStore->getValue<float>(PersistentKeysCommon::MAG_SOFT_IRON_OFFSETS, 9);
 
     if (hardIronOffsets.size() == 3 && softIronMatrix.size() == 9) {
       // Add finite checks
@@ -189,12 +188,10 @@ void MagnetometerCalibrator::_storeCalibrationData(void)
   constexpr size_t softIronSize = 9;
 
   std::vector<float> hardIronOffsets(_hardIronOffset.data, _hardIronOffset.data + hardIronSize);
-  _kvStore->setVectorForKey<float>(PersistentKeysCommon::MAG_HARD_IRON_OFFSETS, hardIronOffsets);
+  _kvStore->setValue(PersistentKeysCommon::MAG_HARD_IRON_OFFSETS, hardIronOffsets);
 
   std::vector<float> softIronVector(_softIronMatrix.data, _softIronMatrix.data + softIronSize);
-  _kvStore->setVectorForKey<float>(
-      PersistentKeysCommon::MAG_SOFT_IRON_OFFSETS,
-      softIronVector);  // Store as flat vector
+  _kvStore->setValue(PersistentKeysCommon::MAG_SOFT_IRON_OFFSETS, softIronVector);  // Store as flat vector
 }
 
 void MagnetometerCalibrator::addMeasurement(const Vector3float& raw_measurement)

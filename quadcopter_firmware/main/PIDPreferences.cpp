@@ -92,14 +92,14 @@ void PIDPreferences::_updateGains(ControlAxis axis, PIDType type, gains_t gains)
         (float)this->gains.rateGains[(int)axis].kI,
         (float)this->gains.rateGains[(int)axis].kD,
     };
-    _kvStore->setVectorForKey<float>(_getAxisKey(axis), newGains);
+    _kvStore->setValue(_getAxisKey(axis), newGains);
   } else {
     std::vector<float> newGains = {
         (float)this->gains.verticalVelocityGains.kP,
         (float)this->gains.verticalVelocityGains.kI,
         (float)this->gains.verticalVelocityGains.kD,
     };
-    _kvStore->setVectorForKey<float>(_getAxisKey(axis), newGains);
+    _kvStore->setValue(_getAxisKey(axis), newGains);
   }
 }
 
@@ -120,7 +120,7 @@ quadcopter_config_t PIDPreferences::_initializeGains()
   const std::string yawKey = _getAxisKey(ControlAxis::Yaw);
   if (_kvStore->hasValueForKey(yawKey)) {
     const std::vector<float> yawGains =
-        _kvStore->getVectorForKey<float>(yawKey, 6);  // Expect 6 floats (angle P,I,D, rate P,I,D)
+        _kvStore->getValue<float>(yawKey, 6);  // Expect 6 floats (angle P,I,D, rate P,I,D)
     if (yawGains.size() == 6) {
       config.angleGains[0] = {.kP = yawGains[0], .kI = yawGains[1], .kD = yawGains[2]};  // Index 0 assumed Yaw
       config.rateGains[0] = {.kP = yawGains[3], .kI = yawGains[4], .kD = yawGains[5]};   // Index 0 assumed Yaw
@@ -139,7 +139,7 @@ quadcopter_config_t PIDPreferences::_initializeGains()
   // --- Try to load Pitch gains ---
   const std::string pitchKey = _getAxisKey(ControlAxis::Pitch);
   if (_kvStore->hasValueForKey(pitchKey)) {
-    const std::vector<float> pitchGains = _kvStore->getVectorForKey<float>(pitchKey, 6);  // Expect 6 floats
+    const std::vector<float> pitchGains = _kvStore->getValue<float>(pitchKey, 6);  // Expect 6 floats
     if (pitchGains.size() == 6) {
       config.angleGains[1] = {.kP = pitchGains[0], .kI = pitchGains[1], .kD = pitchGains[2]};  // Index 1 assumed Pitch
       config.rateGains[1] = {.kP = pitchGains[3], .kI = pitchGains[4], .kD = pitchGains[5]};   // Index 1 assumed Pitch
@@ -158,7 +158,7 @@ quadcopter_config_t PIDPreferences::_initializeGains()
   // --- Try to load Roll gains ---
   const std::string rollKey = _getAxisKey(ControlAxis::Roll);
   if (_kvStore->hasValueForKey(rollKey)) {
-    const std::vector<float> rollGains = _kvStore->getVectorForKey<float>(rollKey, 6);  // Expect 6 floats
+    const std::vector<float> rollGains = _kvStore->getValue<float>(rollKey, 6);  // Expect 6 floats
     if (rollGains.size() == 6) {
       config.angleGains[2] = {.kP = rollGains[0], .kI = rollGains[1], .kD = rollGains[2]};  // Index 2 assumed Roll
       config.rateGains[2] = {.kP = rollGains[3], .kI = rollGains[4], .kD = rollGains[5]};   // Index 2 assumed Roll
@@ -177,8 +177,7 @@ quadcopter_config_t PIDPreferences::_initializeGains()
   // --- Try to load Vertical gains ---
   const std::string verticalKey = _getAxisKey(ControlAxis::Vertical);
   if (_kvStore->hasValueForKey(verticalKey)) {
-    const std::vector<float> verticalGains =
-        _kvStore->getVectorForKey<float>(verticalKey, 3);  // Expect 3 floats (P,I,D)
+    const std::vector<float> verticalGains = _kvStore->getValue<float>(verticalKey, 3);  // Expect 3 floats (P,I,D)
     if (verticalGains.size() == 3) {
       config.verticalVelocityGains = {.kP = verticalGains[0], .kI = verticalGains[1], .kD = verticalGains[2]};
       LOG_INFO("Loaded custom Vertical PID gains from KV store.");

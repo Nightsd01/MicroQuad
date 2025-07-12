@@ -85,7 +85,7 @@ MotorMagCompensationHandler::MotorMagCompensationHandler(PersistentKeyValueStore
     }
 
     // Expecting vector of [x_offset, y_offset, z_offset]
-    std::vector<float> xyzOffsets = _kvStore->getVectorForKey<float>(key, 3 /* expected length */);
+    std::vector<float> xyzOffsets = _kvStore->getValue<float>(key, 3 /* expected length */);
     if (xyzOffsets.size() != 3) {
       // Data corrupted or wrong format
       isCalibrated = false;
@@ -321,8 +321,8 @@ void MotorMagCompensationHandler::_completeCalibration()
     std::vector<float> record = {bias.x, bias.y, bias.z};
 
     std::string key = _getKey(step);
-    // Assumes setVectorForKey returns bool indicating success
-    _kvStore->setVectorForKey(key, record);
+    // Store the compensation values
+    _kvStore->setValue(key, record);
   }
 
   // Update calibration status based on whether saving was successful

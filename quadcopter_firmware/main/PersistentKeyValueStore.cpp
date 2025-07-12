@@ -6,6 +6,7 @@
 #include <nvs_flash.h>
 
 #include <string>
+#include <type_traits>
 
 #include "Logger.h"
 
@@ -24,269 +25,88 @@ PersistentKeyValueStore::PersistentKeyValueStore()
   ESP_ERROR_CHECK(err);
 }
 
-std::string PersistentKeyValueStore::getStringForKey(const std::string& key)
+// Generic getValue implementation
+template <typename T>
+T PersistentKeyValueStore::getValue(const std::string& key)
 {
   nvs_handle_t handle;
   esp_err_t err;
+  T value = T{};
 
   // Open NVS namespace in read mode
   err = nvs_open(kNamespaceName, NVS_READONLY, &handle);
   if (err != ESP_OK) {
     LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
-    return "";
+    return T{};
   }
 
-  size_t required_size = 0;
-  // Obtain required size first
-  err = nvs_get_str(handle, key.c_str(), NULL, &required_size);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) getting string size!", esp_err_to_name(err));
-    nvs_close(handle);
-    return "";
+  if constexpr (std::is_same_v<T, std::string>) {
+    // Handle string type
+    size_t required_size = 0;
+    err = nvs_get_str(handle, key.c_str(), NULL, &required_size);
+    if (err == ESP_OK && required_size > 0) {
+      char* str_value = new char[required_size];
+      err = nvs_get_str(handle, key.c_str(), str_value, &required_size);
+      if (err == ESP_OK) {
+        value = std::string(str_value);
+      }
+      delete[] str_value;
+    }
+  } else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool>) {
+    // Handle integer types
+    if constexpr (sizeof(T) <= 4) {
+      // 32-bit or smaller integers
+      int32_t temp_value = 0;
+      err = nvs_get_i32(handle, key.c_str(), &temp_value);
+      if (err == ESP_OK) {
+        value = static_cast<T>(temp_value);
+      }
+    } else {
+      // 64-bit integers - store as blob
+      size_t length = sizeof(T);
+      err = nvs_get_blob(handle, key.c_str(), &value, &length);
+      if (err != ESP_OK || length != sizeof(T)) {
+        err = ESP_FAIL;
+      }
+    }
+  } else if constexpr (std::is_floating_point_v<T>) {
+    // Handle floating point types - store as string for precision
+    size_t required_size = 0;
+    err = nvs_get_str(handle, key.c_str(), NULL, &required_size);
+    if (err == ESP_OK && required_size > 0) {
+      char* str_value = new char[required_size];
+      err = nvs_get_str(handle, key.c_str(), str_value, &required_size);
+      if (err == ESP_OK) {
+        if constexpr (std::is_same_v<T, float>) {
+          value = std::stof(str_value);
+        } else if constexpr (std::is_same_v<T, double>) {
+          value = std::stod(str_value);
+        } else if constexpr (std::is_same_v<T, long double>) {
+          value = std::stold(str_value);
+        }
+      }
+      delete[] str_value;
+    }
+  } else {
+    // For other types, try to load as blob
+    size_t length = sizeof(T);
+    err = nvs_get_blob(handle, key.c_str(), &value, &length);
+    if (err != ESP_OK || length != sizeof(T)) {
+      err = ESP_FAIL;
+    }
   }
 
-  char* value = new char[required_size];
-  err = nvs_get_str(handle, key.c_str(), value, &required_size);
   if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) getting string value!", esp_err_to_name(err));
-    delete[] value;
-    nvs_close(handle);
-    return "";
-  }
-
-  std::string result(value);
-  delete[] value;
-  nvs_close(handle);
-  return result;
-}
-
-int PersistentKeyValueStore::getIntForKey(const std::string& key)
-{
-  nvs_handle_t handle;
-  esp_err_t err;
-  int32_t value = 0;
-
-  // Open NVS namespace in read mode
-  err = nvs_open(kNamespaceName, NVS_READONLY, &handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
-    return 0;
-  }
-
-  err = nvs_get_i32(handle, key.c_str(), &value);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) getting int value!", esp_err_to_name(err));
-    nvs_close(handle);
-    return 0;
+    LOG_ERROR("Error (%s) getting value for key '%s'!", esp_err_to_name(err), key.c_str());
   }
 
   nvs_close(handle);
   return value;
 }
 
-float PersistentKeyValueStore::getFloatForKey(const std::string& key)
-{
-  nvs_handle_t handle;
-  esp_err_t err;
-  float value = 0.0f;
-
-  // Open NVS namespace in read mode
-  err = nvs_open(kNamespaceName, NVS_READONLY, &handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
-    return 0.0f;
-  }
-
-  // NVS doesn't support float directly, store as string
-  size_t required_size = 0;
-  err = nvs_get_str(handle, key.c_str(), NULL, &required_size);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) getting float size!", esp_err_to_name(err));
-    nvs_close(handle);
-    return 0.0f;
-  }
-
-  char* str_value = new char[required_size];
-  err = nvs_get_str(handle, key.c_str(), str_value, &required_size);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) getting float value!", esp_err_to_name(err));
-    delete[] str_value;
-    nvs_close(handle);
-    return 0.0f;
-  }
-
-  value = std::stof(str_value);
-  delete[] str_value;
-  nvs_close(handle);
-  return value;
-}
-
-void PersistentKeyValueStore::setStringForKey(const std::string& key, const std::string& value)
-{
-  nvs_handle_t handle;
-  esp_err_t err;
-
-  // Open NVS namespace in write mode
-  err = nvs_open(kNamespaceName, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
-    return;
-  }
-
-  err = nvs_set_str(handle, key.c_str(), value.c_str());
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) setting string value!", esp_err_to_name(err));
-  }
-
-  // Commit changes
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) committing changes!", esp_err_to_name(err));
-  }
-
-  nvs_close(handle);
-}
-
-void PersistentKeyValueStore::setIntForKey(const std::string& key, int value)
-{
-  nvs_handle_t handle;
-  esp_err_t err;
-
-  // Open NVS namespace in write mode
-  err = nvs_open(kNamespaceName, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
-    return;
-  }
-
-  err = nvs_set_i32(handle, key.c_str(), value);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) setting int value!", esp_err_to_name(err));
-  }
-
-  // Commit changes
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) committing changes!", esp_err_to_name(err));
-  }
-
-  nvs_close(handle);
-}
-
-void PersistentKeyValueStore::setFloatForKey(const std::string& key, float value)
-{
-  nvs_handle_t handle;
-  esp_err_t err;
-
-  // Convert float to string for storage
-  std::string str_value = std::to_string(value);
-
-  // Open NVS namespace in write mode
-  err = nvs_open(kNamespaceName, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
-    return;
-  }
-
-  err = nvs_set_str(handle, key.c_str(), str_value.c_str());
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) setting float value!", esp_err_to_name(err));
-  }
-
-  // Commit changes
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) committing changes!", esp_err_to_name(err));
-  }
-
-  nvs_close(handle);
-}
-
-bool PersistentKeyValueStore::hasValueForKey(const std::string& key)
-{
-  nvs_iterator_t it = nullptr;
-  esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, kNamespaceName, NVS_TYPE_ANY, &it);
-  if (err != ESP_OK || it == NULL) {
-    // No entries found in the namespace or an error occurred
-    return false;
-  }
-
-  bool found = false;
-  while (it != NULL) {
-    nvs_entry_info_t info;
-    nvs_entry_info(it, &info);
-    if (key == info.key) {
-      found = true;
-      nvs_release_iterator(it);  // Release the iterator if we found the key
-      break;
-    }
-    err = nvs_entry_next(&it);  // Advances and releases the current iterator
-    if (err != ESP_OK || it == NULL) {
-      // No entries found in the namespace or an error occurred
-      return false;
-    }
-  }
-
-  // If we didn't find the key, the last iterator is already released
-  return found;
-}
-
-void PersistentKeyValueStore::removeValueForKey(const std::string& key)
-{
-  nvs_handle_t handle;
-  esp_err_t err;
-
-  // Open NVS namespace in write mode
-  err = nvs_open(kNamespaceName, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
-    return;
-  }
-
-  err = nvs_erase_key(handle, key.c_str());
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) erasing key!", esp_err_to_name(err));
-  }
-
-  // Commit changes
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) committing erase!", esp_err_to_name(err));
-  }
-
-  nvs_close(handle);
-}
-
+// Special overload for vectors
 template <typename T>
-void PersistentKeyValueStore::setVectorForKey(const std::string& key, const std::vector<T>& value)
-{
-  nvs_handle_t handle;
-  esp_err_t err;
-
-  // Open NVS namespace in write mode
-  err = nvs_open(kNamespaceName, NVS_READWRITE, &handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
-    return;
-  }
-
-  err = nvs_set_blob(handle, key.c_str(), value.data(), value.size() * sizeof(T));
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) setting vector value!", esp_err_to_name(err));
-  }
-
-  // Commit changes
-  err = nvs_commit(handle);
-  if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) committing changes!", esp_err_to_name(err));
-  }
-
-  LOG_INFO("Stored vector with values (for key %s): ", key.c_str());
-  nvs_close(handle);
-}
-
-template <typename T>
-std::vector<T> PersistentKeyValueStore::getVectorForKey(const std::string& key, size_t length)
+std::vector<T> PersistentKeyValueStore::getValue(const std::string& key, size_t length)
 {
   nvs_handle_t handle;
   esp_err_t err;
@@ -358,7 +178,11 @@ std::vector<T> PersistentKeyValueStore::getVectorForKey(const std::string& key, 
   } else {
     LOG_INFO("Loaded vector with values (for key %s): ", key.c_str());
     for (size_t i = 0; i < length; ++i) {
-      LOG_INFO("%f ", result[i]);
+      if constexpr (std::is_floating_point_v<T>) {
+        LOG_INFO("%f ", static_cast<double>(result[i]));
+      } else {
+        LOG_INFO("%lld ", static_cast<long long>(result[i]));
+      }
     }
   }
 
@@ -366,10 +190,167 @@ std::vector<T> PersistentKeyValueStore::getVectorForKey(const std::string& key, 
   return result;
 }
 
-template std::vector<float> PersistentKeyValueStore::getVectorForKey(const std::string& key, size_t length);
-template void PersistentKeyValueStore::setVectorForKey(const std::string& key, const std::vector<float>& value);
+// Generic setValue implementation
+template <typename T>
+void PersistentKeyValueStore::setValue(const std::string& key, const T& value)
+{
+  nvs_handle_t handle;
+  esp_err_t err;
 
-template std::vector<double> PersistentKeyValueStore::getVectorForKey(const std::string& key, size_t length);
-template void PersistentKeyValueStore::setVectorForKey(const std::string& key, const std::vector<double>& value);
+  // Open NVS namespace in write mode
+  err = nvs_open(kNamespaceName, NVS_READWRITE, &handle);
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
+    return;
+  }
+
+  if constexpr (std::is_same_v<T, std::string>) {
+    // Handle string type
+    err = nvs_set_str(handle, key.c_str(), value.c_str());
+  } else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool>) {
+    // Handle integer types
+    if constexpr (sizeof(T) <= 4) {
+      // 32-bit or smaller integers
+      err = nvs_set_i32(handle, key.c_str(), static_cast<int32_t>(value));
+    } else {
+      // 64-bit integers - store as blob
+      err = nvs_set_blob(handle, key.c_str(), &value, sizeof(T));
+    }
+  } else if constexpr (std::is_floating_point_v<T>) {
+    // Handle floating point types - store as string for precision
+    std::string str_value = std::to_string(value);
+    err = nvs_set_str(handle, key.c_str(), str_value.c_str());
+  } else if constexpr (requires {
+                         value.data();
+                         value.size();
+                       }) {
+    // Handle vector-like types (has data() and size() methods)
+    err = nvs_set_blob(handle, key.c_str(), value.data(), value.size() * sizeof(typename T::value_type));
+    if (err == ESP_OK) {
+      LOG_INFO("Stored vector with %zu elements (for key %s)", value.size(), key.c_str());
+    }
+  } else {
+    // For other types, try to store as blob
+    err = nvs_set_blob(handle, key.c_str(), &value, sizeof(T));
+  }
+
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) setting value for key '%s'!", esp_err_to_name(err), key.c_str());
+  }
+
+  // Commit changes
+  err = nvs_commit(handle);
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) committing changes!", esp_err_to_name(err));
+  }
+
+  nvs_close(handle);
+}
+
+bool PersistentKeyValueStore::hasValueForKey(const std::string& key)
+{
+  nvs_iterator_t it = nullptr;
+  esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, kNamespaceName, NVS_TYPE_ANY, &it);
+  if (err != ESP_OK || it == NULL) {
+    // No entries found in the namespace or an error occurred
+    return false;
+  }
+
+  bool found = false;
+  while (it != NULL) {
+    nvs_entry_info_t info;
+    nvs_entry_info(it, &info);
+    if (key == info.key) {
+      found = true;
+      nvs_release_iterator(it);  // Release the iterator if we found the key
+      break;
+    }
+    err = nvs_entry_next(&it);  // Advances and releases the current iterator
+    if (err != ESP_OK || it == NULL) {
+      // No entries found in the namespace or an error occurred
+      return false;
+    }
+  }
+
+  // If we didn't find the key, the last iterator is already released
+  return found;
+}
+
+void PersistentKeyValueStore::removeValueForKey(const std::string& key)
+{
+  nvs_handle_t handle;
+  esp_err_t err;
+
+  // Open NVS namespace in write mode
+  err = nvs_open(kNamespaceName, NVS_READWRITE, &handle);
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
+    return;
+  }
+
+  err = nvs_erase_key(handle, key.c_str());
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) erasing key!", esp_err_to_name(err));
+  }
+
+  // Commit changes
+  err = nvs_commit(handle);
+  if (err != ESP_OK) {
+    LOG_ERROR("Error (%s) committing erase!", esp_err_to_name(err));
+  }
+
+  nvs_close(handle);
+}
+
+// Explicit template instantiations for getValue/setValue
+// Arithmetic types
+template int PersistentKeyValueStore::getValue<int>(const std::string& key);
+template void PersistentKeyValueStore::setValue<int>(const std::string& key, const int& value);
+
+template int8_t PersistentKeyValueStore::getValue<int8_t>(const std::string& key);
+template void PersistentKeyValueStore::setValue<int8_t>(const std::string& key, const int8_t& value);
+
+template int16_t PersistentKeyValueStore::getValue<int16_t>(const std::string& key);
+template void PersistentKeyValueStore::setValue<int16_t>(const std::string& key, const int16_t& value);
+
+// Note: On many platforms, int and int32_t are the same type, so we skip int32_t
+
+template int64_t PersistentKeyValueStore::getValue<int64_t>(const std::string& key);
+template void PersistentKeyValueStore::setValue<int64_t>(const std::string& key, const int64_t& value);
+
+template uint8_t PersistentKeyValueStore::getValue<uint8_t>(const std::string& key);
+template void PersistentKeyValueStore::setValue<uint8_t>(const std::string& key, const uint8_t& value);
+
+template uint16_t PersistentKeyValueStore::getValue<uint16_t>(const std::string& key);
+template void PersistentKeyValueStore::setValue<uint16_t>(const std::string& key, const uint16_t& value);
+
+template uint32_t PersistentKeyValueStore::getValue<uint32_t>(const std::string& key);
+template void PersistentKeyValueStore::setValue<uint32_t>(const std::string& key, const uint32_t& value);
+
+template uint64_t PersistentKeyValueStore::getValue<uint64_t>(const std::string& key);
+template void PersistentKeyValueStore::setValue<uint64_t>(const std::string& key, const uint64_t& value);
+
+template float PersistentKeyValueStore::getValue<float>(const std::string& key);
+template void PersistentKeyValueStore::setValue<float>(const std::string& key, const float& value);
+
+template double PersistentKeyValueStore::getValue<double>(const std::string& key);
+template void PersistentKeyValueStore::setValue<double>(const std::string& key, const double& value);
+
+// String type
+template std::string PersistentKeyValueStore::getValue<std::string>(const std::string& key);
+template void PersistentKeyValueStore::setValue<std::string>(const std::string& key, const std::string& value);
+
+// Vector types with getValue(key, length)
+template std::vector<float> PersistentKeyValueStore::getValue<float>(const std::string& key, size_t length);
+template std::vector<double> PersistentKeyValueStore::getValue<double>(const std::string& key, size_t length);
+template std::vector<int> PersistentKeyValueStore::getValue<int>(const std::string& key, size_t length);
+
+// Vector types with setValue
+template void PersistentKeyValueStore::setValue<std::vector<float>>(
+    const std::string& key, const std::vector<float>& value);
+template void PersistentKeyValueStore::setValue<std::vector<double>>(
+    const std::string& key, const std::vector<double>& value);
+template void PersistentKeyValueStore::setValue<std::vector<int>>(
+    const std::string& key, const std::vector<int>& value);
 
 #endif  // MATLAB_SIM

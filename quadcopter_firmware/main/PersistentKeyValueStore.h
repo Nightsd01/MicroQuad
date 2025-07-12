@@ -3,7 +3,9 @@
 #ifndef MATLAB_SIM
 
 #include <array>
+#include <concepts>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 class PersistentKeyValueStore
@@ -11,18 +13,19 @@ class PersistentKeyValueStore
  public:
   PersistentKeyValueStore();
 
-  std::string getStringForKey(const std::string& key);
-  int getIntForKey(const std::string& key);
-  float getFloatForKey(const std::string& key);
+  // Generic getter for all types
   template <typename T>
-  std::vector<T> getVectorForKey(const std::string& key, size_t length);
+  T getValue(const std::string& key);
 
-  void setStringForKey(const std::string& key, const std::string& value);
-  void setIntForKey(const std::string& key, int value);
-  void setFloatForKey(const std::string& key, float value);
+  // Special overload for vectors that need a size parameter
   template <typename T>
-  void setVectorForKey(const std::string& key, const std::vector<T>& value);
+  std::vector<T> getValue(const std::string& key, size_t length);
 
+  // Generic setter for all types
+  template <typename T>
+  void setValue(const std::string& key, const T& value);
+
+  // Utility methods
   bool hasValueForKey(const std::string& key);
   void removeValueForKey(const std::string& key);
 };
