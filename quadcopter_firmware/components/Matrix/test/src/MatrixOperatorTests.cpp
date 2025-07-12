@@ -575,3 +575,274 @@ TEST(MatrixNegationFloatTests, NegateDifferentDims)
   Matrix<float, 2, 1> expected = {{-10.0f}, {20.0f}};
   _assertRoughlyEqual(result, expected);
 }
+
+// --- Test Suite for Matrix Division ---
+
+// Element-wise division tests for integers
+TEST(MatrixDivisionIntTests, ElementWiseDivision)
+{
+  Matrix<int, 2, 2> A = {
+      {10, 20},
+      {30, 40}
+  };
+  Matrix<int, 2, 2> B = {
+      {2, 4},
+      {5, 8}
+  };
+  Matrix<int, 2, 2> result = A / B;
+  Matrix<int, 2, 2> expected = {
+      {5, 5},
+      {6, 5}  // Integer division: 30/5=6, 40/8=5
+  };
+  EXPECT_EQ(result, expected);
+}
+
+TEST(MatrixDivisionIntTests, ElementWiseDivisionWithNegatives)
+{
+  Matrix<int, 2, 2> A = {
+      {-10, 20 },
+      {30,  -40}
+  };
+  Matrix<int, 2, 2> B = {
+      {2,  -4},
+      {-5, 8 }
+  };
+  Matrix<int, 2, 2> result = A / B;
+  Matrix<int, 2, 2> expected = {
+      {-5, -5},
+      {-6, -5}
+  };
+  EXPECT_EQ(result, expected);
+}
+
+// Scalar division tests for integers
+TEST(MatrixDivisionIntTests, MatrixDividedByScalar)
+{
+  Matrix<int, 2, 3> A = {
+      {10, 20, 30},
+      {40, 50, 60}
+  };
+  int scalar = 10;
+  Matrix<int, 2, 3> result = A / scalar;
+  Matrix<int, 2, 3> expected = {
+      {1, 2, 3},
+      {4, 5, 6}
+  };
+  EXPECT_EQ(result, expected);
+}
+
+TEST(MatrixDivisionIntTests, ScalarDividedByMatrix)
+{
+  Matrix<int, 2, 2> A = {
+      {1, 2},
+      {4, 5}
+  };
+  int scalar = 20;
+  Matrix<int, 2, 2> result = scalar / A;
+  Matrix<int, 2, 2> expected = {
+      {20, 10},
+      {5,  4 }  // Integer division: 20/4=5, 20/5=4
+  };
+  EXPECT_EQ(result, expected);
+}
+
+TEST(MatrixDivisionIntTests, DivideEquals)
+{
+  Matrix<int, 2, 2> A = {
+      {100, 200},
+      {300, 400}
+  };
+  A /= 10;
+  Matrix<int, 2, 2> expected = {
+      {10, 20},
+      {30, 40}
+  };
+  EXPECT_EQ(A, expected);
+}
+
+// Element-wise division tests for floats
+TEST(MatrixDivisionFloatTests, ElementWiseDivision)
+{
+  Matrix<float, 2, 2> A = {
+      {10.0f, 20.0f},
+      {30.0f, 40.0f}
+  };
+  Matrix<float, 2, 2> B = {
+      {2.0f, 4.0f},
+      {5.0f, 8.0f}
+  };
+  Matrix<float, 2, 2> result = A / B;
+  Matrix<float, 2, 2> expected = {
+      {5.0f, 5.0f},
+      {6.0f, 5.0f}
+  };
+  _assertRoughlyEqual(result, expected);
+}
+
+TEST(MatrixDivisionFloatTests, ElementWiseDivisionWithNegatives)
+{
+  Matrix<float, 2, 2> A = {
+      {-10.0f, 20.0f },
+      {30.0f,  -40.0f}
+  };
+  Matrix<float, 2, 2> B = {
+      {2.0f,  -4.0f},
+      {-5.0f, 8.0f }
+  };
+  Matrix<float, 2, 2> result = A / B;
+  Matrix<float, 2, 2> expected = {
+      {-5.0f, -5.0f},
+      {-6.0f, -5.0f}
+  };
+  _assertRoughlyEqual(result, expected);
+}
+
+// Scalar division tests for floats
+TEST(MatrixDivisionFloatTests, MatrixDividedByScalar)
+{
+  Matrix<float, 2, 3> A = {
+      {1.0f, 2.0f, 3.0f},
+      {4.0f, 5.0f, 6.0f}
+  };
+  float scalar = 2.0f;
+  Matrix<float, 2, 3> result = A / scalar;
+  Matrix<float, 2, 3> expected = {
+      {0.5f, 1.0f, 1.5f},
+      {2.0f, 2.5f, 3.0f}
+  };
+  _assertRoughlyEqual(result, expected);
+}
+
+TEST(MatrixDivisionFloatTests, ScalarDividedByMatrix)
+{
+  Matrix<float, 2, 2> A = {
+      {1.0f, 2.0f},
+      {4.0f, 0.5f}
+  };
+  float scalar = 1.0f;
+  Matrix<float, 2, 2> result = scalar / A;
+  Matrix<float, 2, 2> expected = {
+      {1.0f,  0.5f},
+      {0.25f, 2.0f}
+  };
+  _assertRoughlyEqual(result, expected);
+}
+
+TEST(MatrixDivisionFloatTests, DivideEquals)
+{
+  Matrix<float, 2, 2> A = {
+      {10.0f, 20.0f},
+      {30.0f, 40.0f}
+  };
+  A /= 10.0f;
+  Matrix<float, 2, 2> expected = {
+      {1.0f, 2.0f},
+      {3.0f, 4.0f}
+  };
+  _assertRoughlyEqual(A, expected);
+}
+
+// Special cases for floating point division
+TEST(MatrixDivisionFloatTests, DivisionByZero)
+{
+  Matrix<float, 2, 2> A = {
+      {1.0f, -1.0f},
+      {0.0f, 2.0f }
+  };
+  Matrix<float, 2, 2> B = {
+      {1.0f, 0.0f},
+      {0.0f, 2.0f}
+  };
+  Matrix<float, 2, 2> result = A / B;
+
+  // Division by zero produces infinity (or -infinity)
+  EXPECT_FLOAT_EQ(result(0, 0), 1.0f);
+  EXPECT_TRUE(std::isinf(result(0, 1)));
+  EXPECT_TRUE(result(0, 1) < 0);          // Should be negative infinity
+  EXPECT_TRUE(std::isnan(result(1, 0)));  // 0/0 = NaN
+  EXPECT_FLOAT_EQ(result(1, 1), 1.0f);
+}
+
+TEST(MatrixDivisionFloatTests, DivisionWithInfinity)
+{
+  float inf = std::numeric_limits<float>::infinity();
+  Matrix<float, 2, 2> A = {
+      {inf,  10.0f},
+      {-inf, 0.0f }
+  };
+  Matrix<float, 2, 2> B = {
+      {2.0f, inf},
+      {inf,  inf}
+  };
+  Matrix<float, 2, 2> result = A / B;
+
+  EXPECT_TRUE(std::isinf(result(0, 0)));  // inf/2 = inf
+  EXPECT_FLOAT_EQ(result(0, 1), 0.0f);    // 10/inf = 0
+  EXPECT_TRUE(std::isnan(result(1, 0)));  // -inf/inf = NaN
+  EXPECT_FLOAT_EQ(result(1, 1), 0.0f);    // 0/inf = 0
+}
+
+// Test chained operations with division
+TEST(MatrixDivisionFloatTests, ChainedOperations)
+{
+  Matrix<float, 2, 2> A = {
+      {10.0f, 20.0f},
+      {30.0f, 40.0f}
+  };
+  Matrix<float, 2, 2> B = {
+      {2.0f, 4.0f},
+      {5.0f, 8.0f}
+  };
+  Matrix<float, 2, 2> C = {
+      {1.0f, 1.0f},
+      {2.0f, 2.0f}
+  };
+
+  // Test (A + B) / C
+  Matrix<float, 2, 2> result1 = (A + B) / C;
+  Matrix<float, 2, 2> expected1 = {
+      {12.0f, 24.0f},
+      {17.5f, 24.0f}
+  };
+  _assertRoughlyEqual(result1, expected1);
+
+  // Test A / B + C
+  Matrix<float, 2, 2> result2 = A / B + C;
+  Matrix<float, 2, 2> expected2 = {
+      {6.0f, 6.0f},
+      {8.0f, 7.0f}
+  };
+  _assertRoughlyEqual(result2, expected2);
+
+  // Test (A * 2.0f) / (B - 1.0f)
+  Matrix<float, 2, 2> result3 = (A * 2.0f) / (B - 1.0f);
+  Matrix<float, 2, 2> expected3 = {
+      {20.0f, 40.0f / 3.0f},
+      {15.0f, 80.0f / 7.0f}
+  };
+  _assertRoughlyEqual(result3, expected3);
+}
+
+// Test division with different matrix dimensions
+TEST(MatrixDivisionFloatTests, DifferentDimensions)
+{
+  // 1x3 matrix
+  Matrix<float, 1, 3> A = {
+      {6.0f, 8.0f, 10.0f}
+  };
+  Matrix<float, 1, 3> B = {
+      {2.0f, 4.0f, 5.0f}
+  };
+  Matrix<float, 1, 3> result = A / B;
+  Matrix<float, 1, 3> expected = {
+      {3.0f, 2.0f, 2.0f}
+  };
+  _assertRoughlyEqual(result, expected);
+
+  // 3x1 matrix
+  Matrix<float, 3, 1> C = {{12.0f}, {15.0f}, {18.0f}};
+  Matrix<float, 3, 1> D = {{3.0f}, {5.0f}, {6.0f}};
+  Matrix<float, 3, 1> result2 = C / D;
+  Matrix<float, 3, 1> expected2 = {{4.0f}, {3.0f}, {3.0f}};
+  _assertRoughlyEqual(result2, expected2);
+}
