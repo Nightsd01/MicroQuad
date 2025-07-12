@@ -213,6 +213,15 @@ void _setupMotors(void)
   }
 }
 
+static float _getHeadingFromMagGaussReading(mag_update_t mag)
+{
+  float heading = atan2f(mag.y, mag.x) * (180.0f / (float)M_PI);
+  if (heading < 0.0f) {
+    heading += 360.0f;
+  }
+  return heading;
+}
+
 static void _gotMagUpdate(mag_update_t update)
 {
   _receivedMagUpdate = true;
@@ -230,7 +239,7 @@ static void _gotMagUpdate(mag_update_t update)
     _magValues.x = mag(0, 0);
     _magValues.y = mag(1, 0);
     _magValues.z = mag(2, 0);
-    _magValues.heading = std::atan2(-_magValues.y, _magValues.x);
+    _magValues.heading = _getHeadingFromMagGaussReading(_magValues);
     _helper->magValuesPostSoftHardMatrixCalibration[0] = _magValues.x;
     _helper->magValuesPostSoftHardMatrixCalibration[1] = _magValues.y;
     _helper->magValuesPostSoftHardMatrixCalibration[2] = _magValues.z;
@@ -290,9 +299,9 @@ static void _setupMagnetometerCalibrator(void)
   float expectedFieldMagnitudeGauss = 0.0f;
   Matrix<float, 3, 1> magRefVector = MAGNETIC_REFERENCE_VECTOR;
   for (int i = 0; i < 3; i++) {
-    expectedFieldMagnitudeGauss += magRefVector(i, 0);
+    expectedFieldMagnitudeGauss += magRefVector(i, 0) * magRefVector(i, 0);  // Sum of squares
   }
-  expectedFieldMagnitudeGauss = std::sqrt(expectedFieldMagnitudeGauss);
+  expectedFieldMagnitudeGauss = std::sqrt(expectedFieldMagnitudeGauss);  // Proper magnitude calculation
   MagnetometerCalibrator::Config config = {
       .min_points = 200,
       .max_points = 0,  // unlimited

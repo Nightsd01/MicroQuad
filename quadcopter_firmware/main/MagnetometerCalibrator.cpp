@@ -1,4 +1,3 @@
-
 #ifndef MATLAB_SIM
 
 #include "MagnetometerCalibrator.h"  // Include the header file defining the class
@@ -13,13 +12,6 @@
 
 #include "Matrix.h"  // Include the FIXED-SIZE Matrix class header
 #include "PersistentKeysCommon.h"
-
-// Type aliases using the provided fixed-size Matrix template
-using Vector3float = Matrix<float, 3, 1>;
-using Matrix3x3float = Matrix<float, 3, 3>;
-using Matrix9x9float = Matrix<float, 9, 9>;
-using Vector9float = Matrix<float, 9, 1>;
-using RowVector3float = Matrix<float, 1, 3>;  // For transpose results
 
 // --- Helper Function: Eigenvalue Decomposition for 3x3 Symmetric Matrix ---
 // Uses the Jacobi rotation method. Compatible with the fixed-size Matrix class.
@@ -138,14 +130,34 @@ MagnetometerCalibrator::MagnetometerCalibrator(const Config& config, PersistentK
     std::vector<float> softIronMatrix = kvStore->getVectorForKey<float>(PersistentKeysCommon::MAG_SOFT_IRON_OFFSETS, 9);
 
     if (hardIronOffsets.size() == 3 && softIronMatrix.size() == 9) {
-      LOG_INFO("Hard iron offsets: %f, %f, %f", hardIronOffsets[0], hardIronOffsets[1], hardIronOffsets[2]);
-      LOG_INFO(
-          "Loaded magnetometer calibration from persistent storage, hard iron matrix = %s, soft iron matrix = %s",
-          Vector3float(hardIronOffsets.data()).description().c_str(),
-          Matrix3x3float(softIronMatrix.data()).description().c_str());
-      _hardIronOffset = Vector3float(hardIronOffsets.data());
-      _softIronMatrix = Matrix3x3float(softIronMatrix.data());
-      _calibrationComplete = true;
+      // Add finite checks
+      bool valid = true;
+      for (float val : hardIronOffsets) {
+        if (!std::isfinite(val)) {
+          valid = false;
+          break;
+        }
+      }
+      if (valid) {
+        for (float val : softIronMatrix) {
+          if (!std::isfinite(val)) {
+            valid = false;
+            break;
+          }
+        }
+      }
+      if (valid) {
+        LOG_INFO("Hard iron offsets: %f, %f, %f", hardIronOffsets[0], hardIronOffsets[1], hardIronOffsets[2]);
+        LOG_INFO(
+            "Loaded magnetometer calibration from persistent storage, hard iron matrix = %s, soft iron matrix = %s",
+            Vector3float(hardIronOffsets.data()).description().c_str(),
+            Matrix3x3float(softIronMatrix.data()).description().c_str());
+        _hardIronOffset = Vector3float(hardIronOffsets.data());
+        _softIronMatrix = Matrix3x3float(softIronMatrix.data());
+        _calibrationComplete = true;
+      } else {
+        LOG_ERROR("Invalid (non-finite) calibration data in persistent storage");
+      }
     } else {
       LOG_ERROR("Invalid calibration data in persistent storage");
     }
@@ -276,7 +288,7 @@ bool MagnetometerCalibrator::solveEllipsoidFit(
 {
   size_t N = measurements.size();
   // Minimum points check already done in calculateCalibration, but double-check
-  if (N < 10) return false;
+  if (N < 30) return false;
 
   // --- Calculate D^T*D and D^T*1 directly ---
   Matrix9x9float DtD(0.0f);  // Initialize 9x9 matrix to zeros
@@ -320,8 +332,15 @@ bool MagnetometerCalibrator::solveEllipsoidFit(
   // A robust implementation would check the result.
   Matrix9x9float DtD_inv = DtD.invert();
 
-  // Optional: Add check for NaNs/Infs in DtD_inv if invert doesn't throw/signal error
-  // for(size_t i=0; i<81; ++i) { if (!std::isfinite(DtD_inv.data[i])) return false; }
+  // Add check for NaNs/Infs in DtD_inv
+  bool valid = true;
+  for (size_t i = 0; i < 81; ++i) {
+    if (!std::isfinite(DtD_inv.data[i])) {
+      valid = false;
+      break;
+    }
+  }
+  if (!valid) return false;
 
   // Calculate the parameter vector v = (D^T*D)^-1 * (D^T*1)
   Vector9float v = DtD_inv * Dt1;
@@ -346,7 +365,15 @@ bool MagnetometerCalibrator::solveEllipsoidFit(
     return false;  // Cannot invert Q
   }
   Matrix3x3float Q_inv = Q.invert();
-  // Optional: check Q_inv for validity
+  // Add check for NaNs/Infs in Q_inv
+  valid = true;
+  for (size_t i = 0; i < 9; ++i) {
+    if (!std::isfinite(Q_inv.data[i])) {
+      valid = false;
+      break;
+    }
+  }
+  if (!valid) return false;
 
   hard_iron = Q_inv * GHI * -1.0f;
 
@@ -358,7 +385,7 @@ bool MagnetometerCalibrator::solveEllipsoidFit(
   RowVector3float GHI_T = GHI.transpose();      // 1x3
   Matrix<float, 1, 1> HtQH = H_T * Q * hard_iron;
   Matrix<float, 1, 1> GHItH = GHI_T * hard_iron;
-  float scale = HtQH(0, 0) + GHItH(0, 0) + 1.0f;
+  float scale = HtQH(0, 0) + 1.0f;
 
   if (std::fabs(scale) < std::numeric_limits<float>::epsilon()) {
     return false;  // Scale factor is too small
@@ -371,21 +398,27 @@ bool MagnetometerCalibrator::solveEllipsoidFit(
     return false;  // Cannot invert M'
   }
   Matrix3x3float M_prime_inv = M_prime.invert();
-  // Optional: check M_prime_inv for validity
+  // Add check for NaNs/Infs in M_prime_inv
+  valid = true;
+  for (size_t i = 0; i < 9; ++i) {
+    if (!std::isfinite(M_prime_inv.data[i])) {
+      valid = false;
+      break;
+    }
+  }
+  if (!valid) return false;
 
   // M'^-1 = V * Lambda * V^T
   Vector3float eigenvalues;     // Stores eigenvalues (diagonal of Lambda)
   Matrix3x3float eigenvectors;  // Stores eigenvectors (columns of V)
 
-  if (!eigenDecompositionSym3x3(M_prime_inv, eigenvalues, eigenvectors)) {
+  if (!eigenDecompositionSym3x3(M_prime, eigenvalues, eigenvectors)) {
     // Eigenvalue decomposition failed (likely didn't converge)
     return false;
   }
 
   // Check for non-positive eigenvalues (indicates poor fit or data)
-  if (eigenvalues(0, 0) <= std::numeric_limits<float>::epsilon() ||
-      eigenvalues(1, 0) <= std::numeric_limits<float>::epsilon() ||
-      eigenvalues(2, 0) <= std::numeric_limits<float>::epsilon()) {
+  if (eigenvalues(0, 0) <= 1e-6f || eigenvalues(1, 0) <= 1e-6f || eigenvalues(2, 0) <= 1e-6f) {
     // Use epsilon tolerance instead of strict zero
     return false;  // Ellipsoid is not positive definite -> bad fit
   }

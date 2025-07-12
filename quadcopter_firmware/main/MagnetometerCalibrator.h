@@ -4,15 +4,16 @@
 
 #include <Matrix.h>  // Include the provided Matrix class definition
 
-#include <cmath>
 #include <functional>
-#include <stdexcept>  // Used for potential exceptions
-#include <vector>     // Still needed for std::vector to store measurements
+#include <vector>  // Still needed for std::vector to store measurements
 
 #include "PersistentKeyValueStore.h"
 
-using Vector3float = Matrix<float, 3, 1>;
-using Matrix3x3float = Matrix<float, 3, 3>;
+typedef Matrix<float, 3, 1> Vector3float;
+typedef Matrix<float, 3, 3> Matrix3x3float;
+typedef Matrix<float, 9, 9> Matrix9x9float;
+typedef Matrix<float, 9, 1> Vector9float;
+typedef Matrix<float, 1, 3> RowVector3float;
 
 /**
  * @brief Performs Hard and Soft Iron Calibration for a magnetometer.
