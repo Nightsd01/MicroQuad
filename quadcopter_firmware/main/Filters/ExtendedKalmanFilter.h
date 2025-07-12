@@ -142,6 +142,7 @@ class ExtendedKalmanFilter
   float _R_mag;
   float _R_baro;
   float _R_range_finder;
+  Matrix<float, 3, 1> _mag_ref_world;
 
   // Configuration parameters
   Config _config;
@@ -163,4 +164,6 @@ class ExtendedKalmanFilter
   Matrix<float, STATE_DIM, STATE_DIM> _calculateQ(
       const Matrix<float, 4, 1>& q,  // Current quaternion estimate needed for Qqq
       float dt);
+
+  Matrix<float, 3, 4> _computeVectorJacobian(const Matrix<float, 4, 1>& q, const Matrix<float, 3, 1>& ref_vec);
 };

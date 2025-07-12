@@ -178,6 +178,20 @@ ExtendedKalmanFilter::ExtendedKalmanFilter(const Config& config) : _config(confi
 
   // Set gravity vector based on config
   _gravity_world(2, 0) = _config.gravity_magnitude;
+
+  // Set magnetic reference vector (NED frame, unit vector)
+  // Assuming declination 0, inclination ~60 degrees (typical mid-latitude)
+  // Set magnetic reference vector from config and normalize
+  _mag_ref_world = _config.mag_reference_vector;
+  float mag_norm = std::sqrt(_mag_ref_world.dot(_mag_ref_world));
+  if (mag_norm > EPSILON) {
+    _mag_ref_world /= mag_norm;
+  } else {
+    LOG_ERROR("Mag reference vector is zero, setting to horizontal north");
+    _mag_ref_world(0, 0) = 1.0f;  // Horizontal north as fallback
+    _mag_ref_world(1, 0) = 0.0f;
+    _mag_ref_world(2, 0) = 0.0f;
+  }
 }
 
 void ExtendedKalmanFilter::predict(
@@ -344,6 +358,34 @@ Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateF(
   return F_term;
 }
 
+Matrix<float, 3, 4> ExtendedKalmanFilter::_computeVectorJacobian(
+    const Matrix<float, 4, 1>& q, const Matrix<float, 3, 1>& ref_vec)
+{
+  Matrix<float, 3, 4> H;
+  float q0 = q(0, 0), q1 = q(1, 0), q2 = q(2, 0), q3 = q(3, 0);
+  float vx = ref_vec(0, 0), vy = ref_vec(1, 0), vz = ref_vec(2, 0);
+
+  // Row 0 (hx partials)
+  H(0, 0) = 2 * q0 * vx + 2 * q3 * vy - 2 * q2 * vz;
+  H(0, 1) = 2 * q1 * vx + 2 * q2 * vy + 2 * q3 * vz;
+  H(0, 2) = -2 * q2 * vx + 2 * q1 * vy - 2 * q0 * vz;
+  H(0, 3) = -2 * q3 * vx + 2 * q0 * vy + 2 * q1 * vz;
+
+  // Row 1 (hy partials)
+  H(1, 0) = -2 * q3 * vx + 2 * q0 * vy + 2 * q1 * vz;
+  H(1, 1) = 2 * q2 * vx - 2 * q1 * vy + 2 * q0 * vz;
+  H(1, 2) = 2 * q1 * vx + 2 * q2 * vy + 2 * q3 * vz;
+  H(1, 3) = -2 * q0 * vx - 2 * q3 * vy + 2 * q2 * vz;
+
+  // Row 2 (hz partials)
+  H(2, 0) = 2 * q2 * vx - 2 * q1 * vy + 2 * q0 * vz;
+  H(2, 1) = 2 * q3 * vx - 2 * q0 * vy - 2 * q1 * vz;
+  H(2, 2) = 2 * q0 * vx + 2 * q3 * vy - 2 * q2 * vz;
+  H(2, 3) = 2 * q1 * vx + 2 * q2 * vy + 2 * q3 * vz;
+
+  return H;
+}
+
 Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateQ(
     const Matrix<float, 4, 1>& q,  // Current quaternion estimate needed for Qqq
     float dt)
@@ -354,38 +396,27 @@ Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateQ(
 
   // --- Calculate Noise Variances for the interval dt ---
 
-  // Gyro noise affecting attitude state (variance = density * dt)
-  // Units: (rad/s)^2/Hz * s = rad^2
-  float var_gyro = _config.gyro_noise_density * dt;
+  // Gyro noise affecting attitude state (variance = density^2 * dt)
+  float var_gyro = std::pow(_config.gyro_noise_density, 2) * dt;
 
   // Vertical velocity process noise (from continuous white noise accel model)
-  // Units: (m/s^2)^2/Hz
   float Pn_accel = _config.velz_Process_noise;
 
-  // Gyro bias random walk variance (variance = density * dt)
-  // Units: (rad/s^2)^2/Hz * s = (rad/s)^2
-  float var_gyro_bias = _config.gyro_bias_random_walk * dt;
+  // Gyro bias random walk variance (variance = density^2 * dt)
+  float var_gyro_bias = std::pow(_config.gyro_bias_random_walk, 2) * dt;
 
-  // Barometer bias random walk variance (variance = density * dt)
-  // Config comment unit "(m/s)^2 / Hz" seems odd, should likely be m^2/Hz.
-  // Assuming the value corresponds to the variance rate needed: m^2/s
-  // Units: (m^2/s) * s = m^2
-  float var_baro_bias = _config.baro_bias_random_walk * dt;
+  // Barometer bias random walk variance (variance = density^2 * dt)
+  float var_baro_bias = std::pow(_config.baro_bias_random_walk, 2) * dt;
 
   // --- Populate Diagonal Blocks of Q ---
 
   // 1. Qqq: Attitude noise block (4x4)
-  //    Maps gyro noise variance into quaternion state variance.
-  //    Qqq = (0.25 * var_gyro) * (I - q*q^T)
-  //    Avoid calculation if noise density is zero.
   if (var_gyro > 1e-12f) {
-    // Extract quaternion components first (or pass q to _calculateQ)
     float q0 = q(0, 0);
     float q1 = q(1, 0);
     float q2 = q(2, 0);
     float q3 = q(3, 0);
 
-    // Construct Xi matrix
     Matrix<float, 4, 3> Xi = {
         {-q1, -q2, -q3},
         {q0,  -q3, q2 },
@@ -393,26 +424,18 @@ Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateQ(
         {-q2, q1,  q0 }
     };
 
-    // Gyro noise covariance matrix (3x3 diagonal)
     Matrix<float, 3, 3> GyroNoiseCov = Matrix<float, 3, 3>::identity() * var_gyro;
 
-    // Calculate Qqq
     Matrix<float, 4, 4> Qqq = Xi * GyroNoiseCov * Xi.transpose() * 0.25f;
 
-    // Set this 4x4 slice into the main Q matrix
     Q.setSlice<4, 4>(Q0_IDX, Q0_IDX, Qqq);
   }
 
   // 2. Altitude/Velocity Noise Block (2x2)
-  //    Derived from integrating white noise acceleration Pn_accel over dt.
-  //    Avoid calculation if noise density is zero.
-  if (Pn_accel > 1e-12f)  // Use a small tolerance
-  {
+  if (Pn_accel > 1e-12f) {
     float dt2 = dt * dt;
     float dt3 = dt2 * dt;
 
-    // Using direct element access based on indices
-    // Assumes ALT_IDX and VELZ_IDX are consecutive or handled correctly by operator()
     Q(ALT_IDX, ALT_IDX) = (dt3 / 3.0f) * Pn_accel;
     Q(ALT_IDX, VELZ_IDX) = (dt2 / 2.0f) * Pn_accel;
     Q(VELZ_IDX, ALT_IDX) = (dt2 / 2.0f) * Pn_accel;  // Symmetric
@@ -420,24 +443,16 @@ Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateQ(
   }
 
   // 3. Gyro Bias Noise Block (Diagonal 3x3)
-  //    Represents the random walk of the gyro biases.
-  //    Avoid calculation if noise density is zero.
-  if (var_gyro_bias > 1e-12f)  // Use a small tolerance
-  {
+  if (var_gyro_bias > 1e-12f) {
     Q(BG_XIDX, BG_XIDX) = var_gyro_bias;
     Q(BGY_IDX, BGY_IDX) = var_gyro_bias;
     Q(BGZ_IDX, BGZ_IDX) = var_gyro_bias;
   }
 
   // 4. Barometer Bias Noise (Scalar)
-  //    Represents the random walk of the barometer bias.
-  //    Avoid calculation if noise density is zero.
-  if (var_baro_bias > 1e-12f)  // Use a small tolerance
-  {
+  if (var_baro_bias > 1e-12f) {
     Q(BBARO_IDX, BBARO_IDX) = var_baro_bias;
   }
-
-  // All off-diagonal blocks (except alt/vel block) remain zero
 
   return Q;
 }
@@ -466,217 +481,130 @@ void ExtendedKalmanFilter::updateAccelerometer(float accel_x, float accel_y, flo
   // but returns the value we need q = q_normalized_temp; // Use the normalized version for calculations if desired
 
   // 3. Define the measurement vector z
-  Matrix<float, 3, 1> z;  // Default constructor zeros the matrix
-  z(0, 0) = accel_x;
-  z(1, 0) = accel_y;
-  z(2, 0) = accel_z;
+  Matrix<float, 3, 1> z = {{accel_x}, {accel_y}, {accel_z}};
 
   // 4. Calculate the predicted measurement h(x)
-  // Rotate the negative world gravity vector [-0, -0, -g].
-  Matrix<float, 3, 3> R_bw = quaternionToRotationMatrix(q);  // Get Body-to-World matrix
-  Matrix<float, 3, 3> R_wb = R_bw.transpose();               // Calculate World-to-Body via transpose
-  Matrix<float, 3, 1> h = R_wb * _gravity_world;             // Use the correct R_wb
+  Matrix<float, 3, 3> R_bw = quaternionToRotationMatrix(q);  // Body-to-World
+  Matrix<float, 3, 3> R_wb = R_bw.transpose();               // World-to-Body
+  Matrix<float, 3, 1> h = R_wb * _gravity_world;
 
   // 5. Calculate the measurement residual (innovation) y = z - h(x)
-  Matrix<float, 3, 1> y = z - h;  // Matrix subtraction uses operator-
+  Matrix<float, 3, 1> y = z - h;
 
   // 6. Calculate the measurement Jacobian H = dh/dx | x = x_pred
-  Matrix<float, 3, STATE_DIM> H;  // Default constructor zeros the matrix
+  Matrix<float, 3, STATE_DIM> H;  // zeros
 
-  float q0 = q(0, 0);  // Access elements of the quaternion copy
+  float q0 = q(0, 0);
   float q1 = q(1, 0);
   float q2 = q(2, 0);
   float q3 = q(3, 0);
   float g = _config.gravity_magnitude;
 
-  // Populate the 3x4 Jacobian block related to quaternion states
-  // using operator() for element access.
-  // ∂h/∂q0
   H(0, Q0_IDX) = -2.0f * g * q2;
   H(1, Q0_IDX) = 2.0f * g * q1;
   H(2, Q0_IDX) = 2.0f * g * q0;
-  // ∂h/∂q1
   H(0, Q1_IDX) = 2.0f * g * q3;
   H(1, Q1_IDX) = 2.0f * g * q0;
   H(2, Q1_IDX) = -2.0f * g * q1;
-  // ∂h/∂q2
   H(0, Q2_IDX) = -2.0f * g * q0;
   H(1, Q2_IDX) = 2.0f * g * q3;
   H(2, Q2_IDX) = -2.0f * g * q2;
-  // ∂h/∂q3
   H(0, Q3_IDX) = 2.0f * g * q1;
   H(1, Q3_IDX) = 2.0f * g * q2;
   H(2, Q3_IDX) = 2.0f * g * q3;
-  // Other columns of H remain zero.
 
-  // 7. Define the measurement noise covariance matrix R (3x3)
-  Matrix<float, 3, 3> R_mat;  // Default zeroed
+  // 7. Measurement noise R
+  Matrix<float, 3, 3> R_mat;
   R_mat(0, 0) = _R_accel;
   R_mat(1, 1) = _R_accel;
   R_mat(2, 2) = _R_accel;
 
-  // 8. Calculate the innovation covariance S = H * P_pred * H^T + R
-  // Uses operator* for matrix multiplication, transpose() method, and operator+
+  // 8. Innovation covariance S
   Matrix<float, 3, 3> S = H * P_pred * H.transpose() + R_mat;
 
-  // 9. Calculate the Kalman Gain K = P_pred * H^T * S^-1
-  // Uses transpose(), operator*, and invert() method
+  // 9. Kalman Gain K
   Matrix<float, STATE_DIM, 3> K = P_pred * H.transpose() * S.invert();
 
-  // 10. Update the state estimate: x_updated = x_pred + K * y
-  // Uses operator* and operator+
+  // 10. Update state
   _x = x_pred + K * y;
 
-  // 11. Update the state covariance: P_updated = (I - K * H) * P_pred
-  // Uses identity() static method, operator-, operator*,
+  // 11. Update covariance (Joseph form)
   Matrix<float, STATE_DIM, STATE_DIM> I = Matrix<float, STATE_DIM, STATE_DIM>::identity();
   Matrix<float, STATE_DIM, STATE_DIM> I_KH = I - K * H;
-  // Make sure R_mat (or R for 1D updates) holds the appropriate measurement noise covariance matrix
-  // calculated earlier in the specific update function.
-  // For updateAccelerometer/Magnetometer, use R_mat (3x3)
-  // For updateBarometer/Rangefinder, use R (1x1)
-  // Let's assume the variable is called 'R_noise_matrix' in general below:
-  // Matrix<float, M, M> R_noise_matrix = ...; // Defined earlier in the function (e.g., R_mat or R)
   _PCovariance = I_KH * P_pred * I_KH.transpose() + K * R_mat * K.transpose();
 
-  // Belt-and-braces: Enforce symmetry AFTER Joseph form update
+  // Enforce symmetry
   _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;
 
-  // 12. Renormalize the quaternion part of the updated state vector _x
-  //     using slice() to get a copy and setSlice() to write it back.
-  //     Assumes normalizeQuaternion returns the normalized value.
-  Matrix<float, 4, 1> q_updated = _x.slice<4, 1>(Q0_IDX, 0);  // Get copy of updated quat
-  Matrix<float, 4, 1> q_normalized =
-      normalizeQuaternion(q_updated);  // Normalize the copy
-                                       // Assumes normalizeQuaternion takes Matrix& but we rely on the return value.
-                                       // If it modifies q_updated in place and returns void/ref, this still works.
-  _x.setSlice<4, 1>(Q0_IDX, 0, q_normalized);  // Set the normalized values back into _x
-}
-
-float ExtendedKalmanFilter::_quatToYaw(const Matrix<float, 4, 1>& q) const
-{
-  float q0 = q(0, 0), q1 = q(1, 0), q2 = q(2, 0), q3 = q(3, 0);
-  // standard aerospace yaw formula:
-  float s = 2.f * (q0 * q3 + q1 * q2);
-  float c = 1.f - 2.f * (q2 * q2 + q3 * q3);
-  return std::atan2(s, c);
-}
-static float _wrapAngle(float angle)
-{
-  // Move angle into [ -PI, +3PI ) via offset, then reduce modulo 2PI
-  angle = std::fmod(angle + PI, TWO_PI);
-
-  // fmod in C/C++ can yield negative results when the input is negative,
-  // so shift back into [0, 2PI) if necessary
-  if (angle < 0.0f) {
-    angle += TWO_PI;
-  }
-
-  // Now angle is in [0, 2PI). Subtract PI to get it into [-PI, PI).
-  return angle - PI;
+  // 12. Renormalize quaternion
+  Matrix<float, 4, 1> q_updated = _x.slice<4, 1>(Q0_IDX, 0);
+  q_updated = normalizeQuaternion(q_updated);
+  _x.setSlice<4, 1>(Q0_IDX, 0, q_updated);
 }
 
 void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float mag_z)
 {
+  // --- EKF Update Step using Magnetometer (vector-based) ---
+
   // 1. Copy predicted state and covariance
   Matrix<float, STATE_DIM, 1> x_pred = _x;
   Matrix<float, STATE_DIM, STATE_DIM> P_pred = _PCovariance;
 
-  // 2. Check magnetometer strength to avoid near-zero vectors
-  float mag_norm_sq = mag_x * mag_x + mag_y * mag_y;
-  // For a heading measurement, we only really need x-y plane magnitude.
-  const float MIN_MAGNITUDE_SQ = 1e-12f;
-  if (mag_norm_sq < MIN_MAGNITUDE_SQ) {
-    // Too weak or near-zero in horizontal plane => skip
-    return;
+  // 2. Normalize measurement vector (to unit vector)
+  Matrix<float, 3, 1> z = {{mag_x}, {mag_y}, {mag_z}};
+  float mag_norm = std::sqrt(z.dot(z));
+  if (mag_norm < EPSILON) {
+    return;  // Skip if near-zero
   }
+  z /= mag_norm;
 
-  // 3. Compute measured heading from mag X/Y
-  //    (In typical aerospace “Z-down” body frame, yaw is atan2(mag_y, mag_x).)
-  float yaw_meas = std::atan2(mag_y, mag_x);
-
-  // 4. Extract quaternion from predicted state
+  // 3. Extract quaternion
   Matrix<float, 4, 1> q = x_pred.slice<4, 1>(Q0_IDX, 0);
+  q = normalizeQuaternion(q);  // Ensure normalized
 
-  // 5. Compute predicted yaw from quaternion
-  float yaw_pred = _quatToYaw(q);
-
-  // 6. Innovation y = (yaw_meas - yaw_pred), wrapped to [-pi, pi)
-  float y = _wrapAngle(yaw_meas - yaw_pred);
-
-  // 7. Build 1×STATE_DIM Jacobian H for the yaw measurement
-  //    We only fill partial derivatives wrt q0..q3. Everything else = 0.
-  Matrix<float, 1, STATE_DIM> H;
-  H.zeros();
-
-  // We compute d(yaw)/d(q). Let's do it explicitly:
-  //   yaw = atan2( 2(q0q3 + q1q2), 1 - 2(q2^2 + q3^2) )
-  //   Let s = 2(q0q3 + q1q2), c = 1 - 2(q2^2 + q3^2).
-  //   yaw = atan2(s, c).
-  // Then derivative wrt each q_i:
-  //   dyaw/dq_i = 1 / (s^2 + c^2) * [ c * d(s)/dq_i - s * d(c)/dq_i ].
-  // Where:
-  //   s = 2(q0q3 + q1q2)
-  //   ds/dq0 = 2 q3, ds/dq1 = 2 q2, ds/dq2 = 2 q1, ds/dq3 = 2 q0
-  //   c = 1 - 2(q2^2 + q3^2)
-  //   dc/dq0 = 0, dc/dq1 = 0, dc/dq2 = -4 q2, dc/dq3 = -4 q3
-
-  float q0 = q(0, 0), q1 = q(1, 0), q2 = q(2, 0), q3 = q(3, 0);
-  float s = 2.f * (q0 * q3 + q1 * q2);
-  float c = 1.f - 2.f * (q2 * q2 + q3 * q3);
-  float denom = (s * s + c * c);
-  if (denom < 1e-20f) {
-    // Very unlikely if magnetometer is valid; might skip update to avoid dividing by zero
+  // 4. Predicted measurement h (world mag ref rotated to body frame, normalized)
+  Matrix<float, 3, 3> R_bw = quaternionToRotationMatrix(q);
+  Matrix<float, 3, 3> R_wb = R_bw.transpose();
+  Matrix<float, 3, 1> h = R_wb * _mag_ref_world;
+  float h_norm = std::sqrt(h.dot(h));
+  if (h_norm < EPSILON) {
     return;
   }
+  h /= h_norm;
 
-  auto ds_dq0 = 2.f * q3;
-  auto ds_dq1 = 2.f * q2;
-  auto ds_dq2 = 2.f * q1;
-  auto ds_dq3 = 2.f * q0;
-  auto dc_dq2 = -4.f * q2;
-  auto dc_dq3 = -4.f * q3;
+  // 5. Innovation y
+  Matrix<float, 3, 1> y = z - h;
 
-  // Helper lambda to fill each partial derivative wrt q_i
-  auto dYaw_dq = [&](float ds_dqi, float dc_dqi) { return (1.f / denom) * (c * ds_dqi - s * dc_dqi); };
+  // 6. Jacobian H
+  Matrix<float, 3, STATE_DIM> H;  // zeros
+  Matrix<float, 3, 4> Hq =
+      _computeVectorJacobian(q, _mag_ref_world / h_norm);  // Note: scale doesn't matter since linear
+  H.setSlice<3, 4>(0, Q0_IDX, Hq);
 
-  float dyaw_dq0 = dYaw_dq(ds_dq0, 0.f);
-  float dyaw_dq1 = dYaw_dq(ds_dq1, 0.f);
-  float dyaw_dq2 = dYaw_dq(ds_dq2, dc_dq2);
-  float dyaw_dq3 = dYaw_dq(ds_dq3, dc_dq3);
+  // 7. Measurement noise R
+  Matrix<float, 3, 3> R_mat;
+  R_mat(0, 0) = _R_mag;
+  R_mat(1, 1) = _R_mag;
+  R_mat(2, 2) = _R_mag;
 
-  H(0, Q0_IDX) = dyaw_dq0;
-  H(0, Q1_IDX) = dyaw_dq1;
-  H(0, Q2_IDX) = dyaw_dq2;
-  H(0, Q3_IDX) = dyaw_dq3;
-  // All other states = 0 in H
+  // 8. Innovation covariance S
+  Matrix<float, 3, 3> S = H * P_pred * H.transpose() + R_mat;
 
-  // 8. Measurement noise: single scalar for heading variance
-  //    (You might define a separate heading noise param, or reuse _R_mag)
-  float R_yaw = _R_mag;  // or a dedicated _R_yaw for heading
+  // 9. Kalman Gain K
+  Matrix<float, STATE_DIM, 3> K = P_pred * H.transpose() * S.invert();
 
-  // 9. S = H * P_pred * H^T + R  (scalar)
-  float S = (H * P_pred * H.transpose())(0, 0) + R_yaw;
-  if (std::fabs(S) < 1e-12f) {
-    // Degenerate geometry, skip
-    return;
-  }
-
-  // 10. Kalman gain K = P_pred * H^T / S   (STATE_DIM×1 vector)
-  Matrix<float, STATE_DIM, 1> K = (P_pred * H.transpose()) * (1.0f / S);
-
-  // 11. State update
+  // 10. Update state
   _x = x_pred + K * y;
 
-  // 12. Covariance update (Joseph form)
+  // 11. Update covariance (Joseph form)
   Matrix<float, STATE_DIM, STATE_DIM> I = Matrix<float, STATE_DIM, STATE_DIM>::identity();
   Matrix<float, STATE_DIM, STATE_DIM> I_KH = I - K * H;
-  _PCovariance = I_KH * P_pred * I_KH.transpose() + K * R_yaw * K.transpose();
+  _PCovariance = I_KH * P_pred * I_KH.transpose() + K * R_mat * K.transpose();
 
-  // 13. Enforce symmetry
+  // Enforce symmetry
   _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;
 
-  // 14. Renormalize quaternion
+  // 12. Renormalize quaternion
   Matrix<float, 4, 1> q_new = _x.slice<4, 1>(Q0_IDX, 0);
   q_new = normalizeQuaternion(q_new);
   _x.setSlice<4, 1>(Q0_IDX, 0, q_new);
