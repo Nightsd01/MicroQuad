@@ -24,6 +24,17 @@ static void handleInterrupt(void) { _gotInterrupt = true; }
 
 #define INT16T_MAX 32768.0f
 
+// Macro to load and set IMU offsets from persistent storage
+#define ATTEMPT_LOAD_IMU_OFFSET(sensorPrefix, axis, persistentKey, sensorName, offsetFlag) \
+  do {                                                                                     \
+    if (persistentKvStore->hasValueForKey(persistentKey)) {                                \
+      const int16_t offset = persistentKvStore->getValue<int16_t>(persistentKey);          \
+      LOG_INFO("Setting %c " sensorName " offset: %d", #axis[0], offset);                  \
+      _imu->set##sensorPrefix##axis##Offset(offset);                                       \
+      offsetFlag = true;                                                                   \
+    }                                                                                      \
+  } while (0)
+
 static float gyroDPS(int16_t rawValue)
 {
   switch (GYRO_FSR) {
@@ -64,47 +75,16 @@ IMU::IMU(
   _imu = new ICM42688(_spi, csPin);
 
   bool setAnyOffset = false;
-  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::ACCEL_OFFSET_X)) {
-    const int16_t xOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::ACCEL_OFFSET_X);
-    LOG_INFO("Setting X accel offset: %d", xOffset);
-    _imu->setAccXOffset(xOffset);
-    setAnyOffset = true;
-  }
 
-  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::ACCEL_OFFSET_Y)) {
-    const int16_t yOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Y);
-    LOG_INFO("Setting Y accel offset: %d", yOffset);
-    _imu->setAccYOffset(yOffset);
-    setAnyOffset = true;
-  }
+  // Load accelerometer offsets
+  ATTEMPT_LOAD_IMU_OFFSET(Acc, X, PersistentKeysCommon::ACCEL_OFFSET_X, "accel", setAnyOffset);
+  ATTEMPT_LOAD_IMU_OFFSET(Acc, Y, PersistentKeysCommon::ACCEL_OFFSET_Y, "accel", setAnyOffset);
+  ATTEMPT_LOAD_IMU_OFFSET(Acc, Z, PersistentKeysCommon::ACCEL_OFFSET_Z, "accel", setAnyOffset);
 
-  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::ACCEL_OFFSET_Z)) {
-    const int16_t zOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Z);
-    LOG_INFO("Setting Z accel offset: %d", zOffset);
-    _imu->setAccZOffset(zOffset);
-    setAnyOffset = true;
-  }
-
-  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_X)) {
-    const int16_t xOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_X);
-    LOG_INFO("Setting X gyro offset: %d", xOffset);
-    _imu->setGyrXOffset(xOffset);
-    setAnyOffset = true;
-  }
-
-  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Y)) {
-    const int16_t yOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Y);
-    LOG_INFO("Setting Y gyro offset: %d", yOffset);
-    _imu->setGyrYOffset(yOffset);
-    setAnyOffset = true;
-  }
-
-  if (persistentKvStore->hasValueForKey(PersistentKeysCommon::GYRO_OFFSET_Z)) {
-    const int16_t zOffset = (int16_t)persistentKvStore->getIntForKey(PersistentKeysCommon::GYRO_OFFSET_Z);
-    LOG_INFO("Setting Z gyro offset: %d", zOffset);
-    _imu->setGyrZOffset(zOffset);
-    setAnyOffset = true;
-  }
+  // Load gyroscope offsets
+  ATTEMPT_LOAD_IMU_OFFSET(Gyr, X, PersistentKeysCommon::GYRO_OFFSET_X, "gyro", setAnyOffset);
+  ATTEMPT_LOAD_IMU_OFFSET(Gyr, Y, PersistentKeysCommon::GYRO_OFFSET_Y, "gyro", setAnyOffset);
+  ATTEMPT_LOAD_IMU_OFFSET(Gyr, Z, PersistentKeysCommon::GYRO_OFFSET_Z, "gyro", setAnyOffset);
 
   if (!setAnyOffset) {
     LOG_WARN("No IMU offsets found in persistent storage, please calibrate the device");
@@ -250,9 +230,9 @@ void IMU::_continueCalibration(imu_update_t update)
         averages[i] = (int16_t)(_accelCalibrationData.gyroCurrentSums[i] / NUM_CALIBRATION_SAMPLES_PER_AXIS);
       }
 
-      _persistentKvStore->setIntForKey(PersistentKeysCommon::GYRO_OFFSET_X, averages[0]);
-      _persistentKvStore->setIntForKey(PersistentKeysCommon::GYRO_OFFSET_Y, averages[1]);
-      _persistentKvStore->setIntForKey(PersistentKeysCommon::GYRO_OFFSET_Z, averages[2]);
+      _persistentKvStore->setValue<int16_t>(PersistentKeysCommon::GYRO_OFFSET_X, averages[0]);
+      _persistentKvStore->setValue<int16_t>(PersistentKeysCommon::GYRO_OFFSET_Y, averages[1]);
+      _persistentKvStore->setValue<int16_t>(PersistentKeysCommon::GYRO_OFFSET_Z, averages[2]);
 
       _imu->setGyrXOffset(averages[0]);
       _imu->setGyrYOffset(averages[1]);
@@ -292,9 +272,9 @@ void IMU::_continueCalibration(imu_update_t update)
       _imu->setAccYOffset(offsets[1]);
       _imu->setAccZOffset(offsets[2]);
 
-      _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_X, offsets[0]);
-      _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Y, offsets[1]);
-      _persistentKvStore->setIntForKey(PersistentKeysCommon::ACCEL_OFFSET_Z, offsets[2]);
+      _persistentKvStore->setValue<int64_t>(PersistentKeysCommon::ACCEL_OFFSET_X, offsets[0]);
+      _persistentKvStore->setValue<int64_t>(PersistentKeysCommon::ACCEL_OFFSET_Y, offsets[1]);
+      _persistentKvStore->setValue<int64_t>(PersistentKeysCommon::ACCEL_OFFSET_Z, offsets[2]);
 
       _accelCalibrationData.requestHandler(CalibrationRequest::Complete);
     } else {
