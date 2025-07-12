@@ -12,6 +12,7 @@
 #include <esp_partition.h>
 
 #include <algorithm>
+#include <vector>
 
 #include "AsyncController.h"
 #include "BLEController.h"
@@ -119,7 +120,7 @@ static Barometer _barometer;
 static bool _receivedAltitudeUpdate = false;
 static float _relativeAltitudeMeters = 0.0f;
 
-static GPSService* _gpsService = nullptr;
+static GPSService *_gpsService = nullptr;
 
 MotorMagCompensationHandler *_motorMagCompensationHandler;
 
@@ -643,22 +644,27 @@ void setup()
       &Wire);
 
   LOG_INFO("Initializing GPS service");
-  _gpsService = new GPSService(GPS_RX_PIN, GPS_TX_PIN, [&](const gps_fix_info_t& fix) {
+  _gpsService = new GPSService(GPS_RX_PIN, GPS_TX_PIN, [&](const gps_fix_info_t &fix) {
     // GPS fix callback - called for all GPS updates, even without valid fix
     static uint32_t lastGPSLogMs = 0;
     uint32_t currentMs = millis();
-    
+
     // Log GPS status periodically (every 5 seconds)
     if (currentMs - lastGPSLogMs > 5000) {
       lastGPSLogMs = currentMs;
       if (fix.position_valid) {
-        LOG_INFO("GPS Fix: Lat=%.6f, Lon=%.6f, Alt=%.1fm, Sats=%d, HDOP=%.1f",
-                 fix.latitude, fix.longitude, fix.altitude, fix.satellites, fix.hdop);
+        LOG_INFO(
+            "GPS Fix: Lat=%.6f, Lon=%.6f, Alt=%.1fm, Sats=%d, HDOP=%.1f",
+            fix.latitude,
+            fix.longitude,
+            fix.altitude,
+            fix.satellites,
+            fix.hdop);
       } else {
         LOG_INFO("GPS Status: No fix, Sats=%d, HDOP=%.1f", fix.satellites, fix.hdop);
       }
     }
-    
+
     // Always send telemetry data - this allows iOS app to show GPS status
     // even when there's no valid position fix
     gps_telem_event_t telemData = _gpsService->getTelemetryData();
@@ -860,22 +866,30 @@ void loop()
   _batteryController->loopHandler();
   _barometer.loopHandler();
   _vl53Manager.loopHandler();
-  
+
+  EXECUTE_PERIODIC(2000, {
+    if (_hasReceivedTimestamp) {
+      LOG_INFO("Current estimated timestamp: %.3f", _currentTimestamp());
+    } else {
+      LOG_INFO("Waiting for initial timestamp from iOS app...");
+    }
+  });
+
   if (_gpsService) {
     _gpsService->loopHandler();
-    
+
     // Periodic GPS status check
     static uint32_t lastGPSStatusCheckMs = 0;
     uint32_t currentMs = millis();
-    if (currentMs - lastGPSStatusCheckMs > 10000) { // Check every 10 seconds
+    if (currentMs - lastGPSStatusCheckMs > 10000) {  // Check every 10 seconds
       lastGPSStatusCheckMs = currentMs;
-      
+
       if (!_gpsService->isConnected()) {
-        LOG_ERROR("GPS not connected! Time since last data: %lu ms", 
-                  (unsigned long)_gpsService->getTimeSinceLastData());
+        LOG_ERROR(
+            "GPS not connected! Time since last data: %lu ms",
+            (unsigned long)_gpsService->getTimeSinceLastData());
       } else if (!_gpsService->hasValidFix()) {
-        LOG_WARN("GPS connected but no valid fix. Satellites: %d", 
-                 _gpsService->getSatelliteCount());
+        LOG_WARN("GPS connected but no valid fix. Satellites: %d", _gpsService->getSatelliteCount());
       }
     }
   }

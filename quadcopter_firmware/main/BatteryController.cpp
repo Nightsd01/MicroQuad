@@ -54,7 +54,8 @@ void BatteryController::loopHandler(void)
     batteryEvent.voltage = voltage;
     batteryEvent.status = status;
 
-    LOG_INFO(
+    LOG_INFO_PERIODIC_MILLIS(
+        1000,
         "Battery voltage: %.2fV, Status: %i, size %i",
         batteryEvent.voltage,
         (int)batteryEvent.status,
