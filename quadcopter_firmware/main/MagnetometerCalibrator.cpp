@@ -234,6 +234,7 @@ bool MagnetometerCalibrator::_calculateCalibration()
     _hardIronOffset = hard_iron_temp;
     _softIronMatrix = soft_iron_temp;
     _calibrationComplete = true;
+    _storeCalibrationData();  // Store after member variables are set
     return true;
   } else {
     // Calculation failed, reset to defaults to avoid using bad values
@@ -429,11 +430,8 @@ bool MagnetometerCalibrator::solveEllipsoidFit(
   // Calculate S = V * sqrt(Lambda_of_Mprime_inv) * V^T
   soft_iron = eigenvectors * Lambda_sqrt_inv * eigenvectors.transpose();
 
-  _calibrationComplete = true;  // Set calibration complete flag
-
   // Note: The optional scaling based on expected_field_magnitude_gauss can still be added here if desired.
 
-  _storeCalibrationData();
   return true;  // Successfully calculated parameters
 }
 #endif  // MATLAB_SIM
