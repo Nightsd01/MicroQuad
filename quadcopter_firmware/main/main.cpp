@@ -50,8 +50,7 @@ BatteryController *_batteryController;
 
 static LEDController _ledController(LED_DATA_PIN);
 
-struct _memory_usage_telemetry_packet_t
-{
+struct _memory_usage_telemetry_packet_t {
   uint32_t freeHeap;
   uint32_t minFreeHeap;
   uint32_t totalHeapSize;
@@ -110,8 +109,8 @@ static PIDPreferences *_pidPreferences;
 
 static VL53Manager _vl53Manager;
 
-// Used at startup so we can determine when the quadcopter is not in motion, in order to
-// perform a quick gyro calibration
+// Used at startup so we can determine when the quadcopter is not in motion, in
+// order to perform a quick gyro calibration
 static MotionDetector _motionDetector;
 
 EulerAngle _euler;
@@ -149,8 +148,7 @@ static bool _recordDebugDataLEDStateChanged = false;
 // We only have 4 RMT channels on the ESP32 and so in order to use 4 motors
 // and 1 LED we need to share the channel
 static bool _waitingForLED = false;
-static void _updateLED(int red, int green, int blue)
-{
+static void _updateLED(int red, int green, int blue) {
   if (_waitingForLED) {
     LOG_WARN("Already waiting for LED transition to occur");
     return;
@@ -159,7 +157,8 @@ static void _updateLED(int red, int green, int blue)
   if (_speedControllers.size() > 0 && _speedControllers[0]->isConnected) {
     _speedControllers[0]->disconnectRMT();
   } else if (_speedControllers.size() > 0) {
-    LOG_WARN("RMT multiplexing issue: Speed controller was already disconnected");
+    LOG_WARN(
+        "RMT multiplexing issue: Speed controller was already disconnected");
   }
   // Calling showRGB initializes the RMT channel
   _ledController.showRGB(red, green, blue);
@@ -175,8 +174,7 @@ static void _updateLED(int red, int green, int blue)
   });
 }
 
-static void updateMotors(motor_outputs_t outputs)
-{
+static void updateMotors(motor_outputs_t outputs) {
   if (!_completedFirstArm) {
     return;
   }
@@ -185,41 +183,43 @@ static void updateMotors(motor_outputs_t outputs)
     if (!_armed) {
       _speedControllers[i]->setSpeed(MIN_THROTTLE_RANGE);
     } else {
-      _speedControllers[i]->setSpeed(map(outputs[i], 1000, 2000, MIN_THROTTLE_RANGE, MAX_THROTTLE_RANGE));
-      // LOG_INFO_PERIODIC_MILLIS(100, "Motor %d, %f, %f, %f, %f", i, outputs[0], outputs[1], outputs[2], outputs[3]);
+      _speedControllers[i]->setSpeed(
+          map(outputs[i], 1000, 2000, MIN_THROTTLE_RANGE, MAX_THROTTLE_RANGE));
+      // LOG_INFO_PERIODIC_MILLIS(100, "Motor %d, %f, %f, %f, %f", i,
+      // outputs[0], outputs[1], outputs[2], outputs[3]);
     }
   }
 }
 
-static void _updateArmStatus(void)
-{
+static void _updateArmStatus(void) {
   if (_speedControllers.size() == 0) {
     return;
   }
   if (_armed && !_completedFirstArm) {
     _completedFirstArm = true;
     _updateLED(_armed ? 255 : 0, _armed ? 0 : 255, 0);
-    AsyncController::main.executeAfter(50, []() { updateMotors({1000.0f, 1000.0f, 1000.0f, 1000.0f}); });
+    AsyncController::main.executeAfter(
+        50, []() { updateMotors({1000.0f, 1000.0f, 1000.0f, 1000.0f}); });
     return;
   }
-  _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange, &_armed, sizeof(bool));
+  _telemetryController->updateTelemetryEvent(TelemetryEvent::ArmStatusChange,
+                                             &_armed, sizeof(bool));
   if (!_enteredEmergencyMode) {
     _updateLED(_armed ? 255 : 0, _armed ? 0 : 255, 0);
   }
 }
 
-void _setupMotors(void)
-{
+void _setupMotors(void) {
   LOG_INFO("Setting up motor outputs");
   for (int i = 0; i < NUM_MOTORS; i++) {
     LOG_INFO("Attaching motor %i to pin %i", i, MOTOR_PINS[i]);
-    MotorController *controller = new MotorController(MOTOR_PINS[i], MOTOR_TELEM_PINS[i], false);
+    MotorController *controller =
+        new MotorController(MOTOR_PINS[i], MOTOR_TELEM_PINS[i], false);
     _speedControllers.push_back(controller);
   }
 }
 
-static float _getHeadingFromMagGaussReading(mag_update_t mag)
-{
+static float _getHeadingFromMagGaussReading(mag_update_t mag) {
   float heading = atan2f(mag.y, mag.x) * (180.0f / (float)M_PI);
   if (heading < 0.0f) {
     heading += 360.0f;
@@ -227,8 +227,7 @@ static float _getHeadingFromMagGaussReading(mag_update_t mag)
   return heading;
 }
 
-static void _gotMagUpdate(mag_update_t update)
-{
+static void _gotMagUpdate(mag_update_t update) {
   _receivedMagUpdate = true;
   _magValues = update;
   _helper->magValuesRaw[0] = update.x;
@@ -251,17 +250,23 @@ static void _gotMagUpdate(mag_update_t update)
     _helper->magValuesPostSoftHardMatrixCalibration[3] = _magValues.heading;
     LOG_INFO_PERIODIC_MILLIS(
         500,
-        "Magnetometer soft/hard iron calibration applied, magnitude before: %.3f, after: %.3f",
-        std::sqrt(update.x * update.x + update.y * update.y + update.z * update.z),
-        std::sqrt(_magValues.x * _magValues.x + _magValues.y * _magValues.y + _magValues.z * _magValues.z));
+        "Magnetometer soft/hard iron calibration applied, magnitude before: "
+        "%.3f, after: %.3f",
+        std::sqrt(update.x * update.x + update.y * update.y +
+                  update.z * update.z),
+        std::sqrt(_magValues.x * _magValues.x + _magValues.y * _magValues.y +
+                  _magValues.z * _magValues.z));
   } else {
-    LOG_WARN_PERIODIC_MILLIS(500, "Magnetometer not calibrated, using raw values");
+    LOG_WARN_PERIODIC_MILLIS(500,
+                             "Magnetometer not calibrated, using raw values");
   }
 
   if (_motorMagCompensationHandler->isCalibrating) {
     _motorMagCompensationHandler->updateMagValue(update);
-  } else if (_completedFirstArm && _mostRecentMotorValues[0] > 0 && _motorMagCompensationHandler->isCalibrated) {
-    _magValues = _motorMagCompensationHandler->applyMagneticMotorCompensation(_magValues, _mostRecentMotorValues);
+  } else if (_completedFirstArm && _mostRecentMotorValues[0] > 0 &&
+             _motorMagCompensationHandler->isCalibrated) {
+    _magValues = _motorMagCompensationHandler->applyMagneticMotorCompensation(
+        _magValues, _mostRecentMotorValues);
     _helper->magValuesPostMotorMagCompCalibration[0] = _magValues.x;
     _helper->magValuesPostMotorMagCompCalibration[1] = _magValues.y;
     _helper->magValuesPostMotorMagCompCalibration[2] = _magValues.z;
@@ -269,13 +274,14 @@ static void _gotMagUpdate(mag_update_t update)
   }
 
   EXECUTE_PERIODIC(1000, {
-    LOG_INFO("Sending mag update with heading %f, from update %f", _magValues.heading, update.heading);
-    _telemetryController->updateTelemetryEvent(TelemetryEvent::MagnetometerXYZRaw, &_magValues, sizeof(mag_update_t));
+    LOG_INFO("Sending mag update with heading %f, from update %f",
+             _magValues.heading, update.heading);
+    _telemetryController->updateTelemetryEvent(
+        TelemetryEvent::MagnetometerXYZRaw, &_magValues, sizeof(mag_update_t));
   });
 }
 
-static void _configureMagnetometer(void)
-{
+static void _configureMagnetometer(void) {
   _compass = new QMC5883L(&Wire, QMC5883_ADDRESS);
   _compass->addObserver([&](mag_update_t update) { _gotMagUpdate(update); });
 
@@ -291,66 +297,69 @@ static void _configureMagnetometer(void)
   }
 }
 
-static void initController()
-{
+static void initController() {
   delete _controller;
   _controller = new QuadcopterController(_helper, micros());
 }
 
-static void _setupMagnetometerCalibrator(void)
-{
+static void _setupMagnetometerCalibrator(void) {
   delete _magCalibrator;
 
   float expectedFieldMagnitudeGauss = 0.0f;
   Matrix<float, 3, 1> magRefVector = MAGNETIC_REFERENCE_VECTOR;
   for (int i = 0; i < 3; i++) {
-    expectedFieldMagnitudeGauss += magRefVector(i, 0) * magRefVector(i, 0);  // Sum of squares
+    expectedFieldMagnitudeGauss +=
+        magRefVector(i, 0) * magRefVector(i, 0); // Sum of squares
   }
-  expectedFieldMagnitudeGauss = std::sqrt(expectedFieldMagnitudeGauss);  // Proper magnitude calculation
-  MagnetometerCalibrator::Config config = {
-      .min_points = 200,
-      .max_points = 0,  // unlimited
-      .num_seconds_for_calibration = 30,
-      .expected_field_magnitude_gauss = expectedFieldMagnitudeGauss};
+  expectedFieldMagnitudeGauss =
+      std::sqrt(expectedFieldMagnitudeGauss); // Proper magnitude calculation
+  MagnetometerCalibrator::Config config = {.min_points = 200,
+                                           .max_points = 0, // unlimited
+                                           .num_seconds_for_calibration = 30,
+                                           .expected_field_magnitude_gauss =
+                                               expectedFieldMagnitudeGauss};
   _magCalibrator = new MagnetometerCalibrator(config, &_persistentKvStore);
 }
 
-static void _handleMagnetometerCalibration(CalibrationResponse response)
-{
+static void _handleMagnetometerCalibration(CalibrationResponse response) {
   switch (response) {
-    case CalibrationResponse::Start: {
-      LOG_INFO("Starting magnetometer calibration");
-      _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Roll360);
-      break;
-    }
-    case CalibrationResponse::Continue: {
-      LOG_INFO("Beginning compass calibration");
-      _magCalibrator->startCalibration([&](bool success) {
-        if (!success) {
-          LOG_ERROR("Failed to calibrate compass");
-          _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Failed);
-          return;
-        }
-        LOG_INFO(
-            "Successfully calibrated compass with hard iron matrix: %s, soft iron matrix: %s",
-            _magCalibrator->getHardIronOffset().description().c_str(),
-            _magCalibrator->getSoftIronMatrix().description().c_str());
-        _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Complete);
-      });
-      break;
-    }
-    default: {
-      LOG_ERROR("Received unexpected calibration response: %d", response);
-      _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer, CalibrationRequest::Failed);
-      break;
-    }
+  case CalibrationResponse::Start: {
+    LOG_INFO("Starting magnetometer calibration");
+    _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer,
+                                               CalibrationRequest::Roll360);
+    break;
+  }
+  case CalibrationResponse::Continue: {
+    LOG_INFO("Beginning compass calibration");
+    _magCalibrator->startCalibration([&](bool success) {
+      if (!success) {
+        LOG_ERROR("Failed to calibrate compass");
+        _bluetoothController.sendCalibrationUpdate(
+            CalibrationType::Magnetometer, CalibrationRequest::Failed);
+        return;
+      }
+      LOG_INFO("Successfully calibrated compass with hard iron matrix: %s, "
+               "soft iron matrix: %s",
+               _magCalibrator->getHardIronOffset().description().c_str(),
+               _magCalibrator->getSoftIronMatrix().description().c_str());
+      _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer,
+                                                 CalibrationRequest::Complete);
+    });
+    break;
+  }
+  default: {
+    LOG_ERROR("Received unexpected calibration response: %d", response);
+    _bluetoothController.sendCalibrationUpdate(CalibrationType::Magnetometer,
+                                               CalibrationRequest::Failed);
+    break;
+  }
   }
 }
 
-static void _beginMagneticMotorInterferenceCalibration(void)
-{
+static void _beginMagneticMotorInterferenceCalibration(void) {
   if (!_armed) {
-    LOG_ERROR("Cannot start magnetometer-motors-compensation calibration when not armed");
+    LOG_ERROR("Cannot start magnetometer-motors-compensation calibration when "
+              "not armed");
     _bluetoothController.sendCalibrationUpdate(
         CalibrationType::MagnetometerMotorsCompensation,
         CalibrationRequest::Failed);
@@ -360,12 +369,8 @@ static void _beginMagneticMotorInterferenceCalibration(void)
   _compass->setCalibrationOffsets({0.0f, 0.0f, 0.0f});
   _motorMagCompensationHandler->beginCalibration(
       [&](motor_outputs_t outputs) {
-        LOG_INFO(
-            "Updating motor outputs for calibration %f, %f, %f, %f",
-            outputs[0],
-            outputs[1],
-            outputs[2],
-            outputs[3]);
+        LOG_INFO("Updating motor outputs for calibration %f, %f, %f, %f",
+                 outputs[0], outputs[1], outputs[2], outputs[3]);
         for (int i = 0; i < NUM_MOTORS; i++) {
           _motorDebugValues[i] = outputs[i];
         }
@@ -374,7 +379,8 @@ static void _beginMagneticMotorInterferenceCalibration(void)
         // completion callback
         _motorDebugEnabled = false;
         if (!success) {
-          LOG_ERROR("Failed to complete magnetometer motors compensation calibration");
+          LOG_ERROR("Failed to complete magnetometer motors compensation "
+                    "calibration");
           _bluetoothController.sendCalibrationUpdate(
               CalibrationType::MagnetometerMotorsCompensation,
               CalibrationRequest::Failed);
@@ -386,45 +392,42 @@ static void _beginMagneticMotorInterferenceCalibration(void)
       });
 }
 
-static void _handleCalibration(CalibrationType type, CalibrationResponse response)
-{
+static void _handleCalibration(CalibrationType type,
+                               CalibrationResponse response) {
   switch (type) {
-    case CalibrationType::AccelerometerGyro: {
-      std::map<CalibrationResponse, std::function<void(void)>> handlers =
-          _imu->calibrationHandlers([](CalibrationRequest request) {
-            _bluetoothController.sendCalibrationUpdate(CalibrationType::AccelerometerGyro, request);
-          });
-      LOG_INFO("Handling calibration response %d", response);
-      handlers[response]();
-      break;
-    }
-    case CalibrationType::Magnetometer: {
-      _handleMagnetometerCalibration(response);
-      break;
-    }
-    case CalibrationType::MagnetometerMotorsCompensation: {
-      _beginMagneticMotorInterferenceCalibration();
-    }
+  case CalibrationType::AccelerometerGyro: {
+    std::map<CalibrationResponse, std::function<void(void)>> handlers =
+        _imu->calibrationHandlers([](CalibrationRequest request) {
+          _bluetoothController.sendCalibrationUpdate(
+              CalibrationType::AccelerometerGyro, request);
+        });
+    LOG_INFO("Handling calibration response %d", response);
+    handlers[response]();
+    break;
+  }
+  case CalibrationType::Magnetometer: {
+    _handleMagnetometerCalibration(response);
+    break;
+  }
+  case CalibrationType::MagnetometerMotorsCompensation: {
+    _beginMagneticMotorInterferenceCalibration();
+  }
   }
 }
 
 static controller_values_t _controllerValues = {
-    .leftStickInput = {.x = INPUT_MAX_CONTROLLER_INPUT / 2.0, .y = 0.0f                            },
-    .rightStickInput = {.x = INPUT_MAX_CONTROLLER_INPUT / 2.0, .y = INPUT_MAX_CONTROLLER_INPUT / 2.0}
-};
+    .leftStickInput = {.x = INPUT_MAX_CONTROLLER_INPUT / 2.0, .y = 0.0f},
+    .rightStickInput = {.x = INPUT_MAX_CONTROLLER_INPUT / 2.0,
+                        .y = INPUT_MAX_CONTROLLER_INPUT / 2.0}};
 
 static const Matrix<float, 3, 3> _misalignmentMatrix = {
-    {0.7071f, -0.7071f, 0.0f},
-    {0.7071f, 0.7071f,  0.0f},
-    {0.0f,    0.0f,     1.0f}
-};
+    {0.7071f, -0.7071f, 0.0f}, {0.7071f, 0.7071f, 0.0f}, {0.0f, 0.0f, 1.0f}};
 
-static Vector3f _applyMisalignment(const Vector3f &v, const Matrix<float, 3, 3> &mat)
-{
-  return {
-      .x = mat(0, 0) * v.x + mat(0, 1) * v.y + mat(0, 2) * v.z,
-      .y = mat(1, 0) * v.x + mat(1, 1) * v.y + mat(1, 2) * v.z,
-      .z = mat(2, 0) * v.x + mat(2, 1) * v.y + mat(2, 2) * v.z};
+static Vector3f _applyMisalignment(const Vector3f &v,
+                                   const Matrix<float, 3, 3> &mat) {
+  return {.x = mat(0, 0) * v.x + mat(0, 1) * v.y + mat(0, 2) * v.z,
+          .y = mat(1, 0) * v.x + mat(1, 1) * v.y + mat(1, 2) * v.z,
+          .z = mat(2, 0) * v.x + mat(2, 1) * v.y + mat(2, 2) * v.z};
 }
 
 static float _heightMetersRangefinderEstimate = 0.0f;
@@ -435,9 +438,9 @@ static bool _computedEuler = false;
 
 static uint64_t _imuUpdateCounter = 0;
 
-static void _receivedIMUUpdate(imu_update_t update)
-{
-  const float deltaTimeSeconds = (float)(micros() - _previousMicros) / 1000000.0f;
+static void _receivedIMUUpdate(imu_update_t update) {
+  const float deltaTimeSeconds =
+      (float)(micros() - _previousMicros) / 1000000.0f;
   _previousMicros = micros();
   _receivedFirstImuUpdate = true;
 
@@ -454,43 +457,43 @@ static void _receivedIMUUpdate(imu_update_t update)
     return;
   }
   _extendedKalmanFilter.predict(
-      gyroscope.x,
-      gyroscope.y,
-      gyroscope.z,
-      accelerometer.x * STANDARD_GRAVITY,
-      accelerometer.y * STANDARD_GRAVITY,
-      accelerometer.z * STANDARD_GRAVITY,
+      gyroscope.x, gyroscope.y, gyroscope.z, accelerometer.x * STANDARD_GRAVITY,
+      accelerometer.y * STANDARD_GRAVITY, accelerometer.z * STANDARD_GRAVITY,
       deltaTimeSeconds);
 
-  if (_receivedAltitudeUpdate && std::isfinite(_relativeAltitudeMeters) && _relativeAltitudeMeters >= 0.0f &&
-      _imu->completedQuickCalibration) {
+  if (_receivedAltitudeUpdate && std::isfinite(_relativeAltitudeMeters) &&
+      _relativeAltitudeMeters >= 0.0f && _imu->completedQuickCalibration) {
     _extendedKalmanFilter.updateBarometer(_relativeAltitudeMeters);
   }
 
-  if (_setRangefinderHeightEstimate && std::isfinite(_heightMetersRangefinderEstimate) &&
+  if (_setRangefinderHeightEstimate &&
+      std::isfinite(_heightMetersRangefinderEstimate) &&
       _imu->completedQuickCalibration) {
     _extendedKalmanFilter.updateRangefinder(_heightMetersRangefinderEstimate);
   }
 
-  _extendedKalmanFilter.updateMagnetometer(_magValues.x, _magValues.y, _magValues.z);
+  // _extendedKalmanFilter.updateMagnetometer(_magValues.x, _magValues.y,
+  // _magValues.z);
 
-  // NOTE: Due to all the matrix allocations, we cannot combine this with predict()
-  // because of the limited stack size on the ESP32
-  _extendedKalmanFilter.updateAccelerometer(
-      accelerometer.x * STANDARD_GRAVITY,
-      accelerometer.y * STANDARD_GRAVITY,
-      accelerometer.z * STANDARD_GRAVITY);
+  // NOTE: Due to all the matrix allocations, we cannot combine this with
+  // predict() because of the limited stack size on the ESP32
+  _extendedKalmanFilter.updateAccelerometer(accelerometer.x * STANDARD_GRAVITY,
+                                            accelerometer.y * STANDARD_GRAVITY,
+                                            accelerometer.z * STANDARD_GRAVITY);
 
-  const auto ekfAttitudeQuaternion = _extendedKalmanFilter.getAttitudeQuaternion();
+  const auto ekfAttitudeQuaternion =
+      _extendedKalmanFilter.getAttitudeQuaternion();
   const auto ekfYawPitchRoll = _extendedKalmanFilter.getYawPitchRollDegrees();
   auto ekfAltitude = MAX(_extendedKalmanFilter.getAltitude(), 0.0f);
   auto ekfVerticalVelocity = _extendedKalmanFilter.getVerticalVelocity();
 
-  _euler = {.yaw = ekfYawPitchRoll(0, 0), .pitch = ekfYawPitchRoll(1, 0), .roll = ekfYawPitchRoll(2, 0)};
+  _euler = {.yaw = ekfYawPitchRoll(0, 0),
+            .pitch = ekfYawPitchRoll(1, 0),
+            .roll = ekfYawPitchRoll(2, 0)};
 
   _imuValues = {
-      .gyroOutput = {gyroscope.z, gyroscope.y,  gyroscope.x},
-      .yawPitchRollDegrees = {_euler.yaw,  _euler.pitch, _euler.roll},
+      .gyroOutput = {gyroscope.z, gyroscope.y, gyroscope.x},
+      .yawPitchRollDegrees = {_euler.yaw, _euler.pitch, _euler.roll},
       .altitudeMeters = ekfAltitude,
       .verticalVelocityMetersPerSec = ekfVerticalVelocity,
   };
@@ -530,11 +533,12 @@ static void _receivedIMUUpdate(imu_update_t update)
 
   _imuUpdateCounter++;
   EXECUTE_PERIODIC(1000, {
-    _telemetryController->updateTelemetryEvent(TelemetryEvent::IMUUpdateRate, &_imuUpdateCounter, sizeof(uint64_t));
-    _telemetryController->updateTelemetryEvent(TelemetryEvent::EKFAltitudeEstimate, &ekfAltitude, sizeof(float));
     _telemetryController->updateTelemetryEvent(
-        TelemetryEvent::EKFVerticalVelocityEstimate,
-        &ekfVerticalVelocity,
+        TelemetryEvent::IMUUpdateRate, &_imuUpdateCounter, sizeof(uint64_t));
+    _telemetryController->updateTelemetryEvent(
+        TelemetryEvent::EKFAltitudeEstimate, &ekfAltitude, sizeof(float));
+    _telemetryController->updateTelemetryEvent(
+        TelemetryEvent::EKFVerticalVelocityEstimate, &ekfVerticalVelocity,
         sizeof(float));
     _imuUpdateCounter = 0;
   });
@@ -545,10 +549,9 @@ static void _armProcedure(bool arm) { _armed = arm; }
 static uint64_t _firstStageSetupCompletionTimeMillis = 0;
 
 // Time Synchronization Function
-double _currentTimestamp(void)
-{
+double _currentTimestamp(void) {
   if (!_hasReceivedTimestamp) {
-    return 0.0;  // Or some other indicator of invalid time
+    return 0.0; // Or some other indicator of invalid time
   }
   // Calculate elapsed time in seconds since the initial timestamp was received
   double elapsedSeconds = (double)(micros() - _initialMicros) / 1000000.0;
@@ -556,8 +559,7 @@ double _currentTimestamp(void)
 }
 
 // Initial setup
-void setup()
-{
+void setup() {
   esp_log_level_set("rmt", ESP_LOG_DEBUG);
   const unsigned long initializationTime = millis();
   Wire.setClock(400000);
@@ -568,45 +570,53 @@ void setup()
   _helper = new DebugHelper();
 
   // Wait for serial to become available
-  while (!Serial);
+  while (!Serial)
+    ;
 
   LOG_INFO("Initializing bluetooth connection");
 
   _bluetoothController.setControlsUpdateHandler([&](controls_update_t update) {
     _controllerValues = {
-        .leftStickInput = {.x = update.yaw,   .y = update.throttle},
-        .rightStickInput = {.x = update.pitch, .y = update.roll    }
-    };
+        .leftStickInput = {.x = update.yaw, .y = update.throttle},
+        .rightStickInput = {.x = update.pitch, .y = update.roll}};
   });
 
-  _bluetoothController.setArmStatusUpdateHandler([&](bool armStatus) { _armProcedure(armStatus); });
+  _bluetoothController.setArmStatusUpdateHandler(
+      [&](bool armStatus) { _armProcedure(armStatus); });
 
-  _bluetoothController.setResetStatusUpdateHandler([&]() { _resetFlag = true; });
+  _bluetoothController.setResetStatusUpdateHandler(
+      [&]() { _resetFlag = true; });
 
-  _bluetoothController.setMotorDebugEnabledUpdateHandler([&](bool motorDebug) { _motorDebugEnabled = motorDebug; });
+  _bluetoothController.setMotorDebugEnabledUpdateHandler(
+      [&](bool motorDebug) { _motorDebugEnabled = motorDebug; });
 
-  _bluetoothController.setMotorDebugUpdateHandler([&](motor_debug_update_t motorDebugUpdate) {
-    _motorDebugValues[motorDebugUpdate.motorNum] = motorDebugUpdate.motorWriteValue;
-  });
+  _bluetoothController.setMotorDebugUpdateHandler(
+      [&](motor_debug_update_t motorDebugUpdate) {
+        _motorDebugValues[motorDebugUpdate.motorNum] =
+            motorDebugUpdate.motorWriteValue;
+      });
 
-  _bluetoothController.setCalibrationUpdateHandler([&](CalibrationType type, CalibrationResponse response) {
-    AsyncController::main.executePossiblySync([type, response]() {
-      _handleCalibration(type, response);
-      LOG_INFO("Calibration update received: type = %d, response = %d", type, response);
-    });
-  });
+  _bluetoothController.setCalibrationUpdateHandler(
+      [&](CalibrationType type, CalibrationResponse response) {
+        AsyncController::main.executePossiblySync([type, response]() {
+          _handleCalibration(type, response);
+          LOG_INFO("Calibration update received: type = %d, response = %d",
+                   type, response);
+        });
+      });
 
-  _bluetoothController.setDebugDataUpdateHandler([&](debug_recording_update_t debugDataUpdate) {
-    AsyncController::main.executePossiblySync([debugDataUpdate]() {
-      LOG_INFO(
-          "Received debug data update: sendDebugData = %d, recordDebugData = %d",
-          debugDataUpdate.sendDebugData,
-          debugDataUpdate.recordDebugData);
-    });
-    _sendDebugData = debugDataUpdate.sendDebugData;
-    _recordDebugData = debugDataUpdate.recordDebugData;
-    _startedRecordingDebugDataTimeMillis = millis();
-  });
+  _bluetoothController.setDebugDataUpdateHandler(
+      [&](debug_recording_update_t debugDataUpdate) {
+        AsyncController::main.executePossiblySync([debugDataUpdate]() {
+          LOG_INFO("Received debug data update: sendDebugData = %d, "
+                   "recordDebugData = %d",
+                   debugDataUpdate.sendDebugData,
+                   debugDataUpdate.recordDebugData);
+        });
+        _sendDebugData = debugDataUpdate.sendDebugData;
+        _recordDebugData = debugDataUpdate.recordDebugData;
+        _startedRecordingDebugDataTimeMillis = millis();
+      });
 
   // Set the handler for when we receive a timestamp from the iOS app
   _bluetoothController.setTimeUpdateHandler([&](double timestamp) {
@@ -614,22 +624,26 @@ void setup()
       _initialTimestampSeconds = timestamp;
       _initialMicros = micros();
       _hasReceivedTimestamp = true;
-      LOG_INFO_ASYNC_ON_MAIN("Received initial timestamp from iOS: %.3f", _initialTimestampSeconds);
+      LOG_INFO_ASYNC_ON_MAIN("Received initial timestamp from iOS: %.3f",
+                             _initialTimestampSeconds);
       LOG_INFO_ASYNC_ON_MAIN("Initial micros: %llu", _initialMicros);
     } else {
       // Optional: handle subsequent time updates for resynchronization
-      LOG_INFO_ASYNC_ON_MAIN("Received subsequent timestamp update: %.3f", timestamp);
+      LOG_INFO_ASYNC_ON_MAIN("Received subsequent timestamp update: %.3f",
+                             timestamp);
     }
   });
 
   // Setup BLE Server
   _bluetoothController.beginBluetooth();
 
-  // Initialize last connected time to current time to prevent immediate emergency mode
+  // Initialize last connected time to current time to prevent immediate
+  // emergency mode
   _lastBluetoothConnectedTimeMillis = millis();
 
   LOG_INFO("Initializing PID preferences");
-  _pidPreferences = new PIDPreferences(&_bluetoothController, &_persistentKvStore);
+  _pidPreferences =
+      new PIDPreferences(&_bluetoothController, &_persistentKvStore);
 
   LOG_INFO("Initializing quadcopter controller");
   initController();
@@ -644,9 +658,7 @@ void setup()
         _relativeAltitudeMeters = relativeAltMeters;
         _helper->relativeAltitudeBarometer = _relativeAltitudeMeters;
       },
-      _telemetryController,
-      0x76,
-      &Wire);
+      _telemetryController, 0x76, &Wire);
 
   LOG_INFO("Initializing VL53L1X sensor");
   _vl53Manager.begin(
@@ -656,37 +668,35 @@ void setup()
         _heightMetersRangefinderEstimate = distance;
         _helper->relativeAltitudeVL53 = distance;
       },
-      _telemetryController,
-      0x29 /* i2c bus address */,
-      &Wire);
+      _telemetryController, 0x29 /* i2c bus address */, &Wire);
 
   LOG_INFO("Initializing GPS service");
-  _gpsService = new GPSService(GPS_RX_PIN, GPS_TX_PIN, [&](const gps_fix_info_t &fix) {
-    // GPS fix callback - called for all GPS updates, even without valid fix
-    static uint32_t lastGPSLogMs = 0;
-    uint32_t currentMs = millis();
+  _gpsService =
+      new GPSService(GPS_RX_PIN, GPS_TX_PIN, [&](const gps_fix_info_t &fix) {
+        // GPS fix callback - called for all GPS updates, even without valid fix
+        static uint32_t lastGPSLogMs = 0;
+        uint32_t currentMs = millis();
 
-    // Log GPS status periodically (every 5 seconds)
-    if (currentMs - lastGPSLogMs > 5000) {
-      lastGPSLogMs = currentMs;
-      if (fix.position_valid) {
-        LOG_INFO(
-            "GPS Fix: Lat=%.6f, Lon=%.6f, Alt=%.1fm, Sats=%d, HDOP=%.1f",
-            fix.latitude,
-            fix.longitude,
-            fix.altitude,
-            fix.satellites,
-            fix.hdop);
-      } else {
-        LOG_INFO("GPS Status: No fix, Sats=%d, HDOP=%.1f", fix.satellites, fix.hdop);
-      }
-    }
+        // Log GPS status periodically (every 5 seconds)
+        if (currentMs - lastGPSLogMs > 5000) {
+          lastGPSLogMs = currentMs;
+          if (fix.position_valid) {
+            LOG_INFO(
+                "GPS Fix: Lat=%.6f, Lon=%.6f, Alt=%.1fm, Sats=%d, HDOP=%.1f",
+                fix.latitude, fix.longitude, fix.altitude, fix.satellites,
+                fix.hdop);
+          } else {
+            LOG_INFO("GPS Status: No fix, Sats=%d, HDOP=%.1f", fix.satellites,
+                     fix.hdop);
+          }
+        }
 
-    // Always send telemetry data - this allows iOS app to show GPS status
-    // even when there's no valid position fix
-    gps_telem_event_t telemData = _gpsService->getTelemetryData();
-    _telemetryController->updateTelemetryEvent(TelemetryEvent::GPSFixData, &telemData, sizeof(gps_telem_event_t));
-  });
+        // Always send telemetry data - this allows iOS app to show GPS status
+        // even when there's no valid position fix
+        gps_telem_event_t telemData = _gpsService->getTelemetryData();
+        _telemetryController->updateTelemetryEvent(
+            TelemetryEvent::GPSFixData, &telemData, sizeof(gps_telem_event_t));
+      });
   _gpsService->begin();
 
   LOG_INFO("Initializing battery controller");
@@ -700,19 +710,15 @@ void setup()
   _setupMagnetometerCalibrator();
 
   LOG_INFO("Initializing magnetometer motors compensation handler");
-  _motorMagCompensationHandler = new MotorMagCompensationHandler(&_persistentKvStore);
+  _motorMagCompensationHandler =
+      new MotorMagCompensationHandler(&_persistentKvStore);
 
   LOG_INFO("Initializing IMU");
   bool setupSuccess = false;
   _imu = new IMU(
-      SPI0_CS_PIN,
-      SPI0_MISO_PIN,
-      SPI0_MOSI_PIN,
-      SPI0_SCLK_PIN,
-      IMU_INT_PIN,
+      SPI0_CS_PIN, SPI0_MISO_PIN, SPI0_MOSI_PIN, SPI0_SCLK_PIN, IMU_INT_PIN,
       [](imu_update_t update) { _receivedIMUUpdate(update); },
-      &_persistentKvStore,
-      &setupSuccess);
+      &_persistentKvStore, &setupSuccess);
 
   if (!setupSuccess) {
     LOG_ERROR("IMU Setup Failure");
@@ -726,28 +732,27 @@ void setup()
   LOG_INFO("Initializing Arming Signal LED");
   _updateLED(0, 255, 0);
 
-  LOG_INFO("SETUP FIRST STAGE COMPLETE AFTER %lu ms", millis() - initializationTime);
+  LOG_INFO("SETUP FIRST STAGE COMPLETE AFTER %lu ms",
+           millis() - initializationTime);
 
   _firstStageSetupCompletionTimeMillis = millis();
 }
 
-static void uploadDebugData()
-{
+static void uploadDebugData() {
   DebugDataManager manager = _helper->dataManager;
   uint8_t *data = manager.data;
   uint64_t dataSize = manager.numSamples * DEBUG_PACKET_SIZE;
   _bluetoothController.uploadDebugData(data, dataSize);
 }
 
-static void sendTelemData()
-{
-  _telemetryController->updateTelemetryEvent(
-      TelemetryEvent::MotorValues,
-      _previousMotorOutputs.data(),
-      NUM_MOTORS * sizeof(float));
+static void sendTelemData() {
+  _telemetryController->updateTelemetryEvent(TelemetryEvent::MotorValues,
+                                             _previousMotorOutputs.data(),
+                                             NUM_MOTORS * sizeof(float));
 
   if (_computedEuler) {
-    _telemetryController->updateTelemetryEvent(TelemetryEvent::EulerYawPitchRoll, &_euler, sizeof(float) * 3);
+    _telemetryController->updateTelemetryEvent(
+        TelemetryEvent::EulerYawPitchRoll, &_euler, sizeof(float) * 3);
   }
 
   multi_heap_info_t info;
@@ -758,13 +763,11 @@ static void sendTelemData()
       .totalHeapSize = heap_caps_get_total_size(MALLOC_CAP_8BIT),
   };
   _telemetryController->updateTelemetryEvent(
-      TelemetryEvent::MemoryStats,
-      &memoryStats,
+      TelemetryEvent::MemoryStats, &memoryStats,
       sizeof(_memory_usage_telemetry_packet_t));
 }
 
-static void updateClientTelemetryIfNeeded()
-{
+static void updateClientTelemetryIfNeeded() {
   if (!_bluetoothController.isConnected) {
     return;
   }
@@ -781,29 +784,35 @@ static uint64_t _loopCounter = 1;
 #endif
 
 static constexpr uint32_t _kPulsePeriodMs = 2000;
-static constexpr uint8_t _kMaxWhiteBrightness = 255;  // Use less than 255 if full brightness is too intense
+static constexpr uint8_t _kMaxWhiteBrightness =
+    255; // Use less than 255 if full brightness is too intense
 static constexpr uint8_t _kMinWhiteBrightness = 5;
-static constexpr float _kBrightnessRange = (float)_kMaxWhiteBrightness - (float)_kMinWhiteBrightness;
+static constexpr float _kBrightnessRange =
+    (float)_kMaxWhiteBrightness - (float)_kMinWhiteBrightness;
 static constexpr float _kBrightnessScale = _kBrightnessRange / 2.0f;
-static constexpr float _kBrightnessMidpoint = (float)_kMinWhiteBrightness + _kBrightnessScale;
+static constexpr float _kBrightnessMidpoint =
+    (float)_kMinWhiteBrightness + _kBrightnessScale;
 static constexpr float _kRadsPerMs = (2.0f * M_PI) / (float)_kPulsePeriodMs;
 static bool _previousQuickGyroCalibrationState = false;
-// How many milliseconds after startup should we wait before we allow gyro quick calibration to occur
+// How many milliseconds after startup should we wait before we allow gyro quick
+// calibration to occur
 static constexpr uint64_t _kMinMillisAfterFirstStage = 2000;
 
 // If quick gyro calibration is in progress and the user moves the device,
 // we will cancel the calibration and blink the LED red to signify that
 // the calibration was interrupted
-static constexpr uint64_t _quickGyroCalibrationInterruptedLEDFlashIntervalMillis = 100;
-static constexpr uint64_t _quickGyroCalibrationInterruptedLEDFlashDurationMillis = 2000;
+static constexpr uint64_t
+    _quickGyroCalibrationInterruptedLEDFlashIntervalMillis = 100;
+static constexpr uint64_t
+    _quickGyroCalibrationInterruptedLEDFlashDurationMillis = 2000;
 static uint64_t _quickGyroCalibrationInterruptedTimeMillis = INT64_MIN;
 static uint64_t _quickGyroCalibrationInterruptedLEDUpdateTimeMillis = 0;
 static bool _quickGyroCalibrationInterruptionLEDState = false;
 
-static void _handleFirstStagePreCalibrationIfNeeded(void)
-{
+static void _handleFirstStagePreCalibrationIfNeeded(void) {
   const uint64_t currentMillis = millis();
-  // If we already completed quick calibration, there's no need to proceed any further
+  // If we already completed quick calibration, there's no need to proceed any
+  // further
   if (_imu->completedQuickCalibration) {
     if (!_previousQuickGyroCalibrationState) {
       _previousQuickGyroCalibrationState = true;
@@ -814,7 +823,8 @@ static void _handleFirstStagePreCalibrationIfNeeded(void)
       // Give the LED a bit of time to display the color
       AsyncController::main.executeAfter(10, []() {
         _ledController.disconnectRMT();
-        // Since the first ESC shares the RMT channel with the RGB LED, time to set up the motors now
+        // Since the first ESC shares the RMT channel with the RGB LED, time to
+        // set up the motors now
         _setupMotors();
         _updateArmStatus();
       });
@@ -829,40 +839,49 @@ static void _handleFirstStagePreCalibrationIfNeeded(void)
     if (currentMillis - _quickGyroCalibrationInterruptedLEDUpdateTimeMillis >
         _quickGyroCalibrationInterruptedLEDFlashIntervalMillis) {
       _quickGyroCalibrationInterruptedLEDUpdateTimeMillis = currentMillis;
-      _ledController.showRGB(_quickGyroCalibrationInterruptionLEDState ? 255 : 20, 0, 0);
-      _quickGyroCalibrationInterruptionLEDState = !_quickGyroCalibrationInterruptionLEDState;
+      _ledController.showRGB(
+          _quickGyroCalibrationInterruptionLEDState ? 255 : 20, 0, 0);
+      _quickGyroCalibrationInterruptionLEDState =
+          !_quickGyroCalibrationInterruptionLEDState;
     }
     return;
   }
 
   /*
-    If this check passes, it means that several conditions have been met and we can proceed
-    with a 'quick gyro calibration':
+    If this check passes, it means that several conditions have been met and we
+    can proceed with a 'quick gyro calibration':
       1. The device has been stationary
       2. The device is upright
-      3. It has been at least _kMinMillisAfterFirstStage since the first stage setup completed
+      3. It has been at least _kMinMillisAfterFirstStage since the first stage
+    setup completed
       4. The quick gyro calibration is not already in progress
   */
-  if (!_imu->isQuickGyroCalibrationInProgress && !_motionDetector.isInMotion && _motionDetector.isUpright &&
-      _receivedFirstImuUpdate && _firstStageSetupCompletionTimeMillis > _kMinMillisAfterFirstStage) {
+  if (!_imu->isQuickGyroCalibrationInProgress && !_motionDetector.isInMotion &&
+      _motionDetector.isUpright && _receivedFirstImuUpdate &&
+      _firstStageSetupCompletionTimeMillis > _kMinMillisAfterFirstStage) {
     _imu->beginQuickGyroCalibration();
     LOG_INFO("Beginning quick gyro calibration");
-  }  // check if we need to cancel an ongoing quick calib due to device movement
-  else if (_imu->isQuickGyroCalibrationInProgress && (_motionDetector.isInMotion || !_motionDetector.isUpright)) {
+  } // check if we need to cancel an ongoing quick calib due to device movement
+  else if (_imu->isQuickGyroCalibrationInProgress &&
+           (_motionDetector.isInMotion || !_motionDetector.isUpright)) {
     LOG_WARN("Quick gyro calibration interrupted");
     _imu->cancelQuickGyroCalibration();
     _quickGyroCalibrationInterruptedTimeMillis = currentMillis;
   } else {
-    // While we are waiting for quick gyro calibration - gently flash the white LED
-    const float whiteValue = _kBrightnessMidpoint + (sinf((float)currentMillis * _kRadsPerMs) * _kBrightnessScale);
+    // While we are waiting for quick gyro calibration - gently flash the white
+    // LED
+    const float whiteValue =
+        _kBrightnessMidpoint +
+        (sinf((float)currentMillis * _kRadsPerMs) * _kBrightnessScale);
     // Keep within the min and max brightness range
-    const float clampedwhiteValue = std::clamp(whiteValue, (float)_kMinWhiteBrightness, (float)_kMaxWhiteBrightness);
-    _ledController.showRGB(clampedwhiteValue, clampedwhiteValue, clampedwhiteValue);
+    const float clampedwhiteValue = std::clamp(
+        whiteValue, (float)_kMinWhiteBrightness, (float)_kMaxWhiteBrightness);
+    _ledController.showRGB(clampedwhiteValue, clampedwhiteValue,
+                           clampedwhiteValue);
   }
 }
 
-void loop()
-{
+void loop() {
   TIMERG0.wdtwprotect.val = 0x50D83AA1;
   TIMERG0.wdtfeed.val = 1;
   TIMERG0.wdtwprotect.val = 0;
@@ -873,7 +892,8 @@ void loop()
 
   _loopCounter++;
   EXECUTE_PERIODIC(1000, {
-    _telemetryController->updateTelemetryEvent(TelemetryEvent::LoopUpdateRate, &_loopCounter, sizeof(uint64_t));
+    _telemetryController->updateTelemetryEvent(TelemetryEvent::LoopUpdateRate,
+                                               &_loopCounter, sizeof(uint64_t));
     _loopCounter = 0;
   });
 
@@ -898,15 +918,15 @@ void loop()
     // Periodic GPS status check
     static uint32_t lastGPSStatusCheckMs = 0;
     uint32_t currentMs = millis();
-    if (currentMs - lastGPSStatusCheckMs > 10000) {  // Check every 10 seconds
+    if (currentMs - lastGPSStatusCheckMs > 10000) { // Check every 10 seconds
       lastGPSStatusCheckMs = currentMs;
 
       if (!_gpsService->isConnected()) {
-        LOG_ERROR(
-            "GPS not connected! Time since last data: %lu ms",
-            (unsigned long)_gpsService->getTimeSinceLastData());
+        LOG_ERROR("GPS not connected! Time since last data: %lu ms",
+                  (unsigned long)_gpsService->getTimeSinceLastData());
       } else if (!_gpsService->hasValidFix()) {
-        LOG_WARN("GPS connected but no valid fix. Satellites: %d", _gpsService->getSatelliteCount());
+        LOG_WARN("GPS connected but no valid fix. Satellites: %d",
+                 _gpsService->getSatelliteCount());
       }
     }
   }
@@ -949,7 +969,8 @@ void loop()
 
   if (_motorDebugEnabled) {
     LOG_INFO_PERIODIC_MILLIS(1000, "Motor debug mode enabled");
-    motor_outputs_t motors = {_motorDebugValues[0], _motorDebugValues[1], _motorDebugValues[2], _motorDebugValues[3]};
+    motor_outputs_t motors = {_motorDebugValues[0], _motorDebugValues[1],
+                              _motorDebugValues[2], _motorDebugValues[3]};
     updateMotors(motors);
     if (_recordDebugData) {
       _helper->saveValues(micros());
@@ -986,13 +1007,15 @@ void loop()
 
 #ifdef ENABLE_EMERGENCY_MODE
   // Check if we need to enter into emergency mode
-  if (!_enteredEmergencyMode && (fabs(_euler.pitch) > 80.0f || fabs(_euler.roll) > 80.0f)) {
+  if (!_enteredEmergencyMode &&
+      (fabs(_euler.pitch) > 80.0f || fabs(_euler.roll) > 80.0f)) {
     // The drone has entered into an unacceptable orientation - this kills
     // the motors
     _enteredEmergencyMode = true;
     _armed = false;
     _updateArmStatus();
-    LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f", _euler.pitch, _euler.roll);
+    LOG_ERROR("ENTERED EMERGENCY MODE, killing motors: pitch = %f, roll = %f",
+              _euler.pitch, _euler.roll);
   }
 #endif
 
@@ -1026,8 +1049,9 @@ void loop()
     beganRun = true;
   }
 
-  motor_outputs_t outputs =
-      _controller->calculateOutputs(_pidPreferences->gains, _imuValues, _controllerValues, micros(), _recordDebugData);
+  motor_outputs_t outputs = _controller->calculateOutputs(
+      _pidPreferences->gains, _imuValues, _controllerValues, micros(),
+      _recordDebugData);
 
   _previousMotorOutputs = outputs;
 
@@ -1049,14 +1073,15 @@ void loop()
   }
 
   if (_recordDebugData && !_recordDebugDataLEDStateChanged &&
-      timestampMillis - _startedRecordingDebugDataTimeMillis < RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS) {
+      timestampMillis - _startedRecordingDebugDataTimeMillis <
+          RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS) {
     // Switch LED to emit blue light
     _recordDebugDataLEDStateChanged = true;
     _updateLED(0, 0, 254);
     LOG_INFO("Flashing LED blue");
-  } else if (
-      _recordDebugData && _recordDebugDataLEDStateChanged &&
-      timestampMillis - _startedRecordingDebugDataTimeMillis > RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS) {
+  } else if (_recordDebugData && _recordDebugDataLEDStateChanged &&
+             timestampMillis - _startedRecordingDebugDataTimeMillis >
+                 RECORD_DEBUG_DATA_LED_FLASH_INTERVAL_MILLIS) {
     // Switch LED back to emit red light
     _updateLED(254, 0, 0);
     _recordDebugDataLEDStateChanged = false;
@@ -1064,4 +1089,4 @@ void loop()
   }
 }
 
-#endif  // MATLAB_SIM
+#endif // MATLAB_SIM
