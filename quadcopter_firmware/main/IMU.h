@@ -28,16 +28,6 @@ struct calib_data_t
   std::array<int64_t, 3> gyroCurrentSums;
   int16_t currentStageSamples;
 
-  std::array<MedianFilter<int16_t>, 3> accelMedianFilters = {
-      MedianFilter<int16_t>(CALIB_MEDIAN_FILTER_WINDOW),
-      MedianFilter<int16_t>(CALIB_MEDIAN_FILTER_WINDOW),
-      MedianFilter<int16_t>(CALIB_MEDIAN_FILTER_WINDOW)};
-
-  std::array<MedianFilter<int16_t>, 3> gyroMedianFilters = {
-      MedianFilter<int16_t>(CALIB_MEDIAN_FILTER_WINDOW),
-      MedianFilter<int16_t>(CALIB_MEDIAN_FILTER_WINDOW),
-      MedianFilter<int16_t>(CALIB_MEDIAN_FILTER_WINDOW)};
-
   // Offsets
   std::map<CalibrationRequest, std::array<int64_t, 3>> offsets;
 };
@@ -83,7 +73,7 @@ class IMU
   imu_update_t _mostRecentUpdate;
   bool _calibrated = false;
   bool _accelerometerCalibrationInProgress = false;
-  calib_data_t _accelCalibrationData;
+  calib_data_t _calibrationData;
   void _continueCalibration(imu_update_t update);
   PersistentKeyValueStore *_persistentKvStore;
   bool _quickGyroCalibration = false;

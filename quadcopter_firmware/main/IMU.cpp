@@ -25,14 +25,14 @@ static void handleInterrupt(void) { _gotInterrupt = true; }
 #define INT16T_MAX 32768.0f
 
 // Macro to load and set IMU offsets from persistent storage
-#define ATTEMPT_LOAD_IMU_OFFSET(sensorPrefix, axis, persistentKey, sensorName, offsetFlag) \
-  do {                                                                                     \
-    if (persistentKvStore->hasValueForKey(persistentKey)) {                                \
-      const int16_t offset = persistentKvStore->getValue<int16_t>(persistentKey);          \
-      LOG_INFO("Setting %c " sensorName " offset: %d", #axis[0], offset);                  \
-      _imu->set##sensorPrefix##axis##Offset(offset);                                       \
-      offsetFlag = true;                                                                   \
-    }                                                                                      \
+#define ATTEMPT_LOAD_IMU_OFFSET(sensorPrefix, axis, persistentKey, sensorName, offsetFlag, type) \
+  do {                                                                                           \
+    if (persistentKvStore->hasValueForKey(persistentKey)) {                                      \
+      const type offset = persistentKvStore->getValue<type>(persistentKey);                      \
+      LOG_INFO("Setting %c " sensorName " offset: %d", #axis[0], offset);                        \
+      _imu->set##sensorPrefix##axis##Offset(offset);                                             \
+      offsetFlag = true;                                                                         \
+    }                                                                                            \
   } while (0)
 
 static float gyroDPS(int16_t rawValue)
@@ -77,14 +77,14 @@ IMU::IMU(
   bool setAnyOffset = false;
 
   // Load accelerometer offsets
-  ATTEMPT_LOAD_IMU_OFFSET(Acc, X, PersistentKeysCommon::ACCEL_OFFSET_X, "accel", setAnyOffset);
-  ATTEMPT_LOAD_IMU_OFFSET(Acc, Y, PersistentKeysCommon::ACCEL_OFFSET_Y, "accel", setAnyOffset);
-  ATTEMPT_LOAD_IMU_OFFSET(Acc, Z, PersistentKeysCommon::ACCEL_OFFSET_Z, "accel", setAnyOffset);
+  ATTEMPT_LOAD_IMU_OFFSET(Acc, X, PersistentKeysCommon::ACCEL_OFFSET_X, "accel", setAnyOffset, int64_t);
+  ATTEMPT_LOAD_IMU_OFFSET(Acc, Y, PersistentKeysCommon::ACCEL_OFFSET_Y, "accel", setAnyOffset, int64_t);
+  ATTEMPT_LOAD_IMU_OFFSET(Acc, Z, PersistentKeysCommon::ACCEL_OFFSET_Z, "accel", setAnyOffset, int64_t);
 
   // Load gyroscope offsets
-  ATTEMPT_LOAD_IMU_OFFSET(Gyr, X, PersistentKeysCommon::GYRO_OFFSET_X, "gyro", setAnyOffset);
-  ATTEMPT_LOAD_IMU_OFFSET(Gyr, Y, PersistentKeysCommon::GYRO_OFFSET_Y, "gyro", setAnyOffset);
-  ATTEMPT_LOAD_IMU_OFFSET(Gyr, Z, PersistentKeysCommon::GYRO_OFFSET_Z, "gyro", setAnyOffset);
+  ATTEMPT_LOAD_IMU_OFFSET(Gyr, X, PersistentKeysCommon::GYRO_OFFSET_X, "gyro", setAnyOffset, int16_t);
+  ATTEMPT_LOAD_IMU_OFFSET(Gyr, Y, PersistentKeysCommon::GYRO_OFFSET_Y, "gyro", setAnyOffset, int16_t);
+  ATTEMPT_LOAD_IMU_OFFSET(Gyr, Z, PersistentKeysCommon::GYRO_OFFSET_Z, "gyro", setAnyOffset, int16_t);
 
   if (!setAnyOffset) {
     LOG_WARN("No IMU offsets found in persistent storage, please calibrate the device");
@@ -149,7 +149,7 @@ void IMU::loopHandler(void)
     // reset the interrupt pin flag
     _gotInterrupt = false;
 
-    if (_accelerometerCalibrationInProgress && !_accelCalibrationData.awaitingResponse) {
+    if (_accelerometerCalibrationInProgress && !_calibrationData.awaitingResponse) {
       _continueCalibration(update);
     }
   }
@@ -208,26 +208,24 @@ void IMU::_continueCalibration(imu_update_t update)
 
   // Calculate running median sum for X, Y, and Z axes
   for (int i = 0; i < 3; i++) {
-    _accelCalibrationData.accelMedianFilters[i].addValue(vals[i]);
-    _accelCalibrationData.accelCurrentSums[i] += _accelCalibrationData.accelMedianFilters[i].getMedian();
+    _calibrationData.accelCurrentSums[i] += vals[i];
   }
-  if (_accelCalibrationData.stage == CalibrationRequest::PlaceFlat) {
+  if (_calibrationData.stage == CalibrationRequest::PlaceFlat) {
     const int16_t gyroVals[3] = {update.gyro_raw_x, update.gyro_raw_y, update.gyro_raw_z};
     for (int i = 0; i < 3; i++) {
-      _accelCalibrationData.gyroMedianFilters[i].addValue(gyroVals[i]);
-      _accelCalibrationData.gyroCurrentSums[i] += _accelCalibrationData.gyroMedianFilters[i].getMedian();
+      _calibrationData.gyroCurrentSums[i] += gyroVals[i];
     }
   }
 
-  if (++_accelCalibrationData.currentStageSamples >= NUM_CALIBRATION_SAMPLES_PER_AXIS) {
+  if (++_calibrationData.currentStageSamples >= NUM_CALIBRATION_SAMPLES_PER_AXIS) {
     // We're done with this stage
-    LOG_INFO("Completed stage %d", (int)_accelCalibrationData.stage);
+    LOG_INFO("Completed stage %d", (int)_calibrationData.stage);
     _accelerometerCalibrationInProgress = false;
 
-    if (_accelCalibrationData.stage == CalibrationRequest::PlaceFlat) {
+    if (_calibrationData.stage == CalibrationRequest::PlaceFlat) {
       int16_t averages[3];
       for (int i = 0; i < 3; i++) {
-        averages[i] = (int16_t)(_accelCalibrationData.gyroCurrentSums[i] / NUM_CALIBRATION_SAMPLES_PER_AXIS);
+        averages[i] = (int16_t)(_calibrationData.gyroCurrentSums[i] / NUM_CALIBRATION_SAMPLES_PER_AXIS);
       }
 
       _persistentKvStore->setValue<int16_t>(PersistentKeysCommon::GYRO_OFFSET_X, averages[0]);
@@ -241,24 +239,24 @@ void IMU::_continueCalibration(imu_update_t update)
       LOG_INFO("Gyro calibration complete: %d, %d, %d", averages[0], averages[1], averages[2]);
     }
 
-    _accelCalibrationData.offsets[_accelCalibrationData.stage] = {
-        (int64_t)(_accelCalibrationData.accelCurrentSums[0] / NUM_CALIBRATION_SAMPLES_PER_AXIS),
-        (int64_t)(_accelCalibrationData.accelCurrentSums[1] / NUM_CALIBRATION_SAMPLES_PER_AXIS),
-        (int64_t)(_accelCalibrationData.accelCurrentSums[2] / NUM_CALIBRATION_SAMPLES_PER_AXIS),
+    _calibrationData.offsets[_calibrationData.stage] = {
+        (int64_t)(_calibrationData.accelCurrentSums[0] / NUM_CALIBRATION_SAMPLES_PER_AXIS),
+        (int64_t)(_calibrationData.accelCurrentSums[1] / NUM_CALIBRATION_SAMPLES_PER_AXIS),
+        (int64_t)(_calibrationData.accelCurrentSums[2] / NUM_CALIBRATION_SAMPLES_PER_AXIS),
     };
 
-    if (_accelCalibrationData.stage == CalibrationRequest::RollLeft) {
+    if (_calibrationData.stage == CalibrationRequest::RollLeft) {
       // Final Stage Completed
-      if (_accelCalibrationData.offsets.size() != NUM_ACCELGYRO_CALIBRATION_STAGES) {
+      if (_calibrationData.offsets.size() != NUM_ACCELGYRO_CALIBRATION_STAGES) {
         LOG_ERROR("Accelerometer calibration failed: Not all stages completed.");
-        _accelCalibrationData.requestHandler(CalibrationRequest::Failed);
+        _calibrationData.requestHandler(CalibrationRequest::Failed);
         return;
       }
 
       int64_t offsets[3] = {0, 0, 0};
       for (int axis = 0; axis < 3; axis++) {
         for (int i = 0; i < NUM_ACCELGYRO_CALIBRATION_STAGES; i++) {
-          offsets[axis] += _accelCalibrationData.offsets[(CalibrationRequest)i][axis];
+          offsets[axis] += _calibrationData.offsets[(CalibrationRequest)i][axis];
         }
         offsets[axis] /= NUM_ACCELGYRO_CALIBRATION_STAGES;
       }
@@ -276,16 +274,16 @@ void IMU::_continueCalibration(imu_update_t update)
       _persistentKvStore->setValue<int64_t>(PersistentKeysCommon::ACCEL_OFFSET_Y, offsets[1]);
       _persistentKvStore->setValue<int64_t>(PersistentKeysCommon::ACCEL_OFFSET_Z, offsets[2]);
 
-      _accelCalibrationData.requestHandler(CalibrationRequest::Complete);
+      _calibrationData.requestHandler(CalibrationRequest::Complete);
     } else {
       // continue to the next stage
-      const int nextStage = (int)(_accelCalibrationData.stage) + 1;
-      _accelCalibrationData.stage = (CalibrationRequest)nextStage;
-      _accelCalibrationData.currentStageSamples = 0;
-      _accelCalibrationData.accelCurrentSums = {0, 0, 0};
+      const int nextStage = (int)(_calibrationData.stage) + 1;
+      _calibrationData.stage = (CalibrationRequest)nextStage;
+      _calibrationData.currentStageSamples = 0;
+      _calibrationData.accelCurrentSums = {0, 0, 0};
       // We will wait for the user to send CalibrationResponse::Continue before continuing
-      _accelCalibrationData.awaitingResponse = true;
-      _accelCalibrationData.requestHandler(_accelCalibrationData.stage);
+      _calibrationData.awaitingResponse = true;
+      _calibrationData.requestHandler(_calibrationData.stage);
     }
   }
 }
@@ -298,7 +296,7 @@ std::map<CalibrationResponse, std::function<void(void)>> IMU::calibrationHandler
   responseHandlers[CalibrationResponse::Start] = [this, requestHandler]() {
     // The IMU loop handler will imminently start collecting data for the first stage
     _accelerometerCalibrationInProgress = true;
-    _accelCalibrationData = {
+    _calibrationData = {
         .requestHandler = requestHandler,
         .stage = CalibrationRequest::PlaceFlat,
         .calibrationFailed = false,
@@ -311,13 +309,13 @@ std::map<CalibrationResponse, std::function<void(void)>> IMU::calibrationHandler
   };
 
   responseHandlers[CalibrationResponse::Continue] = [this]() {
-    _accelCalibrationData.awaitingResponse = false;
+    _calibrationData.awaitingResponse = false;
     _accelerometerCalibrationInProgress = true;
     LOG_INFO("Continuing accelerometer calibration.");
   };
 
   responseHandlers[CalibrationResponse::Cancel] = [this]() {
-    _accelCalibrationData = {};
+    _calibrationData = {};
     _accelerometerCalibrationInProgress = false;
     LOG_INFO("Accelerometer calibration canceled.");
   };
