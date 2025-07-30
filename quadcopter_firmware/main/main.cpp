@@ -472,8 +472,8 @@ static void _receivedIMUUpdate(imu_update_t update) {
     _extendedKalmanFilter.updateRangefinder(_heightMetersRangefinderEstimate);
   }
 
-  // _extendedKalmanFilter.updateMagnetometer(_magValues.x, _magValues.y,
-  // _magValues.z);
+  _extendedKalmanFilter.updateMagnetometer(_magValues.x, _magValues.y,
+                                           _magValues.z);
 
   // NOTE: Due to all the matrix allocations, we cannot combine this with
   // predict() because of the limited stack size on the ESP32
@@ -526,10 +526,6 @@ static void _receivedIMUUpdate(imu_update_t update) {
   _helper->ekfYawPitchRoll[2] = ekfYawPitchRoll(2, 0);
   _helper->ekfAltitude = ekfAltitude;
   _helper->ekfVerticalVelocity = ekfVerticalVelocity;
-
-  const int stat1 = digitalRead(BATTERY_STAT1_PIN);
-  const int stat2 = digitalRead(BATTERY_STAT2_PIN);
-  const int pg = digitalRead(BATTERY_PG_PIN);
 
   _imuUpdateCounter++;
   EXECUTE_PERIODIC(1000, {
