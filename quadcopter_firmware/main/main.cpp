@@ -89,6 +89,11 @@ static bool _completedFirstArm = false;
 // rebooted
 static bool _enteredEmergencyMode = false;
 
+// Track when we last had a Bluetooth connection for safety
+static uint64_t _lastBluetoothConnectedTimeMillis = 0;
+static constexpr uint64_t _bluetoothDisconnectEmergencyTimeoutMillis =
+    2000; // 2 seconds
+
 static QMC5883L *_compass;
 
 static mag_update_t _magValues;
@@ -620,6 +625,9 @@ void setup()
   // Setup BLE Server
   _bluetoothController.beginBluetooth();
 
+  // Initialize last connected time to current time to prevent immediate emergency mode
+  _lastBluetoothConnectedTimeMillis = millis();
+
   LOG_INFO("Initializing PID preferences");
   _pidPreferences = new PIDPreferences(&_bluetoothController, &_persistentKvStore);
 
@@ -960,6 +968,20 @@ void loop()
       _helper->saveValues(micros());
     }
     return;
+  }
+
+  // Check Bluetooth connection status and update last connected time
+  if (_bluetoothController.isConnected) {
+    _lastBluetoothConnectedTimeMillis = millis();
+  } else if (_armed && !_enteredEmergencyMode &&
+             (millis() - _lastBluetoothConnectedTimeMillis) >
+                 _bluetoothDisconnectEmergencyTimeoutMillis) {
+    // Bluetooth has been disconnected for too long while armed - enter
+    // emergency mode
+    _enteredEmergencyMode = true;
+    _armed = false;
+    _updateArmStatus();
+    LOG_ERROR("ENTERED EMERGENCY MODE due to Bluetooth disconnection timeout");
   }
 
 #ifdef ENABLE_EMERGENCY_MODE
