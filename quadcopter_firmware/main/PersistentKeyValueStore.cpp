@@ -12,6 +12,98 @@
 
 static const char* kNamespaceName = "kv_storage";
 
+// Helper function to get a string representation of NVS type
+static const char* nvsTypeToString(nvs_type_t type)
+{
+  switch (type) {
+    case NVS_TYPE_U8:
+      return "uint8_t";
+    case NVS_TYPE_I8:
+      return "int8_t";
+    case NVS_TYPE_U16:
+      return "uint16_t";
+    case NVS_TYPE_I16:
+      return "int16_t";
+    case NVS_TYPE_U32:
+      return "uint32_t";
+    case NVS_TYPE_I32:
+      return "int32_t";
+    case NVS_TYPE_U64:
+      return "uint64_t";
+    case NVS_TYPE_I64:
+      return "int64_t";
+    case NVS_TYPE_STR:
+      return "string";
+    case NVS_TYPE_BLOB:
+      return "blob";
+    case NVS_TYPE_ANY:
+      return "any";
+    default: {
+      LOG_ERROR("Unknown NVS type: %d", type);
+      abort();
+      return "unknown";
+    }
+  }
+}
+
+// Helper function to get the actual type stored for a key
+static nvs_type_t getStoredType(const std::string& key)
+{
+  nvs_iterator_t it = nullptr;
+  esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, kNamespaceName, NVS_TYPE_ANY, &it);
+
+  if (err != ESP_OK || it == NULL) {
+    return NVS_TYPE_ANY;  // No entries found
+  }
+
+  nvs_type_t storedType = NVS_TYPE_ANY;
+  while (it != NULL) {
+    nvs_entry_info_t info;
+    nvs_entry_info(it, &info);
+    if (key == info.key) {
+      storedType = info.type;
+      nvs_release_iterator(it);
+      break;
+    }
+    err = nvs_entry_next(&it);
+    if (err != ESP_OK || it == NULL) {
+      break;
+    }
+  }
+
+  return storedType;
+}
+
+// Helper to get expected type string based on template type
+template <typename T>
+static const char* getExpectedTypeString()
+{
+  if constexpr (std::is_same_v<T, int8_t>)
+    return "int8_t";
+  else if constexpr (std::is_same_v<T, uint8_t>)
+    return "uint8_t";
+  else if constexpr (std::is_same_v<T, int16_t>)
+    return "int16_t";
+  else if constexpr (std::is_same_v<T, uint16_t>)
+    return "uint16_t";
+  else if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int>)
+    return "int32_t";
+  else if constexpr (std::is_same_v<T, uint32_t>)
+    return "uint32_t";
+  else if constexpr (std::is_same_v<T, int64_t>)
+    return "int64_t";
+  else if constexpr (std::is_same_v<T, uint64_t>)
+    return "uint64_t";
+  else if constexpr (std::is_same_v<T, float>)
+    return "float (stored as string)";
+  else if constexpr (std::is_same_v<T, double>)
+    return "double (stored as string)";
+  else if constexpr (std::is_same_v<T, std::string>)
+    return "string";
+  else
+    return "unknown";
+}
+
 PersistentKeyValueStore::PersistentKeyValueStore()
 {
   // Initialize NVS
@@ -66,6 +158,15 @@ T PersistentKeyValueStore::getValue(const std::string& key)
       size_t length = sizeof(T);
       err = nvs_get_blob(handle, key.c_str(), &value, &length);
       if (err != ESP_OK || length != sizeof(T)) {
+        if (err == ESP_OK && length != sizeof(T)) {
+          // Blob exists but wrong size - likely reading wrong integer type
+          LOG_ERROR(
+              "Blob size mismatch for key '%s': Expected %zu bytes (%s) but found %zu bytes!",
+              key.c_str(),
+              sizeof(T),
+              getExpectedTypeString<T>(),
+              length);
+        }
         err = ESP_FAIL;
       }
     }
@@ -97,7 +198,24 @@ T PersistentKeyValueStore::getValue(const std::string& key)
   }
 
   if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) getting value for key '%s'!", esp_err_to_name(err), key.c_str());
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+      // Check if the key exists with a different type
+      nvs_type_t storedType = getStoredType(key);
+      if (storedType != NVS_TYPE_ANY) {
+        // Key exists but with different type - this is the type mismatch case
+        LOG_ERROR(
+            "Type mismatch for key '%s': Expected %s but stored as %s!",
+            key.c_str(),
+            getExpectedTypeString<T>(),
+            nvsTypeToString(storedType));
+      } else {
+        // Key genuinely doesn't exist
+        LOG_ERROR("Key '%s' not found in persistent storage!", key.c_str());
+      }
+    } else {
+      // Other error
+      LOG_ERROR("Error (%s) getting value for key '%s'!", esp_err_to_name(err), key.c_str());
+    }
   }
 
   nvs_close(handle);
@@ -235,7 +353,18 @@ void PersistentKeyValueStore::setValue(const std::string& key, const T& value)
   }
 
   if (err != ESP_OK) {
-    LOG_ERROR("Error (%s) setting value for key '%s'!", esp_err_to_name(err), key.c_str());
+    LOG_ERROR(
+        "Error (%s) setting %s value for key '%s'!",
+        esp_err_to_name(err),
+        getExpectedTypeString<T>(),
+        key.c_str());
+  } else {
+    // Log successful storage with type information for debugging
+    if constexpr (std::is_integral_v<T> && sizeof(T) > 4) {
+      LOG_INFO("Stored %s (as blob) for key '%s'", getExpectedTypeString<T>(), key.c_str());
+    } else if constexpr (std::is_floating_point_v<T>) {
+      LOG_INFO("Stored %s for key '%s'", getExpectedTypeString<T>(), key.c_str());
+    }
   }
 
   // Commit changes
