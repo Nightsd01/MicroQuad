@@ -11,7 +11,7 @@
 constexpr float EPSILON = 1e-9f;
 
 // Quaternion Helper Function Implementations
-Matrix<float, 4, 1> quaternionMultiplyHamiltonProduct(const Matrix<float, 4, 1>& q1, const Matrix<float, 4, 1>& q2)
+Matrix<float, 4, 1> quaternionMultiplyHamiltonProduct(const Matrix<float, 4, 1> &q1, const Matrix<float, 4, 1> &q2)
 {
   Matrix<float, 4, 1> q_out;
   q_out(0, 0) = q1(0, 0) * q2(0, 0) - q1(1, 0) * q2(1, 0) - q1(2, 0) * q2(2, 0) - q1(3, 0) * q2(3, 0);  // w
@@ -21,7 +21,7 @@ Matrix<float, 4, 1> quaternionMultiplyHamiltonProduct(const Matrix<float, 4, 1>&
   return q_out;
 }
 
-Matrix<float, 4, 1> normalizeQuaternion(Matrix<float, 4, 1>& q)
+Matrix<float, 4, 1> normalizeQuaternion(Matrix<float, 4, 1> &q)
 {
   float norm = sqrt(q(0, 0) * q(0, 0) + q(1, 0) * q(1, 0) + q(2, 0) * q(2, 0) + q(3, 0) * q(3, 0));
   if (norm > EPSILON) {
@@ -36,7 +36,7 @@ Matrix<float, 4, 1> normalizeQuaternion(Matrix<float, 4, 1>& q)
   return q;
 }
 
-Matrix<float, 3, 3> quaternionToRotationMatrix(const Matrix<float, 4, 1>& q)
+Matrix<float, 3, 3> quaternionToRotationMatrix(const Matrix<float, 4, 1> &q)
 {
   float q0 = q(0, 0), q1 = q(1, 0), q2 = q(2, 0), q3 = q(3, 0);
   float q0q0 = q0 * q0, q1q1 = q1 * q1, q2q2 = q2 * q2, q3q3 = q3 * q3;
@@ -57,7 +57,7 @@ Matrix<float, 3, 3> quaternionToRotationMatrix(const Matrix<float, 4, 1>& q)
   return R;  // This is rotation from Body to World. World to Body is transpose.
 }
 
-Matrix<float, 3, 1> getYawPitchRollDegreesFromQuaternion(const Matrix<float, 4, 1>& q)
+Matrix<float, 3, 1> getYawPitchRollDegreesFromQuaternion(const Matrix<float, 4, 1> &q)
 {
   Matrix<float, 4, 1> q_norm = q;
   q_norm = normalizeQuaternion(q_norm);
@@ -119,7 +119,7 @@ Matrix<float, 3, 1> getYawPitchRollDegreesFromQuaternion(const Matrix<float, 4, 
   return ypr_deg;
 }
 
-Matrix<float, 3, 1> rotateVectorByQuaternion(const Matrix<float, 3, 1>& v, const Matrix<float, 4, 1>& q)
+Matrix<float, 3, 1> rotateVectorByQuaternion(const Matrix<float, 3, 1> &v, const Matrix<float, 4, 1> &q)
 {
   Matrix<float, 3, 3> R = quaternionToRotationMatrix(q);
   // We need world to body rotation for accel/mag prediction
@@ -133,7 +133,7 @@ Matrix<float, 3, 1> rotateVectorByQuaternion(const Matrix<float, 3, 1>& v, const
 
 // EKF Implementation
 
-ExtendedKalmanFilter::ExtendedKalmanFilter(const Config& config) : _config(config)
+ExtendedKalmanFilter::ExtendedKalmanFilter(const Config &config) : _config(config)
 {
   // Initialize state vector _x
   _x.zeros();
@@ -144,7 +144,8 @@ ExtendedKalmanFilter::ExtendedKalmanFilter(const Config& config) : _config(confi
 
   // Initialize covariance matrix _PCovariance
   _PCovariance.zeros();
-  _PCovariance(Q0_IDX, Q0_IDX) = _config.initial_quat_uncertainty;  // Simplified: Treat quat uncertainty element-wise
+  _PCovariance(Q0_IDX, Q0_IDX) = _config.initial_quat_uncertainty;  // Simplified: Treat quat uncertainty
+                                                                    // element-wise
   _PCovariance(Q1_IDX, Q1_IDX) = _config.initial_quat_uncertainty;
   _PCovariance(Q2_IDX, Q2_IDX) = _config.initial_quat_uncertainty;
   _PCovariance(Q3_IDX, Q3_IDX) = _config.initial_quat_uncertainty;
@@ -157,14 +158,16 @@ ExtendedKalmanFilter::ExtendedKalmanFilter(const Config& config) : _config(confi
 
   // Initialize base process noise Q_base (variances per second)
   _Q_base.zeros();
-  // Simplified: Assume process noise affects quaternion attitude directly (tune this)
+  // Simplified: Assume process noise affects quaternion attitude directly (tune
+  // this)
   float quat_PCovariancerocess_noise = config.gyro_noise_density;  // Simplified link
   _Q_base(Q0_IDX, Q0_IDX) = quat_PCovariancerocess_noise;
   _Q_base(Q1_IDX, Q1_IDX) = quat_PCovariancerocess_noise;
   _Q_base(Q2_IDX, Q2_IDX) = quat_PCovariancerocess_noise;
   _Q_base(Q3_IDX, Q3_IDX) = quat_PCovariancerocess_noise;
   _Q_base(ALT_IDX, ALT_IDX) = 0.0f;                         // Altitude process noise comes via velocity state
-  _Q_base(VELZ_IDX, VELZ_IDX) = config.velz_Process_noise;  // Uncertainty in vertical velocity prediction model
+  _Q_base(VELZ_IDX, VELZ_IDX) = config.velz_Process_noise;  // Uncertainty in vertical velocity prediction
+                                                            // model
   _Q_base(BG_XIDX, BG_XIDX) = config.gyro_bias_random_walk;
   _Q_base(BGY_IDX, BGY_IDX) = config.gyro_bias_random_walk;
   _Q_base(BGZ_IDX, BGZ_IDX) = config.gyro_bias_random_walk;
@@ -280,7 +283,7 @@ void ExtendedKalmanFilter::predict(
   _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;  // enforce symmetry
 }
 
-static Matrix<float, 1, 4> partialAzWrtQuaternion(const Matrix<float, 4, 1>& q, const Matrix<float, 3, 1>& abody)
+static Matrix<float, 1, 4> partialAzWrtQuaternion(const Matrix<float, 4, 1> &q, const Matrix<float, 3, 1> &abody)
 {
   // For a_z = the 3rd component of (R_bw(q) * abody), ignoring the constant -g
   float q0 = q(0, 0), q1 = q(1, 0), q2 = q(2, 0), q3 = q(3, 0);
@@ -308,11 +311,11 @@ static Matrix<float, 1, 4> partialAzWrtQuaternion(const Matrix<float, 4, 1>& q, 
 }
 
 Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateF(
-    const Matrix<float, 4, 1>& q,
+    const Matrix<float, 4, 1> &q,
     float omega_x,
     float omega_y,
     float omega_z,
-    const Matrix<float, 3, 1>& a_body,  // <-- ADDED
+    const Matrix<float, 3, 1> &a_body,  // <-- ADDED
     float dt)
 {
   Matrix<float, STATE_DIM, STATE_DIM> F_term = Matrix<float, STATE_DIM, STATE_DIM>::identity();
@@ -359,7 +362,7 @@ Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateF(
 }
 
 Matrix<float, 3, 4> ExtendedKalmanFilter::_computeVectorJacobian(
-    const Matrix<float, 4, 1>& q, const Matrix<float, 3, 1>& ref_vec)
+    const Matrix<float, 4, 1> &q, const Matrix<float, 3, 1> &ref_vec)
 {
   Matrix<float, 3, 4> H;
   float q0 = q(0, 0), q1 = q(1, 0), q2 = q(2, 0), q3 = q(3, 0);
@@ -387,7 +390,7 @@ Matrix<float, 3, 4> ExtendedKalmanFilter::_computeVectorJacobian(
 }
 
 Matrix<float, STATE_DIM, STATE_DIM> ExtendedKalmanFilter::_calculateQ(
-    const Matrix<float, 4, 1>& q,  // Current quaternion estimate needed for Qqq
+    const Matrix<float, 4, 1> &q,  // Current quaternion estimate needed for Qqq
     float dt)
 {
   // Initialize Q matrix (STATE_DIM x STATE_DIM).
@@ -475,10 +478,12 @@ void ExtendedKalmanFilter::updateAccelerometer(float accel_x, float accel_y, flo
 
   // 2. Extract current attitude quaternion using slice (creates a copy)
   Matrix<float, 4, 1> q = x_pred.slice<4, 1>(Q0_IDX, 0);
-  // Note: It might be prudent to normalize q here before using it in calculations,
-  // although the state update *should* keep it near-normalized.
-  // Matrix<float, 4, 1> q_normalized_temp = normalizeQuaternion(q); // Assuming normalizeQuaternion takes non-const ref
-  // but returns the value we need q = q_normalized_temp; // Use the normalized version for calculations if desired
+  // Note: It might be prudent to normalize q here before using it in
+  // calculations, although the state update *should* keep it near-normalized.
+  // Matrix<float, 4, 1> q_normalized_temp = normalizeQuaternion(q); // Assuming
+  // normalizeQuaternion takes non-const ref but returns the value we need q =
+  // q_normalized_temp; // Use the normalized version for calculations if
+  // desired
 
   // 3. Define the measurement vector z
   Matrix<float, 3, 1> z = {{accel_x}, {accel_y}, {accel_z}};
@@ -544,67 +549,66 @@ void ExtendedKalmanFilter::updateAccelerometer(float accel_x, float accel_y, flo
 
 void ExtendedKalmanFilter::updateMagnetometer(float mag_x, float mag_y, float mag_z)
 {
-  // --- EKF Update Step using Magnetometer (vector-based) ---
+  //------------------------------------------------------------------
+  // 1.  Build horizontal measurement  z  (body frame, gauss or tesla)
+  //------------------------------------------------------------------
+  Matrix<float, 3, 1> z_body = {{mag_x}, {mag_y}, {0.0f}};  // ← z‑component discarded
+  if (z_body.dot(z_body) < EPSILON) return;                 // bad reading
 
-  // 1. Copy predicted state and covariance
-  Matrix<float, STATE_DIM, 1> x_pred = _x;
-  Matrix<float, STATE_DIM, STATE_DIM> P_pred = _PCovariance;
+  //------------------------------------------------------------------
+  // 2.  Predicted horizontal field  h(q)  in body frame
+  //------------------------------------------------------------------
+  // copy quaternion into an l‑value and normalise (required by your API)
+  Matrix<float, 4, 1> q = _x.slice<4, 1>(Q0_IDX, 0);
+  q = normalizeQuaternion(q);
 
-  // 2. Normalize measurement vector (to unit vector)
-  Matrix<float, 3, 1> z = {{mag_x}, {mag_y}, {mag_z}};
-  float mag_norm = std::sqrt(z.dot(z));
-  if (mag_norm < EPSILON) {
-    return;  // Skip if near-zero
-  }
-  z /= mag_norm;
+  Matrix<float, 3, 3> R_bw = quaternionToRotationMatrix(q);  // body→world
+  Matrix<float, 3, 1> mag_ref_h = _mag_ref_world;            // copy, then zero z
+  mag_ref_h(2, 0) = 0.0f;
+  Matrix<float, 3, 1> h_body = R_bw.transpose() * mag_ref_h;  // world→body
 
-  // 3. Extract quaternion
-  Matrix<float, 4, 1> q = x_pred.slice<4, 1>(Q0_IDX, 0);
-  q = normalizeQuaternion(q);  // Ensure normalized
+  //------------------------------------------------------------------
+  // 3.  Innovation  y = z – h
+  //------------------------------------------------------------------
+  Matrix<float, 3, 1> y = z_body - h_body;
 
-  // 4. Predicted measurement h (world mag ref rotated to body frame, normalized)
-  Matrix<float, 3, 3> R_bw = quaternionToRotationMatrix(q);
-  Matrix<float, 3, 3> R_wb = R_bw.transpose();
-  Matrix<float, 3, 1> h = R_wb * _mag_ref_world;
-  float h_norm = std::sqrt(h.dot(h));
-  if (h_norm < EPSILON) {
-    return;
-  }
-  h /= h_norm;
+  //------------------------------------------------------------------
+  // 4.  Jacobian  H   (3×STATE_DIM)  – horizontal only
+  //     We keep the *un‑normalised* vector model for robustness
+  //------------------------------------------------------------------
+  Matrix<float, 3, 4> Hq = _computeVectorJacobian(q, mag_ref_h);  // 3×4
+  Matrix<float, 3, STATE_DIM> H;
+  H.zeros();                        // zero every element
+  H.setSlice<3, 4>(0, Q0_IDX, Hq);  // insert attitude block
 
-  // 5. Innovation y
-  Matrix<float, 3, 1> y = z - h;
-
-  // 6. Jacobian H
-  Matrix<float, 3, STATE_DIM> H;  // zeros
-  Matrix<float, 3, 4> Hq =
-      _computeVectorJacobian(q, _mag_ref_world / h_norm);  // Note: scale doesn't matter since linear
-  H.setSlice<3, 4>(0, Q0_IDX, Hq);
-
-  // 7. Measurement noise R
+  //------------------------------------------------------------------
+  // 5.  Measurement noise   R   (tune in [field‑unit]²)
+  //------------------------------------------------------------------
   Matrix<float, 3, 3> R_mat;
-  R_mat(0, 0) = _R_mag;
+  R_mat.zeros();
+  R_mat(0, 0) = _R_mag;  // e.g.  (30 mG)²  or  (0.003 T)²
   R_mat(1, 1) = _R_mag;
-  R_mat(2, 2) = _R_mag;
+  R_mat(2, 2) = _R_mag * 10.0f;  // give z a *very* high variance → effectively ignored
 
-  // 8. Innovation covariance S
-  Matrix<float, 3, 3> S = H * P_pred * H.transpose() + R_mat;
+  //------------------------------------------------------------------
+  // 6.  Kalman update   (step‑by‑step so every operand is a Matrix)
+  //------------------------------------------------------------------
+  Matrix<float, 3, 3> S = H * _PCovariance * H.transpose() + R_mat;           // 3×3
+  Matrix<float, STATE_DIM, 3> K = _PCovariance * H.transpose() * S.invert();  // 10×3
 
-  // 9. Kalman Gain K
-  Matrix<float, STATE_DIM, 3> K = P_pred * H.transpose() * S.invert();
+  Matrix<float, STATE_DIM, 1> dx = K * y;  // 10×1
+  _x = _x + dx;                            // state update (Matrix + Matrix)
 
-  // 10. Update state
-  _x = x_pred + K * y;
-
-  // 11. Update covariance (Joseph form)
+  Matrix<float, STATE_DIM, STATE_DIM> KH = K * H;  // 10×10
   Matrix<float, STATE_DIM, STATE_DIM> I = Matrix<float, STATE_DIM, STATE_DIM>::identity();
-  Matrix<float, STATE_DIM, STATE_DIM> I_KH = I - K * H;
-  _PCovariance = I_KH * P_pred * I_KH.transpose() + K * R_mat * K.transpose();
+  Matrix<float, STATE_DIM, STATE_DIM> I_KH = I - KH;  // 10×10
 
-  // Enforce symmetry
-  _PCovariance = (_PCovariance + _PCovariance.transpose()) * 0.5f;
+  Matrix<float, STATE_DIM, STATE_DIM> P_new = I_KH * _PCovariance * I_KH.transpose() + K * R_mat * K.transpose();
+  _PCovariance = (P_new + P_new.transpose()) * 0.5f;  // force symmetry
 
-  // 12. Renormalize quaternion
+  //------------------------------------------------------------------
+  // 7.  Keep quaternion normalised
+  //------------------------------------------------------------------
   Matrix<float, 4, 1> q_new = _x.slice<4, 1>(Q0_IDX, 0);
   q_new = normalizeQuaternion(q_new);
   _x.setSlice<4, 1>(Q0_IDX, 0, q_new);
@@ -678,7 +682,7 @@ void ExtendedKalmanFilter::updateRangefinder(float range_reading)
 }
 
 float ExtendedKalmanFilter::_verticalAccelerationWorld(
-    const Matrix<float, 3, 1>& a_body, const Matrix<float, 4, 1>& q) const
+    const Matrix<float, 3, 1> &a_body, const Matrix<float, 4, 1> &q) const
 {
   // Body → World
   Matrix<float, 3, 3> R_bw = quaternionToRotationMatrix(q);
