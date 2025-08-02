@@ -11,6 +11,7 @@ import SwiftUI
 struct QuadControllerApp: App {
   init() {
     CameraController.shared.requestCameraPermissionIfNeeded()
+    GPSController.shared.requestLocationPermission()
   }
   var body: some Scene {
     WindowGroup {
