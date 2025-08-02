@@ -50,6 +50,7 @@ class BluetoothStickController: ObservableObject {
   private var connectedController: GCController? = nil
   private var notificationObservers: [NSObjectProtocol] = []
   private var deadZone: Float
+  private var controlUpdateTimer: Timer? = nil
   
   // MARK: - Initialization
   public init(deadZone: Float = 0.15) {
@@ -62,6 +63,7 @@ class BluetoothStickController: ObservableObject {
   
   deinit {
     print("BluetoothStickController: Deinitializing.")
+    stopControlUpdateTimer()
     stopDiscovery()
     notificationObservers.forEach(NotificationCenter.default.removeObserver)
     notificationObservers.removeAll()
@@ -88,6 +90,40 @@ class BluetoothStickController: ObservableObject {
   }
   
   // MARK: - Connection Management
+  
+  private func startControlUpdateTimer() {
+    stopControlUpdateTimer() // Ensure no duplicate timers
+    
+    // Create a timer that fires 10 times per second (every 0.1 seconds)
+    controlUpdateTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+      self?.sendPeriodicControlUpdate()
+    }
+    print("BluetoothStickController: Started control update timer (10Hz)")
+  }
+  
+  private func stopControlUpdateTimer() {
+    controlUpdateTimer?.invalidate()
+    controlUpdateTimer = nil
+    print("BluetoothStickController: Stopped control update timer")
+  }
+  
+  private func sendPeriodicControlUpdate() {
+    // Only send if we have a BLE controller and are connected
+    guard let bleController = bluetoothController, isConnected else { return }
+    
+    let left = self.leftStickValues ?? XY(x: 0.0, y: 0.0)
+    let right = self.rightStickValues ?? XY(x: 0.0, y: 0.0)
+    
+    // Convert stick values to the expected range for the drone
+    let rescaledStickParams = StickUpdateParams(
+      throttle: (((Double(left.y) / 2.0) + 1.0) * 255.0) - 127.5,
+      yaw: (((Double(left.x) / 2.0) + 1.0) * 255.0) - 127.5,
+      pitch: (((Double(right.y) / 2.0) + 1.0) * 255.0) - 127.5,
+      roll: (((Double(right.x) / 2.0) + 1.0) * 255.0) - 127.5)
+    
+    bleController.sendControlUpdate(rescaledStickParams, endGesture: false)
+  }
+  
   private func setupConnectionObservers() {
     // Observer for when a controller connects
     let connectObserver = NotificationCenter.default.addObserver(
@@ -121,6 +157,7 @@ class BluetoothStickController: ObservableObject {
   
   private func handleDisconnection() {
     DispatchQueue.main.async {
+      self.stopControlUpdateTimer() // Stop sending updates when disconnected
       self.connectedController = nil
       self.isConnected = false
       self.connectedControllerName = nil
@@ -177,6 +214,7 @@ class BluetoothStickController: ObservableObject {
       self.connectedControllerName = controller.vendorName
       print("BluetoothStickController: Successfully connected to \(controller.vendorName ?? "Unknown Vendor"). Setting up input handlers.")
       self.setupInputHandlers(for: gamepad)
+      self.startControlUpdateTimer() // Start sending periodic updates
     }
   }
   
@@ -262,69 +300,6 @@ class BluetoothStickController: ObservableObject {
         break
     }
     
-    let left = self.leftStickValues ?? XY(x: 0.0, y: 0.0)
-    let right = self.rightStickValues ?? XY(x: 0.0, y: 0.0)
-    
-    // need to now send the update via bluetooth to the device
-    // the drone expects XY stick values in 0-255, whereas our
-    // XY here is in the -1.0 to 1.0 range
-    let rescaledStickParams = StickUpdateParams(
-      throttle: ((Double(left.y) / 2.0) + 1.0) * 255.0,
-      yaw: ((Double(left.x) / 2.0) + 1.0) * 255.0,
-      pitch: ((Double(right.y) / 2.0) + 1.0) * 255.0,
-      roll: ((Double(right.x) / 2.0) + 1.0) * 255.0)
-    bluetoothController.sendControlUpdate(rescaledStickParams, endGesture: false)
+    // No need to send updates here - the timer handles all transmissions at 10Hz
   }
 }
-
-// MARK: - Example SwiftUI Usage
-/*
- // Ensure XY struct is defined in your project (as shown above or externally)
- // and AnalogInputState (though not directly used by ViewModel, it's a good concept).
-
- struct JoystickStatusView: View {
-     @StateObject private var stickController = BluetoothStickController() // Initialize here
-
-     var body: some View {
-         VStack(alignment: .leading, spacing: 10) {
-             Text("Bluetooth Stick Controller Status")
-                 .font(.headline)
-             
-             Text("Connected: \(stickController.isConnected ? "Yes" : "No")")
-                 .foregroundColor(stickController.isConnected ? .green : .red)
-            
-             if let controllerName = stickController.connectedControllerName, stickController.isConnected {
-                 Text("Controller: \(controllerName)")
-             }
-
-             if stickController.isConnected {
-                 Text("Button A Pressed: \(stickController.isButtonAPressed ? "Yes" : "No")")
-
-                 if let leftStick = stickController.leftStickValues {
-                     Text("Left Stick: X=\(String(format: "%.2f", leftStick.x)), Y=\(String(format: "%.2f", leftStick.y))")
-                 } else {
-                     Text("Left Stick: -")
-                 }
-                 if let rightStick = stickController.rightStickValues {
-                     Text("Right Stick: X=\(String(format: "%.2f", rightStick.x)), Y=\(String(format: "%.2f", rightStick.y))")
-                 } else {
-                     Text("Right Stick: -")
-                 }
-             } else {
-                 Text("Connect a joystick to see input.")
-                 Button("Start Discovery") {
-                     stickController.startDiscovery()
-                 }
-             }
-         }
-         .padding()
-         // .onAppear {
-         //     // Discovery is started in BluetoothStickController's init.
-         //     // Call startDiscovery() if you explicitly stopped it.
-         // }
-         // .onDisappear {
-         //     // stickController.stopDiscovery() // Optional: stop discovery when view disappears
-         // }
-     }
- }
-*/

@@ -160,7 +160,15 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     }
     do {
       lastUpdateTime = Date().timeIntervalSince1970
-      let data = try params.toData()
+      // Invert the roll command (right stick X axis) before sending
+      // Since values are 0-255 with 127.5 as center, we reflect around the center
+      let invertedParams = StickUpdateParams(
+        throttle: params.throttle,
+        yaw: params.yaw,
+        pitch: params.pitch,
+        roll: 255.0 - params.roll  // Invert roll by reflecting around the 0-255 range
+      )
+      let data = try invertedParams.toData()
       device?.writeValue(data, for: characteristic, type: .withoutResponse)
     } catch {
       print("Encountered an error encoding JSON for control update: \(error)")
