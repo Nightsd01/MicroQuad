@@ -5,15 +5,11 @@
 #include <AsyncController.h>
 #include <DebugHelper.h>
 #include <Logger.h>
-#include <esp_gap_ble_api.h>
-#include <esp_gatt_common_api.h>
-#include <esp_gattc_api.h>
+#include <NimBLEDevice.h>
 #include <mbedtls/md5.h>
 #include <stdio.h>   // For sprintf, if you want a hex string output
 #include <string.h>  // For memset, if needed
 
-#include "BLE2902.h"
-#include "BLEUtils.h"
 #include "Constants.h"
 
 #define MAX_CALIBRATION_PACKET_SIZE_BYTES 10
@@ -80,139 +76,130 @@ std::string _calculateMD5HashString(const uint8_t *data, size_t length)
 
 void BLEController::beginBluetooth(void)
 {
-  BLEDevice::init(DEVICE_NAME);
-  BLEDevice::setMTU(150);
-  _server = BLEDevice::createServer();
+  NimBLEDevice::init(DEVICE_NAME);
+  NimBLEDevice::setMTU(517);  // Max MTU for BLE 4.2+
+  _server = NimBLEDevice::createServer();
   _server->setCallbacks(this);
 
-  _service = _server->createService(BLEUUID(SERVICE_UUID), 30, 0);
+  _service = _server->createService(SERVICE_UUID);
 
+  // Control characteristic
   _controlCharacteristic = _service->createCharacteristic(
       CONTROL_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
   _controlCharacteristic->setCallbacks(this);
-  _controlCharacteristic->addDescriptor(new BLE2902());
 
+  // Telemetry characteristic
   _telemetryCharacteristic = _service->createCharacteristic(
       TELEM_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
   _telemetryCharacteristic->setCallbacks(this);
-  _telemetryCharacteristic->addDescriptor(new BLE2902());
-  _telemetryCharacteristic->setWriteNoResponseProperty(true);
 
+  // Arm characteristic
   _armCharacteristic = _service->createCharacteristic(
       ARM_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
   _armCharacteristic->setCallbacks(this);
-  _armCharacteristic->addDescriptor(new BLE2902());
 
+  // Reset characteristic
   _resetCharacteristic = _service->createCharacteristic(
       RESET_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
   _resetCharacteristic->setCallbacks(this);
-  _resetCharacteristic->addDescriptor(new BLE2902());
 
+  // Motor debug characteristic
   _motorDebugCharacteristic = _service->createCharacteristic(
       MOTOR_DEBUG_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
   _motorDebugCharacteristic->setCallbacks(this);
-  _motorDebugCharacteristic->addDescriptor(new BLE2902());
 
+  // Calibration characteristic
   _calibrationCharacteristic = _service->createCharacteristic(
       CALIBRATION_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
   _calibrationCharacteristic->setCallbacks(this);
-  _calibrationCharacteristic->addDescriptor(new BLE2902());
-  _calibrationCharacteristic->setWriteNoResponseProperty(true);
 
+  // Debug characteristic
   _debugCharacteristic = _service->createCharacteristic(
       DEBUG_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
   _debugCharacteristic->setCallbacks(this);
-  _debugCharacteristic->addDescriptor(new BLE2902());
 
+  // PID constants characteristic
   _pidConstantsCharacteristic = _service->createCharacteristic(
       PID_CONSTANTS_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_WRITE_NR);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE_NR);
   _pidConstantsCharacteristic->setCallbacks(this);
-  _pidConstantsCharacteristic->addDescriptor(new BLE2902());
-  _pidConstantsCharacteristic->setWriteNoResponseProperty(true);
 
-  // Add Current Time Service Characteristic
+  // Current Time Service Characteristic
   _currentTimeCharacteristic = _service->createCharacteristic(
       CTS_CURRENT_TIME_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_NOTIFY);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
   _currentTimeCharacteristic->setCallbacks(this);
-  _currentTimeCharacteristic->addDescriptor(new BLE2902());
 
-  // Set the MTU size
-  esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
-  if (status != ESP_OK) {
-    LOG_ERROR("set local MTU failed, error code = %x", status);
-  }
 
-  // Register device info service, that contains the device's UUID, manufacturer
-  // and name. _deviceInfoService = _server->createService(DEVINFO_UUID);
-  BLECharacteristic *manufacturerCharacteristic =
-      _service->createCharacteristic(DEVINFO_MANUFACTURER_UUID, BLECharacteristic::PROPERTY_READ);
+  // Device info characteristics
+  NimBLECharacteristic *manufacturerCharacteristic =
+      _service->createCharacteristic(DEVINFO_MANUFACTURER_UUID, NIMBLE_PROPERTY::READ);
   manufacturerCharacteristic->setValue(DEVICE_MANUFACTURER);
-  BLECharacteristic *deviceNameCharacteristic =
-      _service->createCharacteristic(DEVINFO_NAME_UUID, BLECharacteristic::PROPERTY_READ);
+
+  NimBLECharacteristic *deviceNameCharacteristic =
+      _service->createCharacteristic(DEVINFO_NAME_UUID, NIMBLE_PROPERTY::READ);
   deviceNameCharacteristic->setValue(DEVICE_NAME);
-  BLECharacteristic *deviceMacAddressCharacteristic =
-      _service->createCharacteristic(DEVINFO_SERIAL_UUID, BLECharacteristic::PROPERTY_READ);
+
+  NimBLECharacteristic *deviceMacAddressCharacteristic =
+      _service->createCharacteristic(DEVINFO_SERIAL_UUID, NIMBLE_PROPERTY::READ);
   String chipId = String((uint32_t)(ESP.getEfuseMac() >> 24), HEX);
   deviceMacAddressCharacteristic->setValue(chipId.c_str());
 
-  // Advertise services
-  BLEAdvertising *advertisement = _server->getAdvertising();
-  BLEAdvertisementData adv;
-  adv.setName(DEVICE_NAME);
-  adv.setCompleteServices(BLEUUID(SERVICE_UUID));
-  advertisement->setAdvertisementData(adv);
-  advertisement->start();
+  // Start the service
+  _service->start();
 
   LOG_INFO_ASYNC_ON_MAIN("BLE setup complete");
 
-  _service->start();
+  // Start advertising
+  NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponseData(pAdvertising->getAdvertisementData());
+  pAdvertising->start();
+
+  LOG_INFO_ASYNC_ON_MAIN("BLE setup complete");
 }
-void BLEController::onConnect(BLEServer *server)
+
+void BLEController::onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo)
 {
   LOG_INFO_ASYNC_ON_MAIN("Connected");
   isConnected = true;
-  // Set the MTU size
-  esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
-  if (status != ESP_OK) {
-    LOG_ERROR("set local MTU failed, error code = %x", status);
-  }
-};
 
-void BLEController::onDisconnect(BLEServer *server)
+  // Update connection parameters for better throughput
+  pServer->updateConnParams(connInfo.getConnHandle(), 6, 6, 0, 400);
+}
+
+void BLEController::onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo, int reason)
 {
-  LOG_INFO_ASYNC_ON_MAIN("Disconnected");
+  LOG_INFO_ASYNC_ON_MAIN("Disconnected, reason: %d", reason);
   isConnected = false;
-  // Set the MTU size
-  esp_err_t status = esp_ble_gatt_set_local_mtu(180);  // Replace 500 with the MTU size you want
-  if (status != ESP_OK) {
-    LOG_ERROR("set local MTU failed, error code = %x", status);
-  }
-  _server->startAdvertising();
+
+  // Restart advertising
+  NimBLEDevice::startAdvertising();
+
   if (_armStatusUpdateHandler) {
     _armStatusUpdateHandler(false);
   }
 }
 
-void BLEController::onMtuChanged(BLEServer *pServer, esp_ble_gatts_cb_param_t *param)
+void BLEController::onMTUChange(uint16_t MTU, NimBLEConnInfo &connInfo)
 {
-  LOG_INFO_ASYNC_ON_MAIN("MTU changed to: %i", param->mtu);
+  LOG_INFO_ASYNC_ON_MAIN("MTU changed to: %i", MTU);
 }
 
-void BLEController::onWrite(BLECharacteristic *characteristic)
+void BLEController::onWrite(NimBLECharacteristic *characteristic, NimBLEConnInfo &connInfo)
 {
   // TODO: switch this to a mutex
   isProcessingBluetoothTransaction = true;
-  if (characteristic->getUUID().equals(_controlCharacteristic->getUUID())) {
-    std::string data = std::string(characteristic->getValue().c_str());
+
+  if (characteristic->getUUID().equals(NimBLEUUID(CONTROL_CHARACTERISTIC_UUID))) {
+    std::string data = characteristic->getValue();
     char *str = (char *)malloc((strlen(data.c_str()) * sizeof(char)) + 10);
     strcpy(str, data.c_str());
     char *ptr = strtok(str, ",");
@@ -240,19 +227,21 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
     if (_controlsUpdateHandler) {
       _controlsUpdateHandler(controlsUpdate);
     }
-  } else if (characteristic->getUUID().equals(_armCharacteristic->getUUID())) {
-    uint8_t *armData = characteristic->getData();
-    bool armed = armData[0];
-    if (_armStatusUpdateHandler) {
-      _armStatusUpdateHandler(armed);
+  } else if (characteristic->getUUID().equals(NimBLEUUID(ARM_CHARACTERISTIC_UUID))) {
+    NimBLEAttValue value = characteristic->getValue();
+    if (value.length() > 0) {
+      bool armed = value[0];
+      if (_armStatusUpdateHandler) {
+        _armStatusUpdateHandler(armed);
+      }
     }
-  } else if (characteristic->getUUID().equals(_resetCharacteristic->getUUID())) {
+  } else if (characteristic->getUUID().equals(NimBLEUUID(RESET_CHARACTERISTIC_UUID))) {
     LOG_INFO_ASYNC_ON_MAIN("SET RESET FLAG");
     if (_resetStatusUpdateHandler) {
       _resetStatusUpdateHandler();
     }
-  } else if (characteristic->getUUID().equals(_motorDebugCharacteristic->getUUID())) {
-    std::string value = std::string(characteristic->getValue().c_str());
+  } else if (characteristic->getUUID().equals(NimBLEUUID(MOTOR_DEBUG_CHARACTERISTIC_UUID))) {
+    std::string value = characteristic->getValue();
     std::vector<std::string> components = _split(value, ":");
     if (components.size() == 0) {
       LOG_ERROR_ASYNC_ON_MAIN("ERROR: Incorrect motor debug packet (1)");
@@ -290,9 +279,9 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
       LOG_ERROR_ASYNC_ON_MAIN("ERROR: Incorrect motor debug packet (4)");
       return;
     }
-  } else if (characteristic->getUUID().equals(_calibrationCharacteristic->getUUID())) {
+  } else if (characteristic->getUUID().equals(NimBLEUUID(CALIBRATION_CHARACTERISTIC_UUID))) {
     if (_calibrationUpdateHandler) {
-      std::string value = std::string(characteristic->getValue().c_str());
+      std::string value = characteristic->getValue();
       std::vector<std::string> components = _split(value, ":");
       if (components.size() < 2) {
         LOG_ERROR_ASYNC_ON_MAIN("Incorrect calibration packet");
@@ -310,8 +299,8 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
     } else {
       LOG_ERROR_ASYNC_ON_MAIN("No calibration update handler set");
     }
-  } else if (characteristic->getUUID().equals(_debugCharacteristic->getUUID())) {
-    std::string val = std::string(characteristic->getValue().c_str());
+  } else if (characteristic->getUUID().equals(NimBLEUUID(DEBUG_CHARACTERISTIC_UUID))) {
+    std::string val = characteristic->getValue();
     LOG_INFO_ASYNC_ON_MAIN("Received debug command: %s", val.c_str());
     debug_recording_update_t debugDataUpdate = {.recordDebugData = false, .sendDebugData = false};
     if (val == "request") {
@@ -327,13 +316,14 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
     if (_debugDataUpdateHandler) {
       _debugDataUpdateHandler(debugDataUpdate);
     }
-  } else if (characteristic->getUUID().equals(_pidConstantsCharacteristic->getUUID())) {
+  } else if (characteristic->getUUID().equals(NimBLEUUID(PID_CONSTANTS_CHARACTERISTIC_UUID))) {
     LOG_INFO_ASYNC_ON_MAIN("Received PID constants update");
-    uint8_t *pidConstants = characteristic->getData();
-    if (characteristic->getLength() != 14) {
-      LOG_ERROR_ASYNC_ON_MAIN("Incorrect PID constants packet size %i", characteristic->getLength());
+    NimBLEAttValue value = characteristic->getValue();
+    if (value.length() != 14) {
+      LOG_ERROR_ASYNC_ON_MAIN("Incorrect PID constants packet size %i", value.length());
       return;
     }
+    const uint8_t *pidConstants = value.data();
     // Assumes the following packet structure:
     // byte 0 - axis enum
     // byte 1 - PID type enum
@@ -347,7 +337,8 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
 
     gains_t gains = {.kP = kP, .kI = kI, .kD = kD};
     if (_pidConstantsUpdateHandler) {
-      AsyncController::main.executePossiblySync([=]() { _pidConstantsUpdateHandler(axis, type, gains); });
+      AsyncController::main.executePossiblySync(
+          [this, axis, type, gains]() { _pidConstantsUpdateHandler(axis, type, gains); });
       LOG_INFO_ASYNC_ON_MAIN(
           "Updating PID constants for axis %d, type %d, p = %f, i = %f, d = %f",
           axis,
@@ -356,15 +347,14 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
           gains.kI,
           gains.kD);
     }
-  } else if (characteristic->getUUID().equals(_currentTimeCharacteristic->getUUID())) {
+  } else if (characteristic->getUUID().equals(NimBLEUUID(CTS_CURRENT_TIME_CHARACTERISTIC_UUID))) {
     LOG_INFO_ASYNC_ON_MAIN("Received Current Time update");
-    uint8_t *data = characteristic->getData();
-    size_t length = characteristic->getLength();
+    NimBLEAttValue value = characteristic->getValue();
 
     // The timestamp is sent as a Double from iOS, which is 8 bytes.
-    if (length == sizeof(double)) {
+    if (value.length() == sizeof(double)) {
       double timestamp;
-      memcpy(&timestamp, data, sizeof(double));
+      memcpy(&timestamp, value.data(), sizeof(double));
 
       if (_timeUpdateHandler) {
         _timeUpdateHandler(timestamp);
@@ -373,74 +363,45 @@ void BLEController::onWrite(BLECharacteristic *characteristic)
       LOG_ERROR_ASYNC_ON_MAIN(
           "Invalid Current Time data received - expected %zu bytes, got %zu",
           sizeof(double),
-          length);
+          value.length());
+    }
     }
   }
   // TODO: switch this to a mutex
   isProcessingBluetoothTransaction = false;
 }
 
-void BLEController::onStatus(BLECharacteristic *pCharacteristic, Status s, uint32_t code)
+void BLEController::onStatus(NimBLECharacteristic *pCharacteristic, int code)
 {
-  switch (s) {
-    case BLECharacteristicCallbacks::Status::SUCCESS_INDICATE:
-      LOG_VERBOSE_ASYNC_ON_MAIN(
-          "received BLE status update = SUCCESS_INDICATE, code = %d, characteristic UUID = %s",
-          code,
-          pCharacteristic->getUUID().toString().c_str());
-      break;
-    case BLECharacteristicCallbacks::Status::SUCCESS_NOTIFY:
-      LOG_VERBOSE_ASYNC_ON_MAIN(
-          "received BLE status update = SUCCESS_NOTIFY, code = %d, characteristic UUID = %s",
-          code,
-          pCharacteristic->getUUID().toString().c_str());
-      if (!pCharacteristic->getUUID().equals(_telemetryCharacteristic->getUUID())) {
-        return;
+  String typeStr;
+  switch (code) {
+    case 0:  // SUCCESS_INDICATE/NOTIFY - code 0 means success
+      typeStr = "SUCCESS";
+      if (pCharacteristic->getUUID().equals(NimBLEUUID(TELEM_CHARACTERISTIC_UUID))) {
+        AsyncController::main.executePossiblySync([this]() {
+          if (_telemetryTransmissionCompleteHandler != nullptr) {
+            _telemetryTransmissionCompleteHandler();
+            _telemetryTransmissionCompleteHandler = nullptr;
+          }
+        });
       }
-      AsyncController::main.executePossiblySync([this, pCharacteristic]() {
-        if (_telemetryTransmissionCompleteHandler != nullptr) {
-          _telemetryTransmissionCompleteHandler();
-          _telemetryTransmissionCompleteHandler = nullptr;
-        }
-      });
       break;
-    case BLECharacteristicCallbacks::Status::ERROR_INDICATE_DISABLED:
-      LOG_ERROR_ASYNC_ON_MAIN(
-          "received BLE status update = ERROR_INDICATE_DISABLED, code = %d, characteristic UUID = %s",
-          code,
-          pCharacteristic->getUUID().toString().c_str());
+    case BLE_HS_ENOTCONN:
+      typeStr = "ERROR_NO_CLIENT";
       break;
-    case BLECharacteristicCallbacks::Status::ERROR_NOTIFY_DISABLED:
-      LOG_ERROR_ASYNC_ON_MAIN(
-          "received BLE status update = ERROR_NOTIFY_DISABLED, code = %d, characteristic UUID = %s",
-          code,
-          pCharacteristic->getUUID().toString().c_str());
+    case BLE_HS_EINVAL:
+      typeStr = "ERROR_INVALID";
       break;
-    case BLECharacteristicCallbacks::Status::ERROR_GATT:
-      LOG_ERROR_ASYNC_ON_MAIN(
-          "received BLE status update = ERROR_GATT, code = %d, characteristic UUID = %s",
-          code,
-          pCharacteristic->getUUID().toString().c_str());
-      break;
-    case BLECharacteristicCallbacks::Status::ERROR_NO_CLIENT:
-      LOG_ERROR_ASYNC_ON_MAIN(
-          "received BLE status update = ERROR_NO_CLIENT, code = %d, characteristic UUID = %s",
-          code,
-          pCharacteristic->getUUID().toString().c_str());
-      break;
-    case BLECharacteristicCallbacks::Status::ERROR_INDICATE_TIMEOUT:
-      LOG_ERROR_ASYNC_ON_MAIN(
-          "received BLE status update = ERROR_INDICATE_TIMEOUT, code = %d, characteristic UUID = %s",
-          code,
-          pCharacteristic->getUUID().toString().c_str());
-      break;
-    case BLECharacteristicCallbacks::Status::ERROR_INDICATE_FAILURE:
-      LOG_ERROR_ASYNC_ON_MAIN(
-          "received BLE status update = ERROR_INDICATE_FAILURE, code = %d, characteristic UUID = %s",
-          code,
-          pCharacteristic->getUUID().toString().c_str());
+    default:
+      typeStr = "ERROR_CODE_" + String(code);
       break;
   }
+
+  LOG_VERBOSE_ASYNC_ON_MAIN(
+      "received BLE status update = %s, code = %d, characteristic UUID = %s",
+      typeStr.c_str(),
+      code,
+      pCharacteristic->getUUID().toString().c_str());
 }
 
 void BLEController::uploadDebugData(uint8_t *data, size_t length)

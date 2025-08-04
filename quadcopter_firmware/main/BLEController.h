@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "BLECharacteristic.h"
-#include "BLEDevice.h"
-#include "BLEServer.h"
+// NimBLE includes from esp-nimble-cpp component
+#include <NimBLEDevice.h>
+
 #include "CalibrationEvent.h"
 #include "CrossPlatformEnum.h"
 #include "IMU.h"
@@ -61,7 +61,7 @@ struct debug_recording_update_t
 
 #define DEBUG_PACKET_SIZE_BYTES 160
 
-class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbacks
+class BLEController : public NimBLEServerCallbacks, public NimBLECharacteristicCallbacks
 {
  public:
   BLEController();
@@ -86,27 +86,28 @@ class BLEController : public BLEServerCallbacks, public BLECharacteristicCallbac
   void setPIDConstantsUpdateHandler(
       std::function<void(ControlAxis, PIDType, gains_t)> pidConstantsUpdateHandler);  // axis, angle + rate PIDs
 
-  // Override methods from BLEServerCallbacks
-  void onConnect(BLEServer *pServer) override;
-  void onDisconnect(BLEServer *pServer) override;
-  void onMtuChanged(BLEServer *pServer, esp_ble_gatts_cb_param_t *param) override;
+  // Override methods from NimBLEServerCallbacks
+  void onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo) override;
+  void onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo, int reason) override;
+  void onMTUChange(uint16_t MTU, NimBLEConnInfo &connInfo) override;
 
-  // Override methods from BLECharacteristicCallbacks
-  void onWrite(BLECharacteristic *pCharacteristic) override;
-  void onStatus(BLECharacteristic *pCharacteristic, Status s, uint32_t code) override;
+  // Override methods from NimBLECharacteristicCallbacks
+  void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override;
+  void onStatus(NimBLECharacteristic *pCharacteristic, int code) override;
+
 
  private:
-  BLEServer *_server;
-  BLEService *_service;
-  BLECharacteristic *_controlCharacteristic;
-  BLECharacteristic *_telemetryCharacteristic;
-  BLECharacteristic *_armCharacteristic;
-  BLECharacteristic *_resetCharacteristic;
-  BLECharacteristic *_motorDebugCharacteristic;
-  BLECharacteristic *_calibrationCharacteristic;
-  BLECharacteristic *_debugCharacteristic;
-  BLECharacteristic *_pidConstantsCharacteristic;
-  BLECharacteristic *_currentTimeCharacteristic;
+  NimBLEServer *_server;
+  NimBLEService *_service;
+  NimBLECharacteristic *_controlCharacteristic;
+  NimBLECharacteristic *_telemetryCharacteristic;
+  NimBLECharacteristic *_armCharacteristic;
+  NimBLECharacteristic *_resetCharacteristic;
+  NimBLECharacteristic *_motorDebugCharacteristic;
+  NimBLECharacteristic *_calibrationCharacteristic;
+  NimBLECharacteristic *_debugCharacteristic;
+  NimBLECharacteristic *_pidConstantsCharacteristic;
+  NimBLECharacteristic *_currentTimeCharacteristic;
 
   std::function<void(controls_update_t)> _controlsUpdateHandler;
   std::function<void(double)> _timeUpdateHandler;
