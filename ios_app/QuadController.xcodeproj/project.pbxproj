@@ -28,6 +28,7 @@
 		CAC0037A2CE1A20A0008FD5A /* MemoryStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC003792CE1A20A0008FD5A /* MemoryStatusView.swift */; };
 		CAC77FB42A8322FA00E8ABA7 /* DGCharts in Frameworks */ = {isa = PBXBuildFile; productRef = CAC77FB32A8322FA00E8ABA7 /* DGCharts */; };
 		CAD1C8842E3B0070003337F5 /* GPSController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD1C8832E3B006B003337F5 /* GPSController.swift */; };
+		CAD1C8882E3DAAED003337F5 /* BLEControllerLargeDataBlobTransmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD1C8872E3DAAED003337F5 /* BLEControllerLargeDataBlobTransmission.swift */; };
 		CAED1C302D8A561E001215E2 /* PIDDebuggerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAED1C2F2D8A561E001215E2 /* PIDDebuggerView.swift */; };
 		CAED1C322D8A5993001215E2 /* PIDControlller.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAED1C312D8A5993001215E2 /* PIDControlller.swift */; };
 		CAF03F7C2544D7A500D04771 /* QuadControllerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF03F7B2544D7A500D04771 /* QuadControllerApp.swift */; };
@@ -71,6 +72,7 @@
 		CAC003762CE0483E0008FD5A /* QuadController-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "QuadController-Bridging-Header.h"; sourceTree = "<group>"; };
 		CAC003792CE1A20A0008FD5A /* MemoryStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStatusView.swift; sourceTree = "<group>"; };
 		CAD1C8832E3B006B003337F5 /* GPSController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPSController.swift; sourceTree = "<group>"; };
+		CAD1C8872E3DAAED003337F5 /* BLEControllerLargeDataBlobTransmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEControllerLargeDataBlobTransmission.swift; sourceTree = "<group>"; };
 		CAED1C2F2D8A561E001215E2 /* PIDDebuggerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PIDDebuggerView.swift; sourceTree = "<group>"; };
 		CAED1C312D8A5993001215E2 /* PIDControlller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PIDControlller.swift; sourceTree = "<group>"; };
 		CAF03F782544D7A500D04771 /* QuadController.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuadController.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -98,6 +100,7 @@
 			children = (
 				CA524550255225B500537AD4 /* BLEController.swift */,
 				CA4AFCB02DCD9F480041EE78 /* BluetoothJoystickController.swift */,
+				CAD1C8872E3DAAED003337F5 /* BLEControllerLargeDataBlobTransmission.swift */,
 				CA011B0F2CF976A2006E5C74 /* CameraController.swift */,
 				CA011B132CFBF729006E5C74 /* CalibrationController.swift */,
 				CAED1C312D8A5993001215E2 /* PIDControlller.swift */,
@@ -278,6 +281,7 @@
 				CA62E3DE25462FB2008C511B /* StickConfiguration.swift in Sources */,
 				CA011B122CFAA159006E5C74 /* CameraPreview.swift in Sources */,
 				CA4AFCB92DCEDF2F0041EE78 /* ArmStatusController.swift in Sources */,
+				CAD1C8882E3DAAED003337F5 /* BLEControllerLargeDataBlobTransmission.swift in Sources */,
 				CAED1C302D8A561E001215E2 /* PIDDebuggerView.swift in Sources */,
 				CAF03F7C2544D7A500D04771 /* QuadControllerApp.swift in Sources */,
 				CA011B102CF976A2006E5C74 /* CameraController.swift in Sources */,

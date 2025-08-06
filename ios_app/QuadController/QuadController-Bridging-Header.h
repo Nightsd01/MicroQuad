@@ -1,5 +1,6 @@
 //
-//  Use this file to import your target's public headers that you would like to expose to Swift.
+//  Use this file to import your target's public headers that you would like to
+//  expose to Swift.
 //
 
 #import <Foundation/Foundation.h>
@@ -7,6 +8,7 @@
 #define USE_NSENUM
 #define CROSS_PLATFORM_ENUM(_type, _name) NS_ENUM(_type, _name)
 
-#import "../../quadcopter_firmware/main/TelemetryEvent.h"
-#import "../../quadcopter_firmware/main/CalibrationEvent.h"
+#import "../../quadcopter_firmware/main/BLELargeDataBlobType.h"
 #import "../../quadcopter_firmware/main/BatteryStatus.h"
+#import "../../quadcopter_firmware/main/CalibrationEvent.h"
+#import "../../quadcopter_firmware/main/TelemetryEvent.h"

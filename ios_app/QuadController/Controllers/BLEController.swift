@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreBluetooth
+import Combine
 
 protocol BLEControllerDelegate {
   func didConnect()
@@ -15,6 +16,15 @@ protocol BLEControllerDelegate {
 
 @objc protocol BLESensorCalibrationDelegate : AnyObject {
   func didGetCalibrationRequest(_ request : CalibrationRequest)
+}
+
+// MARK: - BLE Connection State
+enum BLEConnectionState {
+  case disconnected
+  case scanning
+  case connecting
+  case connected
+  case ready  // Connected and all characteristics discovered
 }
 
 class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, ObservableObject {
@@ -64,6 +74,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   public var quadStatus = QuadStatus()
   @Published var bleStatus = "None"
   @Published var debugDataString : String?
+  @Published var connectionState: BLEConnectionState = .disconnected
   
   private var calibrationDelegates : [CalibrationType : BLESensorCalibrationDelegate] = [:]
   
@@ -182,6 +193,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   
   func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
     connected = true
+    connectionState = .connected
     updateDelegateState()
     device = peripheral
 
@@ -191,6 +203,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   
   func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
     connected = false
+    connectionState = .disconnected
     updateDelegateState()
     device = nil
   }
@@ -199,10 +212,12 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     updateDelegateState()
     device = peripheral
     manager.stopScan()
+    connectionState = .connecting
     manager.connect(peripheral, options: nil)
   }
   
   func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+    connectionState = .disconnected
     updateDelegateState()
   }
   
@@ -274,6 +289,9 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
         writeCurrentTime()
       }
     }
+    
+    // All characteristics discovered, we're ready
+    connectionState = .ready
   }
 
   func writeCurrentTime() {
@@ -480,25 +498,32 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     switch manager.state {
       case .poweredOff:
         bleStatus = "Disconnected"
+        connectionState = .disconnected
         break
       case .poweredOn:
-        bleStatus = "Disconnected"
+        bleStatus = "Scanning"
+        connectionState = .scanning
         manager.scanForPeripherals(withServices: [CBUUID(string: BLEController.serviceUUID)], options: nil)
         break
       case .unknown:
         bleStatus = "Unknown"
+        connectionState = .disconnected
         break
       case .unauthorized:
         bleStatus = "Unauthorized"
+        connectionState = .disconnected
         break
       case .resetting:
         bleStatus = "Resetting"
+        connectionState = .disconnected
         break
       case .unsupported:
         bleStatus = "Unsupported"
+        connectionState = .disconnected
         break
       @unknown default:
         bleStatus = "Unsupported State"
+        connectionState = .disconnected
         break
     }
   }
