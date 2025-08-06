@@ -37,6 +37,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   static let calibrateCharacteristicUUID = "498e876e-0dd2-11ec-82a8-0242ac130003"
   static let debugInfoCharacteristicUUID = "f0a0afee-0983-4691-adc5-02ee803f5418"
   static let pidTuningCharacteristicUUID = "58471750-7394-4659-bc69-09331eed05a3"
+  static let l2capPSMCharacteristicUUID = "6c6892bc-7ade-4721-bc33-f71c245bb24a"
   
   // Current Time Service (CTS)
   static let CTS_SERVICE_UUID = "1805"
@@ -60,6 +61,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   var debugInfoCharacteristic : CBCharacteristic?
   var pidTuningCharacteristic : CBCharacteristic?
   var currentTimeCharacteristic: CBCharacteristic?
+  var l2capPSMCharacteristic: CBCharacteristic?
 
   var lastUpdateTime : TimeInterval?
   var timer : Timer?
@@ -71,12 +73,17 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   @Published var receivingDebugData = false
   @Published var transferProgress = 0.0
   
+  // L2CAP Support
+  var l2capManager: L2CAPChannelManager?
+  var l2capChannelOpenCompletion: ((Error?) -> Void)?
+  
   public var quadStatus = QuadStatus()
   @Published var bleStatus = "None"
   @Published var debugDataString : String?
   @Published var connectionState: BLEConnectionState = .disconnected
   
   private var calibrationDelegates : [CalibrationType : BLESensorCalibrationDelegate] = [:]
+  private var cancellables = Set<AnyCancellable>()
   
   var delegate : BLEControllerDelegate? {
     didSet {
@@ -287,6 +294,8 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
         currentTimeCharacteristic = characteristic
         // Once we discover this characteristic, write the current time.
         writeCurrentTime()
+      } else if characteristic.uuid.uuidString.lowercased() == BLEController.l2capPSMCharacteristicUUID.lowercased() {
+        l2capPSMCharacteristic = characteristic
       }
     }
     
@@ -436,6 +445,12 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     } else if characteristic.uuid.uuidString.lowercased() == BLEController.calibrateCharacteristicUUID.lowercased() {
       calibrationUpdate(characteristic)
       return
+    } else if characteristic.uuid.uuidString.lowercased() == BLEController.l2capPSMCharacteristicUUID.lowercased() {
+      // Handle L2CAP PSM value
+      if let data = characteristic.value {
+        handlePSMValue(data)
+      }
+      return
     }
 
     guard characteristic.uuid.uuidString.lowercased() == BLEController.telemetryCharacteristicUUID.lowercased() else {
@@ -488,6 +503,8 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     
     updatePIDValues(axis: axis, type: type, values: &values)
   }
+  
+
   
   private func updateDelegateState() {
     if (connected) {
