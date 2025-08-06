@@ -38,6 +38,8 @@ class GPSController: NSObject, ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let ephemerisUpdateInterval: TimeInterval = 3600 * 6 // 6 hours for EPO data
     private var hasAttemptedDownload = false  // Track if we've already tried downloading
+    private var bleController: BLEController?  // Reference to BLE controller for transmission
+    private var hasTransmittedEphemeris = false  // Track if we've already sent data to current connection
     
     // MediaTek EPO server URLs
     // Note: These are the official MTK EPO servers used by many GPS manufacturers
@@ -95,6 +97,12 @@ class GPSController: NSObject, ObservableObject {
             return
         }
         
+        // Request location permission if needed (required for ephemeris data context)
+        if authorizationStatus == .notDetermined {
+            print("Requesting location permission for GPS ephemeris data...")
+            requestLocationPermission()
+        }
+        
         hasAttemptedDownload = true
         isDownloadingEphemeris = true
         errorMessage = nil
@@ -110,6 +118,9 @@ class GPSController: NSObject, ObservableObject {
                     self.lastEphemerisUpdate = Date()
                     self.isDownloadingEphemeris = false
                     self.downloadProgress = 1.0
+                    
+                    // Check if we should transmit immediately
+                    self.onEphemerisDownloadComplete()
                 }
                 
                 print("Successfully downloaded EPO data: \(ephemeris.epoData.count) bytes")
@@ -393,6 +404,107 @@ extension GPSController {
     /// Manually triggers ephemeris download (bypasses automatic download prevention)
     func forceDownloadEphemerisData() {
         downloadEphemerisData(force: true)
+    }
+    
+    // MARK: - BLE Integration
+    
+    /// Sets up BLE controller observation for ephemeris data transmission
+    func provideBLEController(_ controller: BLEController) {
+        self.bleController = controller
+        
+        // Observe BLE connection state changes
+        controller.$connectionState
+            .sink { [weak self] state in
+                self?.handleBLEStateChange(state)
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Handles BLE connection state changes
+    private func handleBLEStateChange(_ state: BLEConnectionState) {
+        switch state {
+        case .ready:
+            // Connection is ready, check if we should transmit ephemeris data
+            print("BLE connection ready, checking for ephemeris data transmission...")
+            checkAndTransmitEphemerisData()
+            
+        case .disconnected:
+            // Reset transmission flag for next connection
+            hasTransmittedEphemeris = false
+            
+        default:
+            break
+        }
+    }
+    
+    /// Checks if ephemeris data should be transmitted and sends it
+    /// Data structure sent via L2CAP:
+    /// - [1 byte: BLELargeDataBlobType] (added by transmitLargeDataBlob)
+    /// - [8 bytes: latitude as double]
+    /// - [8 bytes: longitude as double]
+    /// - [8 bytes: timestamp as double (seconds since 1970)]
+    /// - [N bytes: EPO data]
+    private func checkAndTransmitEphemerisData() {
+        guard let bleController = bleController,
+              !hasTransmittedEphemeris,
+              hasEphemerisData(),
+              isEPODataValid(),
+              let epoData = getEPODataForL96(),
+              let location = currentLocation else {
+            // Don't transmit without a valid location
+            if bleController != nil && !hasTransmittedEphemeris && hasEphemerisData() && isEPODataValid() {
+                print("Waiting for valid location before transmitting GPS ephemeris data...")
+            }
+            return
+        }
+        
+        // Prepare the data packet with location and timestamp prefix
+        var fullData = Data()
+        
+        // Add latitude (8 bytes double)
+        let latitude = location.coordinate.latitude
+        var latitudeBytes = latitude
+        fullData.append(Data(bytes: &latitudeBytes, count: 8))
+        
+        // Add longitude (8 bytes double)
+        let longitude = location.coordinate.longitude
+        var longitudeBytes = longitude
+        fullData.append(Data(bytes: &longitudeBytes, count: 8))
+        
+        // Add timestamp (8 bytes double, seconds since 1970)
+        let timestamp: Double = Date().timeIntervalSince1970
+        var timestampBytes = timestamp
+        fullData.append(Data(bytes: &timestampBytes, count: 8))
+        
+        // Append the EPO data
+        fullData.append(epoData)
+        
+        print("Transmitting GPS ephemeris data to quadcopter...")
+        print("Location: lat=\(latitude), lon=\(longitude)")
+        print("Timestamp: \(timestamp) (\(Date()))")
+        print(getEPOInfo() ?? "")
+        print("Total payload: 24 bytes header + \(epoData.count) bytes EPO = \(fullData.count) bytes")
+        
+        hasTransmittedEphemeris = true
+        
+        bleController.transmitLargeDataBlob(.GPSStartupFixData, fullData) { [weak self] error in
+            if let error = error {
+                print("Failed to transmit GPS ephemeris data: \(error)")
+                // Reset flag on failure so we can retry
+                self?.hasTransmittedEphemeris = false
+            } else {
+                print("Successfully transmitted GPS ephemeris data to ESP32")
+                // Keep the flag set - we've successfully sent it for this connection
+            }
+        }
+    }
+    
+    /// Called when ephemeris download completes
+    private func onEphemerisDownloadComplete() {
+        // Check if we should immediately transmit
+        if bleController?.connectionState == .ready {
+            checkAndTransmitEphemerisData()
+        }
     }
 }
 
