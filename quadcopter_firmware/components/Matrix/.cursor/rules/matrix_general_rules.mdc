@@ -1,0 +1,15 @@
+---
+description: Guidelines for working with the C++ Matrix project
+alwaysApply: true
+---
+
+- This Matrix library is a generic templated N-dimensional matrix/tensor class
+- Any time you make changes to this project, please ensure that it builds and
+  that the tests pass by invoking the tests:
+
+```
+# Assuming you are in the Matrix directory:
+cd test/build
+cmake --build .
+ctest
+```

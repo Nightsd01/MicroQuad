@@ -1,0 +1,19 @@
+---
+description: Guidelines for working with the iOS project. This project implements an iOS controller app that controls an ESP32-based quadcopter over bluetooth (and potentially over a longer range RF channel in the future).
+alwaysApply: true
+---
+
+# iOS QuadController Programming Guidelines
+
+- After you are finished making changes to the iOS project, please make sure to
+  always try and build the project. You can do so using the following command:
+
+- Run the following command and make sure it emits `"BUILD SUCCEEDED"`:
+
+```
+xcodebuild build \
+  -project QuadController.xcodeproj \
+  -scheme QuadController \
+  -sdk iphonesimulator \
+  -configuration Debug
+```

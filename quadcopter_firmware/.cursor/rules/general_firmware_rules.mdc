@@ -1,0 +1,24 @@
+---
+description: Rules for working with the ESP-IDF (with Arduino Core) based Quadcopter Firmware project
+alwaysApply: true
+---
+
+- Any time you make changes to the C++ firmware project, before you finish,
+  please make sure to verify your change did not break the build by running this
+  command:
+
+```
+idf.py build
+```
+
+- Right now, the C++ firmware is not super well tested, but I do have some basic
+  tests on the MedianFilter type. If you make changes to the MedianFilter please
+  run these tests, and add any new tests to it as necessary:
+
+```
+cd test/build
+cmake --build .
+ctest
+```
+
+- Verify that 100% of the tests pass. If they do not then something is broken.
