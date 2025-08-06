@@ -16,6 +16,9 @@
 #include "CrossPlatformEnum.h"
 #include "IMU.h"
 
+// Forward declarations
+class BLEControllerLargeDataTransmissionHandler;
+
 // Bluetooth constants
 #define SERVICE_UUID "ab0828b1-198e-4351-b779-901fa0e0371e"
 #define CONTROL_CHARACTERISTIC_UUID "4ac8a682-9736-4e5d-932b-e9b31405049c"
@@ -26,6 +29,7 @@
 #define CALIBRATION_CHARACTERISTIC_UUID "498e876e-0dd2-11ec-82a8-0242ac130003"
 #define DEBUG_CHARACTERISTIC_UUID "f0a0afee-0983-4691-adc5-02ee803f5418"
 #define PID_CONSTANTS_CHARACTERISTIC_UUID "58471750-7394-4659-bc69-09331eed05a3"
+#define LARGE_DATA_CHARACTERISTIC_UUID "6c6892bc-7ade-4721-bc33-f71c245bb24a"
 
 // Current Time Service (CTS)
 #define CTS_SERVICE_UUID (uint16_t)0x1805
@@ -92,9 +96,15 @@ class BLEController : public NimBLEServerCallbacks, public NimBLECharacteristicC
   void onMTUChange(uint16_t MTU, NimBLEConnInfo &connInfo) override;
 
   // Override methods from NimBLECharacteristicCallbacks
+  void onRead(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override;
   void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override;
   void onStatus(NimBLECharacteristic *pCharacteristic, int code) override;
 
+  // L2CAP support
+  BLEControllerLargeDataTransmissionHandler *_l2capHandler;
+
+  // Get the L2CAP handler for large data transfers
+  BLEControllerLargeDataTransmissionHandler *getL2CAPHandler() { return _l2capHandler; }
 
  private:
   NimBLEServer *_server;
@@ -108,6 +118,7 @@ class BLEController : public NimBLEServerCallbacks, public NimBLECharacteristicC
   NimBLECharacteristic *_debugCharacteristic;
   NimBLECharacteristic *_pidConstantsCharacteristic;
   NimBLECharacteristic *_currentTimeCharacteristic;
+  NimBLECharacteristic *_largeDataCharacteristic;
 
   std::function<void(controls_update_t)> _controlsUpdateHandler;
   std::function<void(double)> _timeUpdateHandler;

@@ -10,6 +10,7 @@
 #include <stdio.h>   // For sprintf, if you want a hex string output
 #include <string.h>  // For memset, if needed
 
+#include "BLEControllerLargeDataTransmissionHandler.h"
 #include "Constants.h"
 
 #define MAX_CALIBRATION_PACKET_SIZE_BYTES 10
@@ -25,6 +26,7 @@ BLEController::BLEController()
   _motorDebugCharacteristic = NULL;
   _calibrationCharacteristic = NULL;
   _debugCharacteristic = NULL;
+  _l2capHandler = new BLEControllerLargeDataTransmissionHandler();
 }
 
 static std::vector<std::string> _split(std::string to_split, std::string delimiter)
@@ -137,6 +139,11 @@ void BLEController::beginBluetooth(void)
       NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY);
   _currentTimeCharacteristic->setCallbacks(this);
 
+  // Large Data Transfer Characteristic (also used for PSM advertisement)
+  _largeDataCharacteristic = _service->createCharacteristic(
+      LARGE_DATA_CHARACTERISTIC_UUID,
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::NOTIFY);
+  _largeDataCharacteristic->setCallbacks(this);
 
   // Device info characteristics
   NimBLECharacteristic *manufacturerCharacteristic =
@@ -155,7 +162,19 @@ void BLEController::beginBluetooth(void)
   // Start the service
   _service->start();
 
-  LOG_INFO_ASYNC_ON_MAIN("BLE setup complete");
+  // Initialize Large Data handler
+  if (_l2capHandler) {
+    if (_l2capHandler->initialize(_largeDataCharacteristic)) {
+      LOG_INFO("Large data handler initialized");
+
+      // Set the PSM value on the characteristic for iOS to read
+      uint16_t psm = _l2capHandler->getPSM();
+      _largeDataCharacteristic->setValue((uint8_t *)&psm, sizeof(psm));
+      LOG_INFO("L2CAP PSM advertised: 0x%04X", psm);
+    } else {
+      LOG_ERROR("Failed to initialize large data handler");
+    }
+  }
 
   // Start advertising
   NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
@@ -173,12 +192,28 @@ void BLEController::onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo)
 
   // Update connection parameters for better throughput
   pServer->updateConnParams(connInfo.getConnHandle(), 6, 6, 0, 400);
+
+  // Start L2CAP server for large data transfers after a short delay
+  // to ensure BLE connection is fully established
+  if (_l2capHandler) {
+    if (_l2capHandler->startListening()) {
+      LOG_INFO_ASYNC_ON_MAIN("L2CAP server started successfully");
+    } else {
+      LOG_ERROR_ASYNC_ON_MAIN("Failed to start L2CAP server");
+    }
+  }
 }
 
 void BLEController::onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo, int reason)
 {
   LOG_INFO_ASYNC_ON_MAIN("Disconnected, reason: %d", reason);
   isConnected = false;
+
+  // Stop L2CAP server
+  if (_l2capHandler) {
+    _l2capHandler->stopListening();
+    LOG_INFO_ASYNC_ON_MAIN("L2CAP server stopped");
+  }
 
   // Restart advertising
   NimBLEDevice::startAdvertising();
@@ -191,6 +226,18 @@ void BLEController::onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo
 void BLEController::onMTUChange(uint16_t MTU, NimBLEConnInfo &connInfo)
 {
   LOG_INFO_ASYNC_ON_MAIN("MTU changed to: %i", MTU);
+}
+
+void BLEController::onRead(NimBLECharacteristic *characteristic, NimBLEConnInfo &connInfo)
+{
+  // Handle read requests for the large data characteristic (PSM value)
+  if (characteristic->getUUID().equals(NimBLEUUID(LARGE_DATA_CHARACTERISTIC_UUID))) {
+    if (_l2capHandler) {
+      uint16_t psm = _l2capHandler->getPSM();
+      characteristic->setValue((uint8_t *)&psm, sizeof(psm));
+      LOG_INFO_ASYNC_ON_MAIN("PSM value read: 0x%04X", psm);
+    }
+  }
 }
 
 void BLEController::onWrite(NimBLECharacteristic *characteristic, NimBLEConnInfo &connInfo)
@@ -365,6 +412,12 @@ void BLEController::onWrite(NimBLECharacteristic *characteristic, NimBLEConnInfo
           sizeof(double),
           value.length());
     }
+  } else if (characteristic->getUUID().equals(NimBLEUUID(LARGE_DATA_CHARACTERISTIC_UUID))) {
+    // Handle large data transfer
+    NimBLEAttValue value = characteristic->getValue();
+
+    if (_l2capHandler) {
+      _l2capHandler->processDataChunk(value.data(), value.length());
     }
   }
   // TODO: switch this to a mutex

@@ -9,31 +9,38 @@
 
 const char *TAG = "MicroQuad";
 
+#define EMOJI_CONSOLE u8"\U0001F50D" /* Magnifying glass   */
+#define EMOJI_VERBOSE u8"\U0001F4E3" /* Megaphone          */
+#define EMOJI_BUG u8"\U0001F41E"     /* Bug */
+#define EMOJI_INFO u8"\u2139\uFE0F"  /* Information        */
+#define EMOJI_WARN u8"\u26A0\uFE0F"  /* Warning            */
+#define EMOJI_ERROR u8"\u274C"       /* Cross mark        */
+
 static void _log(char *statement, LogLevel level, unsigned long ts)
 {
   switch (level) {
     case console: {
-      ESP_LOGI(TAG, "%s", statement);
+      ESP_LOGI(TAG, "[%s ] %s", (const char *)EMOJI_CONSOLE, statement);
       return;
     }
     case verbose: {
-      ESP_LOGV(TAG, "%s", statement);
+      ESP_LOGV(TAG, "[%s ] %s", (const char *)EMOJI_VERBOSE, statement);
       break;
     }
     case debug: {
-      ESP_LOGD(TAG, "%s", statement);
+      ESP_LOGD(TAG, "[%s ] %s", (const char *)EMOJI_BUG, statement);
       break;
     }
     case info: {
-      ESP_LOGI(TAG, "%s", statement);
+      ESP_LOGI(TAG, "[%s ] %s", (const char *)EMOJI_INFO, statement);
       break;
     }
     case warn: {
-      ESP_LOGW(TAG, "%s", statement);
+      ESP_LOGW(TAG, "[%s ] %s", (const char *)EMOJI_WARN, statement);
       break;
     }
     case error: {
-      ESP_LOGE(TAG, "%s", statement);
+      ESP_LOGE(TAG, "[%s ] %s", (const char *)EMOJI_ERROR, statement);
       break;
     }
     case none: {
