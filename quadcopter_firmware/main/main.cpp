@@ -1,14 +1,10 @@
 #ifndef MATLAB_SIM
 
 #include <DebugHelper.h>
-#include <QuadcopterController.h>
-#include <Wire.h>
-
-#include <string>
-
-// Magnetometer
 #include <Matrix.h>
 #include <QMC5883L.h>
+#include <QuadcopterController.h>
+#include <Wire.h>
 #include <esp_partition.h>
 
 #include <algorithm>
@@ -20,8 +16,6 @@
 #include "BatteryController.h"
 #include "Constants.h"
 #include "ExtendedKalmanFilter.h"
-#include "Filters/KalmanFilter.h"
-#include "Filters/MedianFilter.h"
 #include "GPSService.h"
 #include "IMU.h"
 #include "LEDController.h"
@@ -32,14 +26,9 @@
 #include "MotorMagCompensationHandler.h"
 #include "PIDPreferences.h"
 #include "PersistentKeyValueStore.h"
-#include "PersistentKeysCommon.h"
-#include "SPI.h"
 #include "TelemetryController.h"
 #include "VL53Manager.h"
-#include "esp_err.h"
 #include "esp_log.h"
-#include "esp_system.h"
-#include "soc/timer_group_reg.h"
 #include "soc/timer_group_struct.h"
 
 static std::vector<MotorController *> _speedControllers;
