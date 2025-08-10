@@ -76,6 +76,8 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   // L2CAP Support
   var l2capManager: L2CAPChannelManager?
   var l2capChannelOpenCompletion: ((Error?) -> Void)?
+  // Separate telemetry CoC manager (smaller MTU / lower latency)
+  var telemetryManager: L2CAPChannelManager?
   
   public var quadStatus = QuadStatus()
   @Published var bleStatus = "None"
@@ -213,6 +215,12 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     connectionState = .disconnected
     updateDelegateState()
     device = nil
+
+    // Ensure any open L2CAP streams are torn down to avoid stale streams after reconnects
+    l2capManager?.disconnect()
+    telemetryManager?.disconnect()
+    l2capManager = nil
+    telemetryManager = nil
   }
   
   func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {

@@ -8,6 +8,42 @@
 import Foundation
 import CoreBluetooth
 
+// MARK: - L2CAP Header Definition
+
+// Swift representation of the L2CAP blob header used by firmware
+// Layout: [type: 1 byte][payload_size_bytes: 4 bytes little-endian]
+struct BLELargeDataBlobHeader {
+  let type: BLELargeDataBlobType
+  let payloadSizeBytes: UInt32
+
+  static let byteCount = 5
+
+  init?(from data: Data) {
+    guard data.count >= BLELargeDataBlobHeader.byteCount else { return nil }
+    let typeByte = data[data.startIndex]
+    guard let t = BLELargeDataBlobType(rawValue: typeByte) else { return nil }
+    type = t
+    let b1 = UInt32(data[data.startIndex &+ 1])
+    let b2 = UInt32(data[data.startIndex &+ 2])
+    let b3 = UInt32(data[data.startIndex &+ 3])
+    let b4 = UInt32(data[data.startIndex &+ 4])
+    payloadSizeBytes = (b1) | (b2 << 8) | (b3 << 16) | (b4 << 24)
+  }
+
+  init(type: BLELargeDataBlobType, payloadSizeBytes: UInt32) {
+    self.type = type
+    self.payloadSizeBytes = payloadSizeBytes
+  }
+
+  func toData() -> Data {
+    var d = Data(count: BLELargeDataBlobHeader.byteCount)
+    d[0] = type.rawValue
+    var sizeLE = payloadSizeBytes.littleEndian
+    withUnsafeBytes(of: &sizeLE) { d.replaceSubrange(1..<5, with: $0) }
+    return d
+  }
+}
+
 // MARK: - L2CAP Channel Management
 
 /// Represents the state of an L2CAP channel
@@ -33,6 +69,13 @@ class L2CAPChannelManager: NSObject {
   
   // Data being transmitted
   private var currentTransmissionData: Data?
+  
+  // RX reassembly buffer/state
+  private var rxBuffer = Data()
+  private var rxExpectedPayloadBytes: UInt32? = nil
+  
+  // Callback for fully reassembled blobs
+  var onReceiveBlob: ((BLELargeDataBlobType, Data) -> Void)?
   
   // Statistics
   private var bytesSent: Int = 0
@@ -79,14 +122,14 @@ class L2CAPChannelManager: NSObject {
     // Close streams
     outputStream?.close()
     inputStream?.close()
-    
-    // Remove from run loop
     outputStream?.remove(from: .main, forMode: .default)
     inputStream?.remove(from: .main, forMode: .default)
     
     // Clean up
     outputStream = nil
     inputStream = nil
+    rxBuffer.removeAll(keepingCapacity: false)
+    rxExpectedPayloadBytes = nil
     channel = nil
     channelState = .disconnected
     
@@ -101,6 +144,13 @@ class L2CAPChannelManager: NSObject {
       return
     }
     
+    // If a previous transmission is in-flight and streams got into a bad state, attempt a light reset
+    if outputStream == nil || inputStream == nil {
+      print("L2CAP streams nil; attempting channel reconnect for PSM: \(psm)")
+      completion(NSError(domain: "BLEController", code: 6, userInfo: [NSLocalizedDescriptionKey: "Streams not available"]))
+      return
+    }
+
     transmissionCompletion = completion
     startTransmission(data: data)
   }
@@ -113,13 +163,16 @@ class L2CAPChannelManager: NSObject {
     
     print("Starting L2CAP transmission of \(data.count) bytes")
     
-    // Write data header first (4 bytes for size of entire payload including type byte)
-    var dataSize = UInt32(data.count).littleEndian
-    let headerData = Data(bytes: &dataSize, count: 4)
-    
-    // Combine header and data
-    var fullData = headerData
-    fullData.append(data)
+    // Build header: [type:1][payload_size:4 LE] is handled by caller. Here we expect 'data' to already include type byte first.
+    // So we compute payload size as data.count - 1 (exclude type byte) and prefix header accordingly.
+    guard let typeByte = data.first, let blobType = BLELargeDataBlobType(rawValue: typeByte) else {
+      transmissionCompletion?(NSError(domain: "BLEController", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid blob type for transmission"]))
+      return
+    }
+    let payloadSize = UInt32(max(0, data.count - 1))
+    let header = BLELargeDataBlobHeader(type: blobType, payloadSizeBytes: payloadSize)
+    var fullData = header.toData()
+    fullData.append(data.dropFirst())
     
     // Store the full data for transmission
     currentTransmissionData = fullData
@@ -136,7 +189,7 @@ class L2CAPChannelManager: NSObject {
       return
     }
     
-    let bytesRemaining = data.count - bytesSent
+    var bytesRemaining = data.count - bytesSent
     if bytesRemaining <= 0 {
       // Transmission complete
       let duration = Date().timeIntervalSince(transmissionStartTime ?? Date())
@@ -150,37 +203,30 @@ class L2CAPChannelManager: NSObject {
       return
     }
     
-    // Check if stream has space available
-    guard outputStream.hasSpaceAvailable else {
-      // Will continue when stream has space (handled in StreamDelegate)
-      return
-    }
-    
-    // Write data in chunks
-    let chunkSize = min(bytesRemaining, 512) // L2CAP MTU is typically 512 bytes
-    let chunk = data.subdata(in: bytesSent..<(bytesSent + chunkSize))
-    
-    chunk.withUnsafeBytes { bytes in
-      let written = outputStream.write(bytes.bindMemory(to: UInt8.self).baseAddress!, maxLength: chunkSize)
-      if written > 0 {
-        bytesSent += written
-        let progress = Double(bytesSent) / Double(data.count)
-        print("L2CAP wrote \(written) bytes, total: \(bytesSent)/\(data.count) (\(String(format: "%.1f", progress * 100))%)")
-        
-        // Continue writing if there's more data
-        if bytesSent < data.count {
-          // Schedule next write on the next run loop iteration
-          DispatchQueue.main.async { [weak self] in
-            self?.writeDataToStream()
-          }
+    // Write as much as possible while the stream has space
+    data.withUnsafeBytes { rawBuf in
+      guard let base = rawBuf.bindMemory(to: UInt8.self).baseAddress else { return }
+      while outputStream.hasSpaceAvailable && bytesRemaining > 0 {
+        let maxChunk = min(bytesRemaining, 16384)
+        let ptr = base.advanced(by: bytesSent)
+        let written = outputStream.write(ptr, maxLength: maxChunk)
+        if written > 0 {
+          bytesSent += written
+          bytesRemaining -= written
+          let progress = Double(bytesSent) / Double(data.count)
+          print("L2CAP wrote \(written) bytes, total: \(bytesSent)/\(data.count) (\(String(format: "%.1f", progress * 100))%)")
+        } else if written == 0 {
+          break
+        } else {
+          transmissionCompletion?(outputStream.streamError ?? NSError(domain: "BLEController", code: 2, userInfo: [NSLocalizedDescriptionKey: "Stream write error"]))
+          transmissionCompletion = nil
+          currentTransmissionData = nil
+          return
         }
-      } else if written < 0 {
-        // Error occurred
-        transmissionCompletion?(outputStream.streamError ?? NSError(domain: "BLEController", code: 2, userInfo: [NSLocalizedDescriptionKey: "Stream write error"]))
-        transmissionCompletion = nil
-        currentTransmissionData = nil
       }
     }
+    
+    // If there is still data remaining, we'll resume on next hasSpaceAvailable event
   }
 }
 
@@ -190,10 +236,7 @@ extension L2CAPChannelManager: StreamDelegate {
   func stream(_ aStream: Stream, handle eventCode: Stream.Event) {
     switch eventCode {
     case .hasBytesAvailable:
-      // Handle incoming data (for future RX implementation)
-      if aStream == inputStream {
-        handleIncomingData()
-      }
+      if aStream == inputStream { readAvailableBytes() }
       
     case .hasSpaceAvailable:
       // Continue writing if we have more data
@@ -221,9 +264,58 @@ extension L2CAPChannelManager: StreamDelegate {
     }
   }
   
-  private func handleIncomingData() {
-    // Placeholder for future RX implementation
-    // This will handle receiving large data blobs from the ESP32
+  // MARK: - RX processing
+  private func readAvailableBytes() {
+    guard let inputStream = inputStream else { return }
+    var tempBuffer = [UInt8](repeating: 0, count: 1024)
+    while inputStream.hasBytesAvailable {
+      let readBytes = inputStream.read(&tempBuffer, maxLength: tempBuffer.count)
+      if readBytes > 0 {
+        rxBuffer.append(contentsOf: tempBuffer.prefix(readBytes))
+      } else if readBytes < 0 {
+        print("L2CAP input stream read error: \(inputStream.streamError?.localizedDescription ?? "Unknown")")
+        break
+      } else {
+        break
+      }
+    }
+    processRxBuffer()
+  }
+  
+  private func processRxBuffer() {
+    // We may have multiple blobs back-to-back; loop until we cannot parse more
+    while true {
+      // Need header first (5 bytes)
+      if rxExpectedPayloadBytes == nil {
+        guard rxBuffer.count >= BLELargeDataBlobHeader.byteCount else { return }
+        guard let header = BLELargeDataBlobHeader(from: rxBuffer) else {
+          print("L2CAP RX: invalid header")
+          return
+        }
+        rxExpectedPayloadBytes = header.payloadSizeBytes + 1 // include an injected type byte
+        // Remove header
+        rxBuffer.removeFirst(BLELargeDataBlobHeader.byteCount)
+        // Inject type as leading byte so downstream stays the same
+        rxBuffer.insert(header.type.rawValue, at: rxBuffer.startIndex)
+      }
+      guard let expected = rxExpectedPayloadBytes else { return }
+      guard rxBuffer.count >= Int(expected) else { return }
+      // Extract payload
+      let payload = rxBuffer.prefix(Int(expected))
+      rxBuffer.removeFirst(Int(expected))
+      rxExpectedPayloadBytes = nil
+      
+      // First byte is type
+      guard let first = payload.first,
+            let blobType = BLELargeDataBlobType(rawValue: first) else {
+        let bad = payload.first ?? 0
+        print("L2CAP RX: invalid blob type \(bad)")
+        continue
+      }
+      let dataOnly = payload.dropFirst()
+      onReceiveBlob?(blobType, Data(dataOnly))
+      // Continue; there may be more data in buffer
+    }
   }
 }
 
@@ -303,13 +395,19 @@ extension BLEController {
       return
     }
     
-    // PSM is typically 2 bytes, little-endian
-    let psm = data.withUnsafeBytes { $0.load(as: UInt16.self) }
+    // PSM is typically 2 bytes, little-endian (avoid unaligned loads)
+    let lo = UInt16(data.first ?? 0)
+    let hi = data.count > 1 ? UInt16(data[1]) : 0
+    let psm = (hi << 8) | lo
     
     print("Read L2CAP PSM from characteristic: \(psm)")
     
-    // Open the L2CAP channel with the discovered PSM
+    // Open the large-data channel with the discovered PSM
     device?.openL2CAPChannel(CBL2CAPPSM(psm))
+    // Open the telemetry channel on adjacent PSM (firmware uses 0x0081)
+    let telemetryPSM = CBL2CAPPSM(0x81)
+    if telemetryManager == nil { telemetryManager = L2CAPChannelManager(psm: telemetryPSM) }
+    device?.openL2CAPChannel(telemetryPSM)
   }
 }
 
@@ -333,41 +431,46 @@ extension BLEController {
       return
     }
     
-    print("L2CAP channel opened successfully")
-    l2capManager?.connect(channel: channel)
+    print("L2CAP channel opened successfully on PSM: \(channel.psm)")
+    if let lm = l2capManager, channel.psm == lm.psm {
+      lm.connect(channel: channel)
+      lm.onReceiveBlob = { [weak self] type, data in
+        guard let self = self else { return }
+        if type == .TelemetryData { self.handleTelemetryBatch(data) }
+      }
+    } else {
+      if telemetryManager == nil { telemetryManager = L2CAPChannelManager(psm: channel.psm) }
+      telemetryManager?.connect(channel: channel)
+      telemetryManager?.onReceiveBlob = { [weak self] type, data in
+        guard let self = self else { return }
+        if type == .TelemetryData { self.handleTelemetryBatch(data) }
+      }
+    }
     l2capChannelOpenCompletion?(nil)
     l2capChannelOpenCompletion = nil
   }
+
+
+  // MARK: - Telemetry Batch Parsing
+  // Batch frame format: [eventId: u8][size: u16 LE][payload: size bytes] x N
+  fileprivate func handleTelemetryBatch(_ batch: Data) {
+    var cursor = 0
+    let bytes = [UInt8](batch)
+    while cursor < bytes.count {
+      // Need at least 3 bytes for header
+      guard cursor + 3 <= bytes.count else { break }
+      let eventId = bytes[cursor]
+      let sizeLE = UInt16(bytes[cursor + 1]) | (UInt16(bytes[cursor + 2]) << 8)
+      cursor += 3
+      let size = Int(sizeLE)
+      guard cursor + size <= bytes.count else { break }
+      let payload = Data(bytes[cursor..<(cursor + size)])
+      cursor += size
+      // Reconstruct legacy telemetry packet: [eventId][payload]
+      var packet = Data()
+      packet.append(eventId)
+      packet.append(payload)
+      self.quadStatus.updateTelemetry(withData: packet)
+    }
+  }
 }
-
-// MARK: - Usage Example
-
-/*
- Usage example for transmitting EPO data:
- 
- ```swift
- // In your GPS controller or main app
- if let epoData = GPSController.shared.getEPODataForL96() {
- bleController.transmitLargeDataBlob(epoData) { error in
- if let error = error {
- print("Failed to transmit EPO data: \(error)")
- } else {
- print("EPO data transmitted successfully")
- }
- }
- }
- ```
- 
- ESP32 Implementation Notes:
- 1. The ESP32 must advertise an L2CAP PSM in a GATT characteristic
- 2. The ESP32 must listen for incoming L2CAP connections on that PSM
- 3. The data format includes a 4-byte header with the data size (little-endian)
- 4. The ESP32 should be prepared to receive data in chunks
- 
- Future RX Implementation:
- - Add a delegate protocol for receiving data
- - Implement data reassembly for incoming chunks
- - Add flow control mechanisms
- - Support bidirectional communication
- */
-
