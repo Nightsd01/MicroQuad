@@ -20,4 +20,5 @@ CROSS_PLATFORM_ENUM(uint8_t, TelemetryEvent){
     EKFAltitudeEstimate = 14,
     EKFVerticalVelocityEstimate = 15,
     GPSFixData = 16,
+    Count = 17,  // NOTE: keep this last
 };

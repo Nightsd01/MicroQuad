@@ -26,7 +26,13 @@ BLEController::BLEController()
   _motorDebugCharacteristic = NULL;
   _calibrationCharacteristic = NULL;
   _debugCharacteristic = NULL;
-  _l2capHandler = new BLEControllerLargeDataTransmissionHandler();
+  _pidConstantsCharacteristic = NULL;
+  _currentTimeCharacteristic = NULL;
+  _largeDataCharacteristic = NULL;
+  // Large data channel: default PSM 0x0080, prefer large MTU (will be negotiated)
+  _l2capHandler = new BLEControllerLargeDataTransmissionHandler(0x0080, 498);
+  // Telemetry channel: different PSM, prefer smaller MTU for lower latency (target ~1024 payload)
+  _telemetryL2capHandler = new BLEControllerLargeDataTransmissionHandler(0x0081, 256);
 }
 
 static std::vector<std::string> _split(std::string to_split, std::string delimiter)
@@ -80,6 +86,8 @@ void BLEController::beginBluetooth(void)
 {
   NimBLEDevice::init(DEVICE_NAME);
   NimBLEDevice::setMTU(517);  // Max MTU for BLE 4.2+
+  // Prefer faster PHY if available (ESP32 classic may ignore; harmless)
+  NimBLEDevice::setDefaultPhy(BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK);
   _server = NimBLEDevice::createServer();
   _server->setCallbacks(this);
 
@@ -193,6 +201,13 @@ void BLEController::onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo)
   // Update connection parameters for better throughput
   pServer->updateConnParams(connInfo.getConnHandle(), 6, 6, 0, 400);
 
+  // Request maximum data length (DLE) to increase payload per packet
+  _server->setDataLen(connInfo.getConnHandle(), 251);
+
+  // Request 2M PHY if both sides support BLE 5 (will no-op on BLE 4.2 hardware)
+  _server
+      ->updatePhy(connInfo.getConnHandle(), BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_2M_MASK, BLE_GAP_LE_PHY_CODED_ANY);
+
   // Start L2CAP server for large data transfers after a short delay
   // to ensure BLE connection is fully established
   if (_l2capHandler) {
@@ -200,6 +215,16 @@ void BLEController::onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo)
       LOG_INFO_ASYNC_ON_MAIN("L2CAP server started successfully");
     } else {
       LOG_ERROR_ASYNC_ON_MAIN("Failed to start L2CAP server");
+    }
+  }
+  // Start separate L2CAP server for telemetry with smaller MTU
+  if (_telemetryL2capHandler) {
+    if (_telemetryL2capHandler->startListening()) {
+      LOG_INFO_ASYNC_ON_MAIN(
+          "Telemetry L2CAP server started successfully (PSM 0x%04X)",
+          _telemetryL2capHandler->getPSM());
+    } else {
+      LOG_ERROR_ASYNC_ON_MAIN("Failed to start telemetry L2CAP server");
     }
   }
 }
@@ -213,6 +238,10 @@ void BLEController::onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo
   if (_l2capHandler) {
     _l2capHandler->stopListening();
     LOG_INFO_ASYNC_ON_MAIN("L2CAP server stopped");
+  }
+  if (_telemetryL2capHandler) {
+    _telemetryL2capHandler->stopListening();
+    LOG_INFO_ASYNC_ON_MAIN("Telemetry L2CAP server stopped");
   }
 
   // Restart advertising

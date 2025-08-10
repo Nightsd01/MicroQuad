@@ -101,10 +101,12 @@ class BLEController : public NimBLEServerCallbacks, public NimBLECharacteristicC
   void onStatus(NimBLECharacteristic *pCharacteristic, int code) override;
 
   // L2CAP support
-  BLEControllerLargeDataTransmissionHandler *_l2capHandler;
+  BLEControllerLargeDataTransmissionHandler *_l2capHandler;           // Large data channel (max MTU)
+  BLEControllerLargeDataTransmissionHandler *_telemetryL2capHandler;  // Telemetry channel (smaller MTU)
 
   // Get the L2CAP handler for large data transfers
   BLEControllerLargeDataTransmissionHandler *getL2CAPHandler() { return _l2capHandler; }
+  BLEControllerLargeDataTransmissionHandler *getTelemetryL2CAPHandler() { return _telemetryL2capHandler; }
 
  private:
   NimBLEServer *_server;

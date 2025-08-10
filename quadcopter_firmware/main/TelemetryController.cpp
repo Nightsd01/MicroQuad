@@ -2,8 +2,13 @@
 
 #ifndef MATLAB_SIM
 
+#include <Arduino.h>
 #include <Logger.h>
 
+#include <vector>
+
+#include "BLEControllerLargeDataTransmissionHandler.h"
+#include "BLELargeDataBlobType.h"
 static const char *_eventTypeToString(TelemetryEvent event)
 {
   switch (event) {
@@ -48,19 +53,19 @@ static const char *_eventTypeToString(TelemetryEvent event)
   }
 }
 
-TelemetryController::TelemetryController(BLEController *controller) { _bleController = controller; }
+TelemetryController::TelemetryController(BLEController *controller)
+{
+  _bleController = controller;
+  _eventCount = 0;
+  _lastTransmissionMillis = 0;
+}
 
 // telem packet structure:
 // [0] - event type
 // [1:] - data
 void TelemetryController::updateTelemetryEvent(TelemetryEvent event, void *data, size_t size)
 {
-  if (!_bleController->isConnected || disableTransmission) {
-    return;
-  }
-
-  if (size > MAX_TELEM_PACKET_SIZE) {
-    LOG_ERROR_PERIODIC_MILLIS(500, "Telemetry packet/s size too large for event %s", _eventTypeToString(event));
+  if (disableTransmission) {
     return;
   }
 
@@ -70,41 +75,85 @@ void TelemetryController::updateTelemetryEvent(TelemetryEvent event, void *data,
     return;
   }
 
-  memcpy(copy + 1, data, size);
-  *copy = (uint8_t)event;
-  _eventQueue.push_back({event, copy, size});
+  // Store just the raw payload. We'll serialize event id during batch send
+  memcpy(copy, data, size);
+
+  // If an entry already exists for this event, free its memory before replacing
+  auto it = _eventMap.find(event);
+  if (it != _eventMap.end()) {
+    if (it->second.data) {
+      free(it->second.data);
+    }
+  }
+
+  _eventMap[event] = {event, (void *)copy, size};
   _eventCount++;
-
-  if (_eventQueue.size() > QUEUE_WARNING_SIZE) {
-    LOG_WARN_PERIODIC_MILLIS(500, "Telemetry queue size is growing too large: %i events", _eventQueue.size());
-  }
-
-  if (_eventQueue.size() > QUEUE_ERROR_DROP_SIZE) {
-    LOG_ERROR_PERIODIC_MILLIS(500, "Telemetry queue size is too large, dropping events");
-    _telem_event_t event = _eventQueue[0];
-    _eventQueue.pop_front();
-    free(event.data);
-  }
 }
 
 void TelemetryController::loopHandler(void)
 {
-  if (!_bleController->isConnected || _eventQueue.size() == 0) {
+  // Transmit at most once every 30 ms
+  static const uint64_t kBatchIntervalMs = 30;
+  if (!_bleController->isConnected || _eventMap.empty()) {
     return;
   }
 
-  if (!_waitingForTransmission) {
-    _telem_event_t event = _eventQueue[0];
-    uint8_t *data = (uint8_t *)event.data;
-
-    _bleController->setTelemetryTransmissionCompleteHandler([this, data]() {
-      _eventQueue.pop_front();
-      _waitingForTransmission = false;
-      free(data);
-    });
-
-    _bleController->sendTelemetryUpdate(data, event.size + 1);
+  if (millis() - _lastTransmissionMillis < kBatchIntervalMs) {
+    return;
   }
+
+  // Use the dedicated telemetry L2CAP channel (smaller MTU, lower latency)
+  auto *l2cap = _bleController->getTelemetryL2CAPHandler();
+  if (!l2cap || !l2cap->isReadyToSend()) {
+    return;
+  }
+
+  // Serialize all events into a single buffer: [event,u16 size,bytes] x N
+  std::vector<uint8_t> buffer;
+  buffer.reserve(256);
+
+  for (auto &kv : _eventMap) {
+    const TelemetryEvent evType = kv.first;
+    const _telem_event_t &ev = kv.second;
+
+    // Event id
+    buffer.push_back(static_cast<uint8_t>(evType));
+
+    // Size (little-endian 16-bit). Clamp to 65535 if larger.
+    uint16_t sz = static_cast<uint16_t>(ev.size > 0xFFFF ? 0xFFFF : ev.size);
+    buffer.push_back(static_cast<uint8_t>(sz & 0xFF));
+    buffer.push_back(static_cast<uint8_t>((sz >> 8) & 0xFF));
+
+    // Data
+    uint8_t *bytes = static_cast<uint8_t *>(ev.data);
+    buffer.insert(buffer.end(), bytes, bytes + sz);
+  }
+
+  // Send as a single L2CAP CoC transaction with TelemetryData type
+  if (!buffer.empty()) {
+    bool ok = l2cap->sendData(BLELargeDataBlobType::TelemetryData, buffer.data(), buffer.size());
+    if (!ok) {
+      LOG_ERROR("Failed to send telemetry batch over L2CAP; dropping batch to avoid memory growth");
+      // Free stored entries and clear the map to avoid memory growth on repeated failures
+      for (auto &kv : _eventMap) {
+        if (kv.second.data) {
+          free(kv.second.data);
+        }
+      }
+      _eventMap.clear();
+      _lastTransmissionMillis = millis();
+      return;
+    }
+  }
+
+  // Free stored entries and clear the map
+  for (auto &kv : _eventMap) {
+    if (kv.second.data) {
+      free(kv.second.data);
+    }
+  }
+  _eventMap.clear();
+  _lastTransmissionMillis = millis();
 }
 
 #endif  // MATLAB_SIM

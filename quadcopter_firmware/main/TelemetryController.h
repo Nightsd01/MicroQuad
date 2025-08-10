@@ -2,7 +2,7 @@
 
 #ifndef MATLAB_SIM
 
-#include <deque>
+#include <map>
 
 #include "BLEController.h"
 #include "TelemetryEvent.h"
@@ -27,9 +27,8 @@ struct _telem_event_t
 // At what queue size should we start dropping events
 #define QUEUE_ERROR_DROP_SIZE 1000
 
-// Bluetooth packets must be limited to 20 bytes in iOS
-// This controller makes it easier to send telemetry updates
-// to the controller app
+// Telemetry controller batches telemetry updates and sends them over
+// L2CAP CoC to the iOS application at a fixed cadence.
 class TelemetryController
 {
  public:
@@ -44,9 +43,10 @@ class TelemetryController
 
  private:
   BLEController *_bleController;
-  std::deque<_telem_event_t> _eventQueue;
-  bool _waitingForTransmission = false;
+  // Latest telemetry entries per event type
+  std::map<TelemetryEvent, _telem_event_t> _eventMap;
   uint64_t _eventCount;
+  uint64_t _lastTransmissionMillis = 0;
 };
 
 #endif  // MATLAB_SIM
