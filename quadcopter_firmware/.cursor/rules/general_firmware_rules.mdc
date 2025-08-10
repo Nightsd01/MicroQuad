@@ -3,6 +3,10 @@ description: Rules for working with the ESP-IDF (with Arduino Core) based Quadco
 alwaysApply: true
 ---
 
+- First - please note that from your point of view, many files will seem
+  duplicated across the quadcopter_firmware and matlab_sim directories. They are
+  NOT actually duplicated, they are symlinks. The original files are all in
+  quadcopter_firmware.
 - Any time you make changes to the C++ firmware project, before you finish,
   please make sure to verify your change did not break the build by running this
   command:
