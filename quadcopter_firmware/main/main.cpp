@@ -16,6 +16,7 @@
 #include "BatteryController.h"
 #include "Constants.h"
 #include "ExtendedKalmanFilter.h"
+#include "GPSQuickStartupController.h"
 #include "GPSService.h"
 #include "IMU.h"
 #include "LEDController.h"
@@ -113,6 +114,7 @@ static Barometer _barometer;
 static bool _receivedAltitudeUpdate = false;
 static float _relativeAltitudeMeters = 0.0f;
 
+static GPSQuickStartupController *_gpsQuickStartupController = nullptr;
 static GPSService *_gpsService = nullptr;
 
 MotorMagCompensationHandler *_motorMagCompensationHandler;
@@ -682,6 +684,9 @@ void setup()
   });
   _gpsService->begin();
 
+  LOG_INFO("Initializing GPS quick startup controller");
+  _gpsQuickStartupController = new GPSQuickStartupController(&_bluetoothController, _gpsService);
+
   LOG_INFO("Initializing battery controller");
   _batteryController = new BatteryController(_telemetryController, _helper);
 
@@ -868,14 +873,6 @@ void loop()
   if (_bluetoothController.isProcessingBluetoothTransaction) {
     return;
   }
-
-  LOG_INFO_PERIODIC_MILLIS(
-      100,
-      "Controller left stick X value: %f, Y value: %f, right stick X value: %f, Y value: %f",
-      _controllerValues.leftStickInput.x,
-      _controllerValues.leftStickInput.y,
-      _controllerValues.rightStickInput.x,
-      _controllerValues.rightStickInput.y);
 
   _loopCounter++;
   EXECUTE_PERIODIC(1000, {

@@ -18,6 +18,29 @@ struct MTKEphemerisData: Codable {
     let validityHours: Int  // EPO data validity period in hours
 }
 
+/// Header for GPS startup fix data sent to firmware
+/// Layout (little-endian):
+/// - latitude:  8 bytes (Double)
+/// - longitude: 8 bytes (Double)
+/// - timestamp: 8 bytes (Double, seconds since 1970)
+struct GPSStartupFixHeader {
+    let latitude: Double
+    let longitude: Double
+    let timestamp: Double
+
+    func toData() -> Data {
+        var d = Data()
+        func appendLE(_ value: Double) {
+            var bits = value.bitPattern.littleEndian
+            withUnsafeBytes(of: &bits) { d.append(contentsOf: $0) }
+        }
+        appendLE(latitude)
+        appendLE(longitude)
+        appendLE(timestamp)
+        return d
+    }
+}
+
 // MARK: - GPS Controller
 
 class GPSController: NSObject, ObservableObject {
@@ -458,25 +481,17 @@ extension GPSController {
             return
         }
         
-        // Prepare the data packet with location and timestamp prefix
-        var fullData = Data()
-        
-        // Add latitude (8 bytes double)
+        // Prepare the data packet using the header struct followed by EPO data
         let latitude = location.coordinate.latitude
-        var latitudeBytes = latitude
-        fullData.append(Data(bytes: &latitudeBytes, count: 8))
-        
-        // Add longitude (8 bytes double)
         let longitude = location.coordinate.longitude
-        var longitudeBytes = longitude
-        fullData.append(Data(bytes: &longitudeBytes, count: 8))
-        
-        // Add timestamp (8 bytes double, seconds since 1970)
         let timestamp: Double = Date().timeIntervalSince1970
-        var timestampBytes = timestamp
-        fullData.append(Data(bytes: &timestampBytes, count: 8))
-        
-        // Append the EPO data
+
+        let header = GPSStartupFixHeader(
+            latitude: latitude,
+            longitude: longitude,
+            timestamp: timestamp
+        )
+        var fullData = header.toData()
         fullData.append(epoData)
         
         print("Transmitting GPS ephemeris data to quadcopter...")

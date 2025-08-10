@@ -3,18 +3,26 @@
 #include <Arduino.h>
 #include <esp_log.h>
 
+#include "Logger.h"
+
 static const char *TAG = "GPSService";
 
 GPSService::GPSService(int rxPin, int txPin, GPSCallback callback)
-    : _rxPin(rxPin), _txPin(txPin), _gpsSerial(2), // Use Serial2 for GPS
-      _callback(callback), _isConnected(false), _lastDataReceivedMs(0),
-      _connectionCheckIntervalMs(0) {}
+    : _rxPin(rxPin),
+      _txPin(txPin),
+      _gpsSerial(2),  // Use Serial2 for GPS
+      _callback(callback),
+      _isConnected(false),
+      _lastDataReceivedMs(0),
+      _connectionCheckIntervalMs(0)
+{
+}
 
 GPSService::~GPSService() { _gpsSerial.end(); }
 
-void GPSService::begin() {
-  ESP_LOGI(TAG, "Initializing GPS on RX=%d, TX=%d at %d baud", _rxPin, _txPin,
-           GPS_BAUD_RATE);
+void GPSService::begin()
+{
+  ESP_LOGI(TAG, "Initializing GPS on RX=%d, TX=%d at %d baud", _rxPin, _txPin, GPS_BAUD_RATE);
 
   // Initialize hardware serial for GPS
   _gpsSerial.begin(GPS_BAUD_RATE, SERIAL_8N1, _rxPin, _txPin);
@@ -36,7 +44,8 @@ void GPSService::begin() {
   ESP_LOGI(TAG, "GPS initialization complete, waiting for data...");
 }
 
-void GPSService::loopHandler() {
+void GPSService::loopHandler()
+{
   bool dataReceived = false;
 
   // Process all available serial data
@@ -67,42 +76,44 @@ void GPSService::loopHandler() {
 
   // Initial connection check
   if (!_isConnected && _lastDataReceivedMs == 0) {
-    if (!_loggedConnectionStatus && currentMs - _connectionCheckIntervalMs >
-                                        INITIAL_CONNECTION_TIMEOUT_MS) {
+    if (!_loggedConnectionStatus && currentMs - _connectionCheckIntervalMs > INITIAL_CONNECTION_TIMEOUT_MS) {
       _loggedConnectionStatus = true;
-      ESP_LOGE(TAG,
-               "GPS module not responding after %lu ms. Check wiring (RX=%d, "
-               "TX=%d) and power.",
-               (unsigned long)INITIAL_CONNECTION_TIMEOUT_MS, _rxPin, _txPin);
-      _connectionCheckIntervalMs = currentMs; // Reset to avoid spamming logs
+      ESP_LOGE(
+          TAG,
+          "GPS module not responding after %lu ms. Check wiring (RX=%d, "
+          "TX=%d) and power.",
+          (unsigned long)INITIAL_CONNECTION_TIMEOUT_MS,
+          _rxPin,
+          _txPin);
+      _connectionCheckIntervalMs = currentMs;  // Reset to avoid spamming logs
     }
   }
   // Ongoing connection monitoring
   else if (_isConnected && timeSinceLastData > CONNECTION_TIMEOUT_MS) {
     _isConnected = false;
     _loggedConnectionStatus = false;
-    ESP_LOGE(TAG, "GPS connection lost - no data received for %lu ms",
-             (unsigned long)CONNECTION_TIMEOUT_MS);
+    ESP_LOGE(TAG, "GPS connection lost - no data received for %lu ms", (unsigned long)CONNECTION_TIMEOUT_MS);
   }
 
   // Periodic status logging if not connected
-  static uint32_t lastStatusLogMs = 0;
-  if (!_isConnected &&
-      currentMs - lastStatusLogMs > 30000) { // Log every 30 seconds
-    lastStatusLogMs = currentMs;
-    ESP_LOGE(TAG, "GPS still not connected. No data received. Check GPS module "
-                  "and antenna.");
+  if (!_isConnected) {
+    LOG_ERROR_PERIODIC_MILLIS(
+        30000,
+        "GPS still not connected. No data received. Check GPS module "
+        "and antenna.");
   }
 }
 
-uint32_t GPSService::getTimeSinceLastData() const {
+uint32_t GPSService::getTimeSinceLastData() const
+{
   if (_lastDataReceivedMs == 0) {
-    return UINT32_MAX; // Never received data
+    return UINT32_MAX;  // Never received data
   }
   return millis() - _lastDataReceivedMs;
 }
 
-gps_telem_event_t GPSService::getTelemetryData() const {
+gps_telem_event_t GPSService::getTelemetryData() const
+{
   gps_telem_event_t telem;
 
   telem.latitude = _lastFix.latitude;
@@ -115,7 +126,101 @@ gps_telem_event_t GPSService::getTelemetryData() const {
   return telem;
 }
 
-void GPSService::_sendInitCommands() {
+// Helper: write an NMEA/PMTK command and give GPS a short breath
+static inline void gps_write_and_wait(HardwareSerial &serial, const char *cmd, uint32_t waitMs = 50)
+{
+  serial.println(cmd);
+  delay(waitMs);
+}
+
+void GPSService::applyQuickStartupEphemeris(
+    uint8_t *ephemerisBytes, size_t ephemerisSize, double latitude, double longitude, double currentTimestampSecs)
+{
+  if (!_isConnected) {
+    ESP_LOGE(TAG, "Cannot apply quick startup ephemeris: GPS not connected");
+    return;
+  }
+
+  ESP_LOGI(
+      TAG,
+      "Applying quick-start GPS seed: lat=%.6f, lon=%.6f, t=%.0f, epoBytes=%u",
+      latitude,
+      longitude,
+      currentTimestampSecs,
+      (unsigned)ephemerisSize);
+
+  // 1) Clear existing EPO data
+  gps_write_and_wait(_gpsSerial, "$PMTK127*36");
+
+  // 2) Send EPO data in chunks; L96-M33 tolerates moderate chunk sizes. Use 1024 bytes to be safe
+  const size_t chunkSize = 1024;
+  size_t offset = 0;
+  while (offset < ephemerisSize) {
+    const size_t bytesThisChunk = (ephemerisSize - offset) < chunkSize ? (ephemerisSize - offset) : chunkSize;
+
+    // Build a PMTK722-style command with hex payload; keep within serial line size limits
+    // Format: $PMTK722,<index>,<length>,<hex...>*<checksum>
+    String cmd =
+        String("$PMTK722,") + String((unsigned)(offset / chunkSize)) + "," + String((unsigned)bytesThisChunk) + ",";
+    cmd.reserve(20 + (bytesThisChunk * 2));
+    for (size_t i = 0; i < bytesThisChunk; ++i) {
+      uint8_t b = ephemerisBytes[offset + i];
+      static const char hex[] = "0123456789ABCDEF";
+      cmd += hex[b >> 4];
+      cmd += hex[b & 0x0F];
+    }
+    // Calculate NMEA checksum (XOR of all chars between $ and *)
+    uint8_t checksum = 0;
+    for (int i = 1; i < cmd.length(); ++i) {
+      checksum ^= static_cast<uint8_t>(cmd[i]);
+    }
+    char finalCmd[6];
+    snprintf(finalCmd, sizeof(finalCmd), "*%02X", checksum);
+    cmd += finalCmd;
+
+    _gpsSerial.println(cmd);
+    delay(100);
+    offset += bytesThisChunk;
+  }
+
+  // 3) Enable EPO/AGPS usage
+  gps_write_and_wait(_gpsSerial, "$PMTK313,1*2E");
+
+  // 4) Provide approximate position (AIDPOS) if supported
+  // Many Mediatek-based modules accept PMTK command $PMTK715 for aiding position (vendor-specific).
+  // If unsupported, the module will ignore it.
+  {
+    // Build: $PMTK715,<lat>,<lon>*cs (lat/lon in degrees)
+    char buf[96];
+    snprintf(buf, sizeof(buf), "$PMTK715,%.6f,%.6f", latitude, longitude);
+    // Compute checksum
+    uint8_t cs = 0;
+    for (int i = 1; buf[i] != '\0'; ++i) cs ^= static_cast<uint8_t>(buf[i]);
+    char line[110];
+    snprintf(line, sizeof(line), "%s*%02X", buf, cs);
+    _gpsSerial.println(line);
+    delay(50);
+  }
+
+  // 5) Provide time aiding (AIDTIME) if supported
+  {
+    // Some PMTK variants accept $PMTK740,<secondsSince1970>
+    // If unsupported, it's ignored.
+    char buf[64];
+    snprintf(buf, sizeof(buf), "$PMTK740,%.0f", currentTimestampSecs);
+    uint8_t cs = 0;
+    for (int i = 1; buf[i] != '\0'; ++i) cs ^= static_cast<uint8_t>(buf[i]);
+    char line[80];
+    snprintf(line, sizeof(line), "%s*%02X", buf, cs);
+    _gpsSerial.println(line);
+    delay(50);
+  }
+
+  ESP_LOGI(TAG, "Quick-start GPS ephemeris and aiding commands sent");
+}
+
+void GPSService::_sendInitCommands()
+{
   ESP_LOGI(TAG, "Sending GPS initialization commands");
 
   // Query version number
@@ -138,7 +243,8 @@ void GPSService::_sendInitCommands() {
   ESP_LOGI(TAG, "GPS initialization commands sent");
 }
 
-void GPSService::_processGPSData() {
+void GPSService::_processGPSData()
+{
   gps_fix_info_t fix;
 
   // Get system timestamp
@@ -193,11 +299,11 @@ void GPSService::_processGPSData() {
   // Determine fix quality based on satellite count and HDOP
   if (fix.position_valid) {
     if (fix.satellites >= 4 && fix.hdop < 5.0f) {
-      fix.fix_quality = 2; // Good fix
+      fix.fix_quality = 2;  // Good fix
     } else if (fix.satellites >= 3) {
-      fix.fix_quality = 1; // Basic fix
+      fix.fix_quality = 1;  // Basic fix
     } else {
-      fix.fix_quality = 0; // Invalid
+      fix.fix_quality = 0;  // Invalid
     }
   } else {
     fix.fix_quality = 0;
@@ -205,9 +311,8 @@ void GPSService::_processGPSData() {
 
   // Extract GPS time
   if (_gps.time.isValid()) {
-    fix.gps_time_ms =
-        (_gps.time.hour() * 3600000UL) + (_gps.time.minute() * 60000UL) +
-        (_gps.time.second() * 1000UL) + _gps.time.centisecond() * 10;
+    fix.gps_time_ms = (_gps.time.hour() * 3600000UL) + (_gps.time.minute() * 60000UL) + (_gps.time.second() * 1000UL) +
+                      _gps.time.centisecond() * 10;
   } else {
     fix.gps_time_ms = 0;
   }
@@ -224,13 +329,18 @@ void GPSService::_processGPSData() {
 
   // Log GPS status periodically
   static unsigned long lastLogTime = 0;
-  if (millis() - lastLogTime > 5000) { // Log every 5 seconds
+  if (millis() - lastLogTime > 5000) {  // Log every 5 seconds
     lastLogTime = millis();
 
     if (fix.position_valid) {
       ESP_LOGI(
-          TAG, "GPS Fix: Lat=%.6f, Lon=%.6f, Alt=%.1fm, Sats=%d, HDOP=%.1f",
-          fix.latitude, fix.longitude, fix.altitude, fix.satellites, fix.hdop);
+          TAG,
+          "GPS Fix: Lat=%.6f, Lon=%.6f, Alt=%.1fm, Sats=%d, HDOP=%.1f",
+          fix.latitude,
+          fix.longitude,
+          fix.altitude,
+          fix.satellites,
+          fix.hdop);
     } else {
       ESP_LOGW(TAG, "No GPS fix. Satellites: %d", fix.satellites);
     }

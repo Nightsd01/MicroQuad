@@ -102,6 +102,12 @@ class GPSService
   // Get time since last GPS data received (milliseconds)
   uint32_t getTimeSinceLastData() const;
 
+  // Apply quick startup ephemeris and seed location/time to the GPS module
+  // ephemerisBytes: raw EPO/AGPS payload
+  // latitude/longitude in degrees, currentTimestampSecs in seconds since 1970
+  void applyQuickStartupEphemeris(
+      uint8_t* ephemerisBytes, size_t ephemerisSize, double latitude, double longitude, double currentTimestampSecs);
+
  private:
   // GPS module configuration
   const int _rxPin;
