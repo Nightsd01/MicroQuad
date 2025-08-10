@@ -24,6 +24,7 @@ class BLEControllerLargeDataTransmissionHandler
 {
  public:
   BLEControllerLargeDataTransmissionHandler();
+  BLEControllerLargeDataTransmissionHandler(uint16_t psm, uint16_t preferredMtu);
   ~BLEControllerLargeDataTransmissionHandler();
 
   // Initialize the L2CAP CoC server
@@ -44,8 +45,15 @@ class BLEControllerLargeDataTransmissionHandler
     _largeTransferReceivedCallback = callback;
   }
 
+  // Transmission methods
+  // Sends a large data blob. The first byte transmitted will be the provided
+  // BLELargeDataBlobType so the receiver can identify the payload type.
+  bool sendData(BLELargeDataBlobType type, const uint8_t* data, size_t length);
+  bool isReadyToSend() const { return _channel != nullptr && !_txBusy; }
+
   // Get statistics
   size_t getBytesReceived() const { return _totalBytesReceived; }
+  size_t getBytesSent() const { return _totalBytesSent; }
   size_t getExpectedBytes() const { return _expectedDataSize; }
   float getProgressPercentage() const
   {
@@ -70,12 +78,19 @@ class BLEControllerLargeDataTransmissionHandler
   std::vector<uint8_t> _dataBuffer;
 
   // Header handling
-  uint8_t _headerBuffer[4];
+  uint8_t _headerBuffer[5];
   size_t _headerBytesReceived;
   bool _headerComplete;
+  BLELargeDataBlobType _incomingType;
 
   // Timing
   uint64_t _receptionStartTime;
+
+  // Transmission state
+  bool _txBusy;
+  size_t _totalBytesSent;
+  std::vector<uint8_t> _txQueue;  // Queue for pending data if channel is busy
+  uint64_t _transmissionStartTime;
 
   // Callbacks
   LargeTransferReceivedCallback _largeTransferReceivedCallback;
@@ -87,6 +102,7 @@ class BLEControllerLargeDataTransmissionHandler
   void resetTransfer();
   void processHeader();
   void handleL2CAPData(struct os_mbuf* om);
+  bool transmitFromQueue();
 
   // Alternative characteristic for fallback
   NimBLECharacteristic* _dataCharacteristic;
