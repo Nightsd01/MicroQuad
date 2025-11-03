@@ -31,7 +31,7 @@ class VL53Manager
   TelemetryController *_telemController;
   std::function<void(float)> _altitudeHandler;
   uint64_t _lastUpdateTimestampMillis;
-  uint64_t _dataUpdateRateHz = 50;
+  uint64_t _dataUpdateRateHz = 100;
   bool _isInitialized;
   EulerAngle _yawPitchRoll;
   bool _gotFirstIMUUpdate = false;

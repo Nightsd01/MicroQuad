@@ -23,14 +23,14 @@ static uint64_t _getDataUpdateHzForDistanceMode(VL53L1X::DistanceMode distanceMo
 {
   switch (distanceMode) {
     case VL53L1X::Short:
-      return 20;
+      return 50;  // 20ms - Short mode can run fast
     case VL53L1X::Medium:
-      return 33;
+      return 33;  // 30ms - Medium mode
     case VL53L1X::Long:
-      return 50;
+      return 20;  // 50ms - Long mode standard timing budget
     case VL53L1X::Unknown:
       LOG_ERROR("VL53Manager - Unknown distance mode");
-      return 50;  // Default to the longest ranging mode
+      return 20;  // Default to Long mode timing
   }
   abort();
 }
@@ -110,7 +110,6 @@ void VL53Manager::loopHandler(void)
   if (!_gotFirstIMUUpdate) {
     return;
   }
-  _lastUpdateTimestampMillis = millis();
 
   _vl53l1x.read(false);
 
@@ -118,6 +117,9 @@ void VL53Manager::loopHandler(void)
     LOG_INFO_PERIODIC_MILLIS(1000, "VL53L1X data not ready");
     return;
   }
+
+  // Only update timestamp after we know data is ready
+  _lastUpdateTimestampMillis = millis();
 
   // Convert to meters
   float rangingDistanceMeters = static_cast<float>(_vl53l1x.ranging_data.range_mm) / 1000.0f;
@@ -130,6 +132,7 @@ void VL53Manager::loopHandler(void)
     return;  // don't send NaN values
   }
 
+  LOG_INFO("VL53L1X distance: %fm", distanceMeters);
   // Call the altitude handler with the distance
   _altitudeHandler(distanceMeters);
 
