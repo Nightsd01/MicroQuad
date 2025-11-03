@@ -81,7 +81,7 @@ void GPSQuickStartupController::_registerL2CAPListener()
         (unsigned)epoSize);
 
     // Defer heavy serial writes to the main scheduler to keep BLE responsive
-    AsyncController::main.executeAfter(0, [this, epoCopy, epoSize, latitude, longitude, timestampSecs]() {
+    AsyncController::main.executePossiblySync([this, epoCopy, epoSize, latitude, longitude, timestampSecs]() {
       if (_gpsService) {
         _gpsService->applyQuickStartupEphemeris(epoCopy, epoSize, latitude, longitude, timestampSecs);
         LOG_INFO("GPSQuickStartupController: quick-start data applied by GPSService");

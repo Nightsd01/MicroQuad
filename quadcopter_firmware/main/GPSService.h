@@ -1,85 +1,57 @@
 #pragma once
 
-#include <HardwareSerial.h>
+#ifndef MATLAB_SIM
+
+#include <Arduino.h>
 #include <TinyGPSPlus.h>
 
+#include <cstdint>
 #include <functional>
+#include <vector>
 
 // GPS fix information structure
 struct gps_fix_info_t
 {
-  // Position
-  float latitude;   // degrees
-  float longitude;  // degrees
-  float altitude;   // meters above sea level
-
-  // Velocity
-  float speed;   // meters/second
-  float course;  // degrees (true north)
-
-  // Accuracy metrics
-  float hdop;           // Horizontal Dilution of Precision
-  uint8_t satellites;   // Number of satellites in view
-  uint8_t fix_quality;  // 0=invalid, 1=GPS fix, 2=DGPS fix
-
-  // Time
-  uint32_t timestamp_ms;  // System timestamp when fix was received
-  uint32_t gps_time_ms;   // GPS time of day in milliseconds
-
-  // Validity flags
+  double latitude;
+  double longitude;
+  double altitude;  // meters
+  float speed;      // m/s
+  float course;     // degrees
+  uint8_t satellites;
+  float hdop;
+  uint8_t fix_quality;  // 0=no fix, 1=GPS fix, 2=DGPS fix
   bool position_valid;
-  bool altitude_valid;
-  bool speed_valid;
-  bool course_valid;
-
-  // Constructor with default values
-  gps_fix_info_t()
-      : latitude(0.0f),
-        longitude(0.0f),
-        altitude(0.0f),
-        speed(0.0f),
-        course(0.0f),
-        hdop(99.9f),
-        satellites(0),
-        fix_quality(0),
-        timestamp_ms(0),
-        gps_time_ms(0),
-        position_valid(false),
-        altitude_valid(false),
-        speed_valid(false),
-        course_valid(false)
-  {
-  }
+  uint32_t timestamp_ms;  // millis() when fix was obtained
 };
 
-// Telemetry event structure for GPS data (max 22 bytes)
-#pragma pack(push, 1)
+// Telemetry event structure (subset for BLE transmission)
 struct gps_telem_event_t
 {
-  float latitude;       // 4 bytes
-  float longitude;      // 4 bytes
-  float altitude;       // 4 bytes
-  float hdop;           // 4 bytes
-  uint8_t satellites;   // 1 byte
-  uint8_t fix_quality;  // 1 byte
-                        // Total: 22 bytes
-};
-#pragma pack(pop)
+  float latitude;
+  float longitude;
+  float altitude;
+  float hdop;
+  uint8_t satellites;
+  uint8_t fix_quality;
+} __attribute__((packed));
+
+// Callback type for GPS fix updates
+using GPSCallback = std::function<void(const gps_fix_info_t&)>;
 
 class GPSService
 {
  public:
-  // Callback type for GPS fix updates
-  using GPSCallback = std::function<void(const gps_fix_info_t&)>;
-
-  // Constructor with pin configuration
-  GPSService(int rxPin, int txPin, GPSCallback callback);
+  // Constructor
+  // rxPin: ESP32 pin connected to GPS TX
+  // txPin: ESP32 pin connected to GPS RX
+  // callback: Function called when GPS fix is updated (optional)
+  GPSService(int rxPin, int txPin, GPSCallback callback = nullptr);
 
   // Destructor
   ~GPSService();
 
   // Initialize the GPS module
-  void begin();
+  bool begin();
 
   // Process incoming GPS data (call this regularly from main loop)
   void loopHandler();
@@ -112,7 +84,8 @@ class GPSService
   // GPS module configuration
   const int _rxPin;
   const int _txPin;
-  static constexpr int GPS_BAUD_RATE = 9600;
+  static constexpr int GPS_BAUD_RATE = 115200;
+  static constexpr int GPS_FALLBACK_BAUD_RATE = 9600;
 
   // Hardware serial for GPS communication
   HardwareSerial _gpsSerial;
@@ -131,12 +104,78 @@ class GPSService
   static constexpr uint32_t CONNECTION_TIMEOUT_MS = 10000;         // 10 seconds
   static constexpr uint32_t INITIAL_CONNECTION_TIMEOUT_MS = 5000;  // 5 seconds for initial connection
 
+  // GPS restart status
+  bool _waitingForRestart = false;
+  uint32_t _restartWaitStartMs = 0;
+  static constexpr uint32_t RESTART_TIMEOUT_MS = 5000;  // 5 seconds to wait for restart
+
   // Last known fix
   gps_fix_info_t _lastFix;
+
+  // EPO upload state machine
+  enum class EPOUploadState
+  {
+    IDLE,
+    CLEAR_EPO,
+    SEND_CHUNKS,
+    ENABLE_EPO,
+    SEND_POSITION,
+    SEND_TIME,
+    COMPLETE
+  };
+
+  struct EPOUploadContext
+  {
+    uint8_t* data = nullptr;
+    size_t dataSize = 0;
+    size_t currentOffset = 0;
+    double latitude = 0;
+    double longitude = 0;
+    double timestampSecs = 0;
+    EPOUploadState state = EPOUploadState::IDLE;
+    uint64_t lastActionTimeMs = 0;
+    uint32_t delayBetweenActions = 50;  // ms
+  };
+
+  EPOUploadContext _epoUpload;
+
+  // Command queue management
+  struct GPSCommand
+  {
+    String command;
+    bool waitForAck;
+    uint32_t timeoutMs;
+  };
+
+  std::vector<GPSCommand> _commandQueue;
+  bool _waitingForAck = false;
+  uint32_t _ackWaitStartMs = 0;
+  uint32_t _currentAckTimeout = 1000;  // Default 1 second timeout
+  String _lastSentCommand;
+
+  // Process EPO upload state machine
+  void _processEPOUpload();
 
   // Send initialization commands to GPS
   void _sendInitCommands();
 
+  // Send initialization commands after GPS restart
+  void _sendInitCommandsAfterRestart();
+
+  // Detect and configure GPS baud rate
+  bool _detectAndConfigureBaudRate();
+
   // Process parsed GPS data
   void _processGPSData();
+
+  // Send GPS command with optional ACK wait
+  void _sendGPSCommand(const char* command, bool waitForAck = false, uint32_t timeoutMs = 1000);
+
+  // Process command queue
+  void _processCommandQueue();
+
+  // Check for PMTK001 acknowledgment
+  void _checkForAck(const char* nmeaSentence);
 };
+
+#endif  // MATLAB_SIM
