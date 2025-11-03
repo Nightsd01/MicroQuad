@@ -5,6 +5,8 @@
 #include <PIDController.h>
 #include <QuadcopterController.h>
 
+#include <vector>
+
 #include "CalibrationEvent.h"
 #include "CrossPlatformEnum.h"
 
@@ -17,6 +19,9 @@ class PIDPreferences
   PIDPreferences(BLEController *controller, PersistentKeyValueStore *kvStore);
 
   quadcopter_config_t gains;
+  
+  // Serialize all PID gains for transmission over BLE
+  std::vector<uint8_t> serializeGains() const;
 
  private:
   PersistentKeyValueStore *_kvStore;

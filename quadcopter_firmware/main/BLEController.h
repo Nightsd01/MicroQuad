@@ -18,6 +18,7 @@
 
 // Forward declarations
 class BLEControllerLargeDataTransmissionHandler;
+class PIDPreferences;
 
 // Bluetooth constants
 #define SERVICE_UUID "ab0828b1-198e-4351-b779-901fa0e0371e"
@@ -108,6 +109,9 @@ class BLEController : public NimBLEServerCallbacks, public NimBLECharacteristicC
   BLEControllerLargeDataTransmissionHandler *getL2CAPHandler() { return _l2capHandler; }
   BLEControllerLargeDataTransmissionHandler *getTelemetryL2CAPHandler() { return _telemetryL2capHandler; }
 
+  // Set PIDPreferences reference for transmitting PID configuration on connection
+  void setPIDPreferences(PIDPreferences *pidPreferences) { _pidPreferences = pidPreferences; }
+
  private:
   NimBLEServer *_server;
   NimBLEService *_service;
@@ -138,6 +142,8 @@ class BLEController : public NimBLEServerCallbacks, public NimBLECharacteristicC
   int _currentByteIndex;
   bool _transferringDebugData = false;
   uint64_t _lastDebugDataTransmissionTimestampMillis = 0;
+
+  PIDPreferences *_pidPreferences = nullptr;
 };
 
 #endif  // MATLAB_SIM

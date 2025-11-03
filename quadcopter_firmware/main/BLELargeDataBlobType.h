@@ -7,6 +7,7 @@
 CROSS_PLATFORM_ENUM(uint8_t, BLELargeDataBlobType){
     GPSStartupFixData = 0,  // contains lat/long estimate, timestamp, and ephemeris data
     TelemetryData = 1,
+    PIDConfigurationData = 2,  // contains all PID gains (angle, rate, vertical)
 };
 
 // Packed header used for L2CAP CoC transmissions

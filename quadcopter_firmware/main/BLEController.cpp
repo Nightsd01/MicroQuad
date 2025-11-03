@@ -12,6 +12,7 @@
 
 #include "BLEControllerLargeDataTransmissionHandler.h"
 #include "Constants.h"
+#include "PIDPreferences.h"
 
 #define MAX_CALIBRATION_PACKET_SIZE_BYTES 10
 #define TERMINATE_UPLOAD_STREAM_SIGNAL "==TERMINATE=="
@@ -226,6 +227,21 @@ void BLEController::onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo)
     } else {
       LOG_ERROR_ASYNC_ON_MAIN("Failed to start telemetry L2CAP server");
     }
+  }
+
+  // Transmit PID configuration after connection is established
+  if (_pidPreferences && _l2capHandler) {
+    // Schedule PID transmission after a short delay to ensure L2CAP is ready
+    AsyncController::main.executeAfter(500, [this]() {  // 500ms delay
+      if (isConnected && _pidPreferences && _l2capHandler && _l2capHandler->isReadyToSend()) {
+        std::vector<uint8_t> pidData = _pidPreferences->serializeGains();
+        if (_l2capHandler->sendData(BLELargeDataBlobType::PIDConfigurationData, pidData.data(), pidData.size())) {
+          LOG_INFO_ASYNC_ON_MAIN("PID configuration sent to iOS app");
+        } else {
+          LOG_ERROR_ASYNC_ON_MAIN("Failed to send PID configuration");
+        }
+      }
+    });
   }
 }
 

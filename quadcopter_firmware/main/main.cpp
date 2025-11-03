@@ -625,6 +625,7 @@ void setup()
 
   LOG_INFO("Initializing PID preferences");
   _pidPreferences = new PIDPreferences(&_bluetoothController, &_persistentKvStore);
+  _bluetoothController.setPIDPreferences(_pidPreferences);
 
   LOG_INFO("Initializing quadcopter controller");
   initController();

@@ -196,4 +196,43 @@ quadcopter_config_t PIDPreferences::_initializeGains()
   return config;
 }
 
+std::vector<uint8_t> PIDPreferences::serializeGains() const
+{
+  // Serialize all PID gains in the following order:
+  // - angleGains: yaw(P,I,D), pitch(P,I,D), roll(P,I,D) = 9 floats
+  // - rateGains: yaw(P,I,D), pitch(P,I,D), roll(P,I,D) = 9 floats
+  // - verticalVelocityGains: (P,I,D) = 3 floats
+  // Total: 21 floats = 84 bytes
+
+  std::vector<uint8_t> data;
+  data.reserve(21 * sizeof(float));
+
+  // Helper lambda to append a float as bytes
+  auto appendFloat = [&data](float value) {
+    const uint8_t *bytes = reinterpret_cast<const uint8_t *>(&value);
+    data.insert(data.end(), bytes, bytes + sizeof(float));
+  };
+
+  // Serialize angleGains (indices: 0=yaw, 1=pitch, 2=roll)
+  for (int i = 0; i < 3; i++) {
+    appendFloat(gains.angleGains[i].kP);
+    appendFloat(gains.angleGains[i].kI);
+    appendFloat(gains.angleGains[i].kD);
+  }
+
+  // Serialize rateGains (indices: 0=yaw, 1=pitch, 2=roll)
+  for (int i = 0; i < 3; i++) {
+    appendFloat(gains.rateGains[i].kP);
+    appendFloat(gains.rateGains[i].kI);
+    appendFloat(gains.rateGains[i].kD);
+  }
+
+  // Serialize verticalVelocityGains
+  appendFloat(gains.verticalVelocityGains.kP);
+  appendFloat(gains.verticalVelocityGains.kI);
+  appendFloat(gains.verticalVelocityGains.kD);
+
+  return data;
+}
+
 #endif  // MATLAB_SIM
