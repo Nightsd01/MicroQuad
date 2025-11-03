@@ -34,7 +34,8 @@ BLEControllerLargeDataTransmissionHandler::BLEControllerLargeDataTransmissionHan
       _txBusy(false),
       _totalBytesSent(0),
       _transmissionStartTime(0),
-      _dataCharacteristic(nullptr)
+      _dataCharacteristic(nullptr),
+      _serverCreated(false)
 {
   _instance = this;
   LOG_INFO("L2CAP CoC handler initialized, will listen on PSM: 0x%04X", _psm);
@@ -53,7 +54,8 @@ BLEControllerLargeDataTransmissionHandler::BLEControllerLargeDataTransmissionHan
       _txBusy(false),
       _totalBytesSent(0),
       _transmissionStartTime(0),
-      _dataCharacteristic(nullptr)
+      _dataCharacteristic(nullptr),
+      _serverCreated(false)
 {
   _instance = this;
   LOG_INFO("L2CAP CoC handler initialized (custom), PSM: 0x%04X, preferred MTU: %u", _psm, _mtu);
@@ -90,14 +92,19 @@ bool BLEControllerLargeDataTransmissionHandler::startListening()
     return false;
   }
 
-  // Create L2CAP server
-  int rc = ble_l2cap_create_server(_psm, _mtu, l2capEventCallback, this);
-  if (rc != 0) {
-    LOG_ERROR("Failed to create L2CAP server: %d", rc);
-    return false;
+  // Create L2CAP server only if not already created
+  if (!_serverCreated) {
+    int rc = ble_l2cap_create_server(_psm, _mtu, l2capEventCallback, this);
+    if (rc != 0) {
+      LOG_ERROR("Failed to create L2CAP server: %d", rc);
+      return false;
+    }
+    _serverCreated = true;
+    LOG_INFO("L2CAP CoC server created and listening on PSM: 0x%04X", _psm);
+  } else {
+    LOG_INFO("L2CAP CoC server already exists on PSM: 0x%04X, reusing", _psm);
   }
 
-  LOG_INFO("L2CAP CoC server listening on PSM: 0x%04X", _psm);
   return true;
 }
 
@@ -188,7 +195,6 @@ bool BLEControllerLargeDataTransmissionHandler::transmitFromQueue()
     // Successfully queued data for transmission
     _txQueue.erase(_txQueue.begin(), _txQueue.begin() + bytesToSend);
     _totalBytesSent += bytesToSend;
-    LOG_INFO("L2CAP TX: sent %zu bytes (MTU %u); remaining %zu", bytesToSend, _mtu, _txQueue.size());
   }
 
   return true;
@@ -278,7 +284,8 @@ void BLEControllerLargeDataTransmissionHandler::handleL2CAPData(struct os_mbuf* 
           auto type = _incomingType;
           // Copy buffer to heap to hand off safely
           std::vector<uint8_t> copy = _dataBuffer;  // shallow copy of vector storage
-          AsyncController::main.executeAfter(0, [this, type, copy]() {
+          // Defer to main task to avoid blocking BLE task
+          AsyncController::main.executePossiblySync([this, type, copy]() {
             if (_largeTransferReceivedCallback) {
               _largeTransferReceivedCallback(type, copy.data(), static_cast<int64_t>(copy.size()));
             }

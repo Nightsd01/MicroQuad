@@ -92,6 +92,12 @@ class BLEControllerLargeDataTransmissionHandler
   std::vector<uint8_t> _txQueue;  // Queue for pending data if channel is busy
   uint64_t _transmissionStartTime;
 
+  // Alternative characteristic for fallback
+  NimBLECharacteristic* _dataCharacteristic;
+
+  // Track if server has been created to avoid recreating
+  bool _serverCreated;
+
   // Callbacks
   LargeTransferReceivedCallback _largeTransferReceivedCallback;
 
@@ -103,9 +109,6 @@ class BLEControllerLargeDataTransmissionHandler
   void processHeader();
   void handleL2CAPData(struct os_mbuf* om);
   bool transmitFromQueue();
-
-  // Alternative characteristic for fallback
-  NimBLECharacteristic* _dataCharacteristic;
 
   // Friend class for access to private initialization
   friend class BLEController;
