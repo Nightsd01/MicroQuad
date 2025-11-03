@@ -48,6 +48,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   
   init(bleDisabled : Bool) {
     pidCalibrationController = PIDController(controller: controller)
+    controller.pidController = pidCalibrationController
     if (!bleDisabled) {
       controller.scan()
       GPSController.shared.provideBLEController(controller)

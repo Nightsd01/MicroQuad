@@ -50,19 +50,24 @@ public struct ControllerView : View {
     let controlColor = Color(red: 0.5, green: 0.5, blue: 0.5, opacity: 1.0);
     
     GeometryReader(content: { geometry in
+      let btStickValues = configuration.stickType == .left ? bluetoothStickController.leftStickValues : bluetoothStickController.rightStickValues
+      
       ZStack {
         RoundedRectangle(cornerRadius: 5.0, style: .continuous)
           .fill(controlColor)
           .frame(width: kSize.width / 5.0, height: kSize.height, alignment: .center)
-          .animation(.linear)
+          .animation(.linear, value: dragOffset)
+          .animation(.linear, value: btStickValues)
         RoundedRectangle(cornerRadius: 5.0, style: .continuous)
           .fill(controlColor)
           .frame(width: kSize.width, height: kSize.height / 5.0, alignment: .center)
-          .animation(.linear)
+          .animation(.linear, value: dragOffset)
+          .animation(.linear, value: btStickValues)
         Circle()
           .frame(width: kSize.width / 2.0, height: kSize.height / 2.0, alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/)
           .position(offsetToCoordinate(geometry))
-          .animation(.linear)
+          .animation(.linear, value: dragOffset)
+          .animation(.linear, value: btStickValues)
           .gesture(
             DragGesture(minimumDistance: 0.0)
               .onChanged { handleDrag($0, geometry) }

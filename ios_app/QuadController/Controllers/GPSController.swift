@@ -14,8 +14,8 @@ import Combine
 /// Represents GPS ephemeris data compatible with Quectel L96-M33 (MTK chipset)
 struct MTKEphemerisData: Codable {
     let timestamp: Date
-    let epoData: Data  // Raw EPO binary data for MTK chipset
-    let validityHours: Int  // EPO data validity period in hours
+    let epoData: Data  // Raw QEPO binary data for MTK chipset (Unified QEPO)
+    let validityHours: Int  // QEPO data validity period in hours
 }
 
 /// Header for GPS startup fix data sent to firmware
@@ -59,18 +59,18 @@ class GPSController: NSObject, ObservableObject {
     // MARK: - Private Properties
     private let locationManager = CLLocationManager()
     private var cancellables = Set<AnyCancellable>()
-    private let ephemerisUpdateInterval: TimeInterval = 3600 * 6 // 6 hours for EPO data
+    private let ephemerisUpdateInterval: TimeInterval = 3600 * 3 // 3 hours for QEPO data (6hr validity, update at 3hr)
     private var hasAttemptedDownload = false  // Track if we've already tried downloading
     private var bleController: BLEController?  // Reference to BLE controller for transmission
     private var hasTransmittedEphemeris = false  // Track if we've already sent data to current connection
     
-    // MediaTek EPO server URLs
-    // Note: These are the official MTK EPO servers used by many GPS manufacturers
-    private let mtkEPOServers = [
-        "http://epodownload.mediatek.com/EPO.DAT",
-        "http://epodownload.mediatek.com/EPO.MD5",
-        "http://wepodownload.mediatek.com/EPO.DAT",  // Alternate server
-        "http://wepodownload.mediatek.com/EPO.MD5"   // Alternate server
+    // MediaTek QEPO server URLs for Unified QEPO (6-hour validity)
+    // QG_R.DAT contains GPS + GLONASS data for quick startup
+    private let mtkQEPOServers = [
+        "http://epodownload.mediatek.com/QG_R.DAT",     // GPS + GLONASS QEPO (primary)
+        "http://wepodownload.mediatek.com/QG_R.DAT",    // GPS + GLONASS QEPO (alternate)
+        "http://epodownload.mediatek.com/QGPS.DAT",     // GPS-only QEPO (fallback)
+        "http://wepodownload.mediatek.com/QGPS.DAT"     // GPS-only QEPO (fallback alternate)
     ]
     
     // Quectel's AGPS server (requires authentication in production)
@@ -93,30 +93,30 @@ class GPSController: NSObject, ObservableObject {
             break
         case .restricted, .denied:
             errorMessage = "Location access is restricted or denied. Please enable in Settings."
-            print("Failed to get EPO data for GPS: \(errorMessage ?? "Unknown error")")
+            print("Failed to get QEPO data for GPS: \(errorMessage ?? "Unknown error")")
             break
         case .authorizedWhenInUse, .authorizedAlways:
             startLocationUpdates()
             break
         @unknown default:
             errorMessage = "Unknown authorization status"
-            print("Failed to get EPO data for GPS: \(errorMessage ?? "Unknown error")")
+            print("Failed to get QEPO data for GPS: \(errorMessage ?? "Unknown error")")
             break
         }
     }
     
-    /// Downloads GPS ephemeris data (EPO format) for Quectel L96-M33
+    /// Downloads GPS ephemeris data (QEPO format) for Quectel L96-M33
     /// - Parameter force: If true, downloads even if data was already downloaded this session
     func downloadEphemerisData(force: Bool = false) {
         // Check if we already have valid data and haven't forced a download
-        if !force && hasAttemptedDownload && isEPODataValid() {
-            print("EPO data already downloaded and still valid, skipping download")
+        if !force && hasAttemptedDownload && isQEPODataValid() {
+            print("QEPO data already downloaded and still valid, skipping download")
             return
         }
         
         // Check if we're already downloading
         if isDownloadingEphemeris {
-            print("EPO download already in progress")
+            print("QEPO download already in progress")
             return
         }
         
@@ -133,8 +133,8 @@ class GPSController: NSObject, ObservableObject {
         
         Task {
             do {
-                // Try primary MTK EPO server first
-                let ephemeris = try await fetchMTKEphemerisData()
+                // Try primary MTK QEPO server first
+                let ephemeris = try await fetchMTKQEPOData()
                 
                 await MainActor.run {
                     self.ephemerisData = ephemeris
@@ -146,11 +146,11 @@ class GPSController: NSObject, ObservableObject {
                     self.onEphemerisDownloadComplete()
                 }
                 
-                print("Successfully downloaded EPO data: \(ephemeris.epoData.count) bytes")
+                print("Successfully downloaded QEPO data: \(ephemeris.epoData.count) bytes")
                 
             } catch {
                 await MainActor.run {
-                    self.errorMessage = "Failed to download EPO data: \(error.localizedDescription)"
+                    self.errorMessage = "Failed to download QEPO data: \(error.localizedDescription)"
                     self.isDownloadingEphemeris = false
                     self.downloadProgress = 0.0
                 }
@@ -188,33 +188,34 @@ class GPSController: NSObject, ObservableObject {
         return Date().timeIntervalSince(lastUpdate) > ephemerisUpdateInterval
     }
     
-    /// Returns EPO data ready for transmission to L96-M33 via PMTK commands
+    /// Returns QEPO data ready for transmission to L96-M33 via PMTK commands
     func getEPODataForL96() -> Data? {
         return ephemerisData?.epoData
     }
     
-    /// Generates PMTK commands to send EPO data to L96-M33
+    /// Generates PMTK commands to send QEPO data to L96-M33
     func generatePMTKCommands(for epoData: Data) -> [String] {
         var commands: [String] = []
         
-        // PMTK command to clear existing EPO data
+        // PMTK command to clear existing EPO/QEPO data
         commands.append("$PMTK127*36")
         
-        // Split EPO data into chunks (L96 can handle up to 2KB per command)
+        // Split QEPO data into chunks (L96 can handle up to 2KB per command)
         let chunkSize = 1024  // 1KB chunks for safety
         let chunks = stride(from: 0, to: epoData.count, by: chunkSize).map {
             Array(epoData[$0..<min($0 + chunkSize, epoData.count)])
         }
         
         // Generate PMTK commands for each chunk
+        // Note: Using PMTK721 for QEPO data upload
         for (index, chunk) in chunks.enumerated() {
             let hexString = chunk.map { String(format: "%02X", $0) }.joined()
-            let command = "$PMTK722,\(index),\(chunk.count),\(hexString)"
+            let command = "$PMTK721,\(index),\(chunk.count),\(hexString)"
             let checksum = calculateNMEAChecksum(for: command)
             commands.append("\(command)*\(checksum)")
         }
         
-        // Command to enable EPO
+        // Command to enable EPO/QEPO
         commands.append("$PMTK313,1*2E")
         
         return commands
@@ -239,18 +240,19 @@ class GPSController: NSObject, ObservableObject {
         locationManager.stopUpdatingLocation()
     }
     
-    /// Fetches EPO data from MediaTek servers
-    private func fetchMTKEphemerisData() async throws -> MTKEphemerisData {
-        // Try to download EPO.DAT file
+    /// Fetches QEPO data from MediaTek servers
+    private func fetchMTKQEPOData() async throws -> MTKEphemerisData {
+        // Try to download QEPO file (QG_R.DAT for GPS+GLONASS or QGPS.DAT for GPS-only)
         var lastError: Error?
         
-        for server in mtkEPOServers where server.contains("EPO.DAT") {
+        for server in mtkQEPOServers {
             do {
                 guard let url = URL(string: server) else {
                     throw NSError(domain: "GPSController", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
                 }
                 
-                print("Attempting to download EPO data from: \(server)")
+                let isGPSGLONASS = server.contains("QG_R.DAT")
+                print("Attempting to download QEPO data (\(isGPSGLONASS ? "GPS+GLONASS" : "GPS-only")) from: \(server)")
                 
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 30
@@ -263,18 +265,19 @@ class GPSController: NSObject, ObservableObject {
                     throw NSError(domain: "GPSController", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
                 }
                 
-                // Verify EPO data format (should start with specific header)
-                guard data.count > 72,  // Minimum EPO file size
-                      isValidEPOData(data) else {
-                    throw NSError(domain: "GPSController", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid EPO data format"])
+                // Verify QEPO data format (QEPO files are much smaller, typically 5-10KB)
+                guard data.count > 1000,  // Minimum QEPO file size (around 5KB)
+                      data.count < 50000,  // Maximum reasonable size (shouldn't exceed 50KB)
+                      isValidQEPOData(data) else {
+                    throw NSError(domain: "GPSController", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid QEPO data format"])
                 }
                 
-                print("Successfully downloaded EPO data: \(data.count) bytes")
+                print("Successfully downloaded QEPO data (\(isGPSGLONASS ? "GPS+GLONASS" : "GPS-only")): \(data.count) bytes")
                 
                 return MTKEphemerisData(
                     timestamp: Date(),
                     epoData: data,
-                    validityHours: 168  // EPO data is typically valid for 7 days
+                    validityHours: 6  // QEPO data is valid for 6 hours
                 )
                 
             } catch {
@@ -284,7 +287,7 @@ class GPSController: NSObject, ObservableObject {
             }
         }
         
-        throw lastError ?? NSError(domain: "GPSController", code: 4, userInfo: [NSLocalizedDescriptionKey: "All EPO servers failed"])
+        throw lastError ?? NSError(domain: "GPSController", code: 4, userInfo: [NSLocalizedDescriptionKey: "All QEPO servers failed"])
     }
     
     /// Fetches AGPS data from Quectel's server (requires authentication)
@@ -315,21 +318,21 @@ class GPSController: NSObject, ObservableObject {
         )
     }
     
-    /// Validates EPO data format
-    private func isValidEPOData(_ data: Data) -> Bool {
-        // EPO files have a specific structure:
-        // - Header (72 bytes)
-        // - Satellite data blocks (72 bytes each for 32 satellites)
-        // Total minimum size should be 72 + (32 * 72) = 2376 bytes
+    /// Validates QEPO data format
+    private func isValidQEPOData(_ data: Data) -> Bool {
+        // QEPO files are much smaller than regular EPO files:
+        // - Unified QEPO contains ephemeris data for 6 hours
+        // - QG_R.DAT: GPS + GLONASS (typically 8-12KB)
+        // - QGPS.DAT: GPS only (typically 5-8KB)
+        // Minimum reasonable size is around 1KB
         
-        guard data.count >= 2376 else { return false }
+        guard data.count >= 1000 else { return false }
         
-        // Check for EPO header signature (first 4 bytes)
-        // EPO files typically start with specific magic bytes
-        let headerBytes = data.prefix(4)
-        // Note: Actual magic bytes may vary, this is a placeholder check
+        // QEPO files have a different structure than standard EPO
+        // They're optimized for quick startup assistance
+        // Basic validation: check size is reasonable for QEPO
         
-        return true  // Basic validation passed
+        return data.count <= 50000  // QEPO should not exceed 50KB
     }
     
     /// Calculates NMEA checksum for PMTK commands
@@ -390,11 +393,11 @@ extension GPSController: CLLocationManagerDelegate {
     }
 }
 
-// MARK: - EPO Data Extensions
+// MARK: - QEPO Data Extensions
 
 extension GPSController {
     
-    /// Provides information about the downloaded EPO data
+    /// Provides information about the downloaded QEPO data
     func getEPOInfo() -> String? {
         guard let ephemeris = ephemerisData else { return nil }
         
@@ -403,16 +406,16 @@ extension GPSController {
         formatter.timeStyle = .short
         
         return """
-        EPO Data Information:
+        QEPO Data Information:
         - Downloaded: \(formatter.string(from: ephemeris.timestamp))
         - Size: \(ephemeris.epoData.count) bytes
         - Valid for: \(ephemeris.validityHours) hours
-        - Satellites: 32 (GPS)
+        - Type: Unified QEPO (GPS + GLONASS)
         """
     }
     
-    /// Checks if current EPO data is still valid
-    func isEPODataValid() -> Bool {
+    /// Checks if current QEPO data is still valid
+    func isQEPODataValid() -> Bool {
         guard let ephemeris = ephemerisData else { return false }
         
         let hoursElapsed = Date().timeIntervalSince(ephemeris.timestamp) / 3600
@@ -466,22 +469,22 @@ extension GPSController {
     /// - [8 bytes: latitude as double]
     /// - [8 bytes: longitude as double]
     /// - [8 bytes: timestamp as double (seconds since 1970)]
-    /// - [N bytes: EPO data]
+    /// - [N bytes: QEPO data]
     private func checkAndTransmitEphemerisData() {
         guard let bleController = bleController,
               !hasTransmittedEphemeris,
               hasEphemerisData(),
-              isEPODataValid(),
+              isQEPODataValid(),
               let epoData = getEPODataForL96(),
               let location = currentLocation else {
             // Don't transmit without a valid location
-            if bleController != nil && !hasTransmittedEphemeris && hasEphemerisData() && isEPODataValid() {
+            if bleController != nil && !hasTransmittedEphemeris && hasEphemerisData() && isQEPODataValid() {
                 print("Waiting for valid location before transmitting GPS ephemeris data...")
             }
             return
         }
         
-        // Prepare the data packet using the header struct followed by EPO data
+        // Prepare the data packet using the header struct followed by QEPO data
         let latitude = location.coordinate.latitude
         let longitude = location.coordinate.longitude
         let timestamp: Double = Date().timeIntervalSince1970
@@ -494,11 +497,11 @@ extension GPSController {
         var fullData = header.toData()
         fullData.append(epoData)
         
-        print("Transmitting GPS ephemeris data to quadcopter...")
+        print("Transmitting GPS ephemeris (QEPO) data to quadcopter...")
         print("Location: lat=\(latitude), lon=\(longitude)")
         print("Timestamp: \(timestamp) (\(Date()))")
         print(getEPOInfo() ?? "")
-        print("Total payload: 24 bytes header + \(epoData.count) bytes EPO = \(fullData.count) bytes")
+        print("Total payload: 24 bytes header + \(epoData.count) bytes QEPO = \(fullData.count) bytes")
         
         hasTransmittedEphemeris = true
         

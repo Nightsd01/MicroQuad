@@ -80,6 +80,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   var telemetryManager: L2CAPChannelManager?
   
   public var quadStatus = QuadStatus()
+  public var pidController: PIDController?
   @Published var bleStatus = "None"
   @Published var debugDataString : String?
   @Published var connectionState: BLEConnectionState = .disconnected

@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct QuadControllerApp: App {
   init() {
+    UIApplication.shared.isIdleTimerDisabled = true
     CameraController.shared.requestCameraPermissionIfNeeded()
     GPSController.shared.requestLocationPermission()
   }

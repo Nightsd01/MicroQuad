@@ -36,17 +36,13 @@ public class PIDController {
   var gains : PIDsContainer
   fileprivate var lastSentTime : Date?
   fileprivate var nextTimer : Timer?
-  static let userDefaultsKey = "pid_gains"
   var waitingOnTimer = false
   
   init(controller: BLEController) {
     self.controller = controller
     
-    guard let loadedGains = PIDController.loadPIDGains() else {
-      self.gains = PIDController.defaultGains()
-      return
-    }
-    self.gains = loadedGains
+    // Initialize with default gains, will be updated when ESP32 sends configuration
+    self.gains = PIDController.defaultGains()
   }
   
   private static func defaultGains() -> PIDsContainer
@@ -109,7 +105,6 @@ public class PIDController {
       default:
         fatalError("Invalid PID type \(type)")
     }
-    savePIDGains()
   }
   
   let updateRateSeconds = 0.1
@@ -151,7 +146,7 @@ public class PIDController {
       }
       waitingOnTimer = true
       nextTimer?.invalidate()
-      nextTimer = Timer(timeInterval: updateRateSeconds, repeats: false) { timer in
+      nextTimer = Timer(timeInterval: updateRateSeconds, repeats: false) { timexr in
         self.sendUpdate(axis: axis, type: type)
         self.waitingOnTimer = false
       }
@@ -166,26 +161,5 @@ public class PIDController {
     return self.gains
   }
   
-  func savePIDGains() {
-    do {
-      // Encode gains to Data using JSON
-      let data = try JSONEncoder().encode(gains)
-      UserDefaults.standard.set(data, forKey: PIDController.userDefaultsKey)
-    } catch {
-      print("Failed to encode PIDGains: \(error)")
-    }
-  }
   
-  static func loadPIDGains() -> PIDsContainer? {
-    guard let data = UserDefaults.standard.data(forKey: PIDController.userDefaultsKey) else {
-      return nil
-    }
-    do {
-      // Decode from JSON Data back into PIDGains
-      return try JSONDecoder().decode(PIDsContainer.self, from: data)
-    } catch {
-      print("Failed to decode PIDGains: \(error)")
-      return nil
-    }
-  }
 }

@@ -11,6 +11,7 @@ struct BLEStatusView: View {
   var controller : BLEController
   @ObservedObject var status : QuadStatus
   @ObservedObject var armStatusController : ArmStatusController
+  @State private var localArmedState: Bool = false
   
   init(_ controller : BLEController, armStatusController : ArmStatusController) {
     self.controller = controller
@@ -76,12 +77,27 @@ struct BLEStatusView: View {
               .foregroundColor(.clear)
           }
         }
-        Picker(selection: $armStatusController.armed, label: Text("Arm Status"), content: {
+        Picker(selection: $localArmedState, label: Text("Arm Status"), content: {
           Text("Disarmed").tag(false)
           Text("Armed").tag(true)
         }).pickerStyle(SegmentedPickerStyle())
+        .onChange(of: localArmedState) { oldValue, newValue in
+          if newValue != armStatusController.armed {
+            armStatusController.armed = newValue
+            // Send update to quadcopter directly without toggling
+            controller.updateArmStatus(armed: newValue)
+          }
+        }
+        .onAppear {
+          localArmedState = armStatusController.armed
+        }
         .onChange(of: armStatusController.armed) { oldValue, newValue in
-          handleArmChange()
+          // Sync external changes to local state
+          if localArmedState != newValue {
+            localArmedState = newValue
+          }
+          // Also sync to QuadStatus for UI consistency
+          status.armed = newValue
         }
         MemoryStatusView(status: status)
           .frame(height: 64)
@@ -139,10 +155,6 @@ struct BLEStatusView: View {
     }
   }
   
-  private func handleArmChange() {
-    armStatusController.handleArmStatusChange(sendUpdateToQuadcopter: true)
-    status.armed = armStatusController.armed
-  }
 }
 
 

@@ -437,6 +437,7 @@ extension BLEController {
       lm.onReceiveBlob = { [weak self] type, data in
         guard let self = self else { return }
         if type == .TelemetryData { self.handleTelemetryBatch(data) }
+        else if type == .PIDConfigurationData { self.handlePIDConfiguration(data) }
       }
     } else {
       if telemetryManager == nil { telemetryManager = L2CAPChannelManager(psm: channel.psm) }
@@ -472,5 +473,98 @@ extension BLEController {
       packet.append(payload)
       self.quadStatus.updateTelemetry(withData: packet)
     }
+  }
+  
+  // MARK: - PID Configuration Data Parsing
+  // Format: 21 floats (84 bytes total), all little-endian
+  // [0-35]: angleGains (yaw P,I,D, pitch P,I,D, roll P,I,D) = 9 floats
+  // [36-71]: rateGains (yaw P,I,D, pitch P,I,D, roll P,I,D) = 9 floats  
+  // [72-83]: verticalVelocityGains (P,I,D) = 3 floats
+  fileprivate func handlePIDConfiguration(_ data: Data) {
+    guard data.count == 84 else { // 21 floats * 4 bytes
+      print("Invalid PID configuration data size: \(data.count), expected 84")
+      return
+    }
+    
+    guard let pidController = self.pidController else {
+      print("PID Controller not initialized")
+      return
+    }
+    
+    // Helper to read a float at given offset
+    func readFloat(at offset: Int) -> Float32 {
+      let bytes = data.subdata(in: offset..<offset+4)
+      return bytes.withUnsafeBytes { $0.load(as: Float32.self) }
+    }
+    
+    var offset = 0
+    
+    // Read angle gains
+    let angleYaw = PIDValues(
+      proportional: readFloat(at: offset),
+      integral: readFloat(at: offset + 4),
+      derivative: readFloat(at: offset + 8)
+    )
+    offset += 12
+    
+    let anglePitch = PIDValues(
+      proportional: readFloat(at: offset),
+      integral: readFloat(at: offset + 4),
+      derivative: readFloat(at: offset + 8)
+    )
+    offset += 12
+    
+    let angleRoll = PIDValues(
+      proportional: readFloat(at: offset),
+      integral: readFloat(at: offset + 4),
+      derivative: readFloat(at: offset + 8)
+    )
+    offset += 12
+    
+    // Read rate gains
+    let rateYaw = PIDValues(
+      proportional: readFloat(at: offset),
+      integral: readFloat(at: offset + 4),
+      derivative: readFloat(at: offset + 8)
+    )
+    offset += 12
+    
+    let ratePitch = PIDValues(
+      proportional: readFloat(at: offset),
+      integral: readFloat(at: offset + 4),
+      derivative: readFloat(at: offset + 8)
+    )
+    offset += 12
+    
+    let rateRoll = PIDValues(
+      proportional: readFloat(at: offset),
+      integral: readFloat(at: offset + 4),
+      derivative: readFloat(at: offset + 8)
+    )
+    offset += 12
+    
+    // Read vertical velocity gains
+    let verticalGains = PIDValues(
+      proportional: readFloat(at: offset),
+      integral: readFloat(at: offset + 4),
+      derivative: readFloat(at: offset + 8)
+    )
+    
+    // Update the PID controller with received values
+    pidController.gains = PIDsContainer(
+      angleValues: PIDGains(
+        yawGains: angleYaw,
+        pitchGains: anglePitch,
+        rollGains: angleRoll
+      ),
+      rateValues: PIDGains(
+        yawGains: rateYaw,
+        pitchGains: ratePitch,
+        rollGains: rateRoll
+      ),
+      verticalGains: verticalGains
+    )
+    
+    print("PID configuration received from ESP32")
   }
 }
