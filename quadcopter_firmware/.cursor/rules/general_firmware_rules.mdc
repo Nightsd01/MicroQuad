@@ -18,6 +18,8 @@ idf.py build
 - Right now, the C++ firmware is not super well tested, but I do have some basic
   tests on the MedianFilter type. If you make changes to the MedianFilter please
   run these tests, and add any new tests to it as necessary:
+- Do NOT run these tests unless you have actually made changes to
+  `MedianFilter` - otherwise it is simply a waste of time
 
 ```
 cd test/build

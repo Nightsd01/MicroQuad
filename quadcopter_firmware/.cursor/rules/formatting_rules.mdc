@@ -6,3 +6,5 @@ alwaysApply: true
 1. Please use the `xaver.clang-format` formatter.
 2. Please keep header files free of implementation - this belongs in .cpp files.
 3. Please use `const` whenever a local variable could use it.
+4. Please follow camelCase for function names and variables. For private
+   functions and private variables, please prefix with an underscore.
