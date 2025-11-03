@@ -212,6 +212,24 @@ void BLEController::onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo)
   // Start L2CAP server for large data transfers after a short delay
   // to ensure BLE connection is fully established
   if (_l2capHandler) {
+    // Set up callback to send PID configuration when L2CAP channel is connected
+    _l2capHandler->setChannelConnectedCallback([this]() {
+      AsyncController::main.executePossiblySync([this]() {
+        if (isConnected && _pidPreferences && _l2capHandler && _l2capHandler->isReadyToSend() && !_pidDataSent) {
+          std::vector<uint8_t> pidData = _pidPreferences->serializeGains();
+          LOG_INFO_ASYNC_ON_MAIN(
+              "L2CAP channel connected, sending PID configuration to iOS app (size: %d bytes)",
+              pidData.size());
+          if (_l2capHandler->sendData(BLELargeDataBlobType::PIDConfigurationData, pidData.data(), pidData.size())) {
+            LOG_INFO_ASYNC_ON_MAIN("PID configuration sent successfully to iOS app");
+            _pidDataSent = true;
+          } else {
+            LOG_ERROR_ASYNC_ON_MAIN("Failed to send PID configuration");
+          }
+        }
+      });
+    });
+
     if (_l2capHandler->startListening()) {
       LOG_INFO_ASYNC_ON_MAIN("L2CAP server started successfully");
     } else {
@@ -228,27 +246,13 @@ void BLEController::onConnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo)
       LOG_ERROR_ASYNC_ON_MAIN("Failed to start telemetry L2CAP server");
     }
   }
-
-  // Transmit PID configuration after connection is established
-  if (_pidPreferences && _l2capHandler) {
-    // Schedule PID transmission after a short delay to ensure L2CAP is ready
-    AsyncController::main.executeAfter(500, [this]() {  // 500ms delay
-      if (isConnected && _pidPreferences && _l2capHandler && _l2capHandler->isReadyToSend()) {
-        std::vector<uint8_t> pidData = _pidPreferences->serializeGains();
-        if (_l2capHandler->sendData(BLELargeDataBlobType::PIDConfigurationData, pidData.data(), pidData.size())) {
-          LOG_INFO_ASYNC_ON_MAIN("PID configuration sent to iOS app");
-        } else {
-          LOG_ERROR_ASYNC_ON_MAIN("Failed to send PID configuration");
-        }
-      }
-    });
-  }
 }
 
 void BLEController::onDisconnect(NimBLEServer *pServer, NimBLEConnInfo &connInfo, int reason)
 {
   LOG_INFO_ASYNC_ON_MAIN("Disconnected, reason: %d", reason);
   isConnected = false;
+  _pidDataSent = false;  // Reset flag for next connection
 
   // Stop L2CAP server
   if (_l2capHandler) {

@@ -31,9 +31,9 @@ fileprivate struct PIDUpdateParams {
   let rateUpdate : PIDGains
 }
 
-public class PIDController {
-  let controller : BLEController
-  var gains : PIDsContainer
+public class PIDController: ObservableObject {
+  weak var controller : BLEController?
+  @Published var gains : PIDsContainer
   fileprivate var lastSentTime : Date?
   fileprivate var nextTimer : Timer?
   var waitingOnTimer = false
@@ -41,8 +41,15 @@ public class PIDController {
   init(controller: BLEController) {
     self.controller = controller
     
-    // Initialize with default gains, will be updated when ESP32 sends configuration
-    self.gains = PIDController.defaultGains()
+    // Check if we already received PID configuration from ESP32
+    if let storedConfig = controller.lastReceivedPIDConfig {
+      self.gains = storedConfig
+      print("PIDController: Using previously received PID configuration")
+    } else {
+      // Initialize with default gains, will be updated when ESP32 sends configuration
+      self.gains = PIDController.defaultGains()
+      print("PIDController: Using default gains, waiting for ESP32 configuration")
+    }
   }
   
   private static func defaultGains() -> PIDsContainer
@@ -91,6 +98,10 @@ public class PIDController {
   }
   
   private func sendUpdate(axis: ControlAxis, type: PIDType) {
+    guard let controller = controller else {
+      print("PIDController: BLE controller has been deallocated")
+      return
+    }
     lastSentTime = Date()
     switch (type) {
       case .Angle:

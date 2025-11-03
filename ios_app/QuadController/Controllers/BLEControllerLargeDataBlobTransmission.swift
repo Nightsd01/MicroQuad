@@ -368,7 +368,7 @@ extension BLEController {
   }
   
   /// Opens an L2CAP channel to the connected device
-  private func openL2CAPChannel(completion: @escaping (Error?) -> Void) {
+  func openL2CAPChannel(completion: @escaping (Error?) -> Void) {
     guard let device = device else {
       completion(NSError(domain: "BLEController", code: 102, userInfo: [NSLocalizedDescriptionKey: "No device connected"]))
       return
@@ -486,10 +486,6 @@ extension BLEController {
       return
     }
     
-    guard let pidController = self.pidController else {
-      print("PID Controller not initialized")
-      return
-    }
     
     // Helper to read a float at given offset
     func readFloat(at offset: Int) -> Float32 {
@@ -550,8 +546,8 @@ extension BLEController {
       derivative: readFloat(at: offset + 8)
     )
     
-    // Update the PID controller with received values
-    pidController.gains = PIDsContainer(
+    // Create the PIDsContainer with received values
+    let receivedConfig = PIDsContainer(
       angleValues: PIDGains(
         yawGains: angleYaw,
         pitchGains: anglePitch,
@@ -565,6 +561,21 @@ extension BLEController {
       verticalGains: verticalGains
     )
     
-    print("PID configuration received from ESP32")
+    // Store the received configuration
+    self.lastReceivedPIDConfig = receivedConfig
+    
+    // Update the PID controller if it exists
+    if let pidController = self.pidController {
+      pidController.gains = receivedConfig
+    }
+    
+    print("PID configuration received from ESP32:")
+    print("  Angle Yaw: P=\(angleYaw.proportional), I=\(angleYaw.integral), D=\(angleYaw.derivative)")
+    print("  Angle Pitch: P=\(anglePitch.proportional), I=\(anglePitch.integral), D=\(anglePitch.derivative)")
+    print("  Angle Roll: P=\(angleRoll.proportional), I=\(angleRoll.integral), D=\(angleRoll.derivative)")
+    print("  Rate Yaw: P=\(rateYaw.proportional), I=\(rateYaw.integral), D=\(rateYaw.derivative)")
+    print("  Rate Pitch: P=\(ratePitch.proportional), I=\(ratePitch.integral), D=\(ratePitch.derivative)")
+    print("  Rate Roll: P=\(rateRoll.proportional), I=\(rateRoll.integral), D=\(rateRoll.derivative)")
+    print("  Vertical: P=\(verticalGains.proportional), I=\(verticalGains.integral), D=\(verticalGains.derivative)")
   }
 }

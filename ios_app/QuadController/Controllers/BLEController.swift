@@ -82,6 +82,7 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
   public var quadStatus = QuadStatus()
   public var pidController: PIDController?
   @Published var bleStatus = "None"
+  public var lastReceivedPIDConfig: PIDsContainer?
   @Published var debugDataString : String?
   @Published var connectionState: BLEConnectionState = .disconnected
   
@@ -310,6 +311,18 @@ class BLEController : NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, 
     
     // All characteristics discovered, we're ready
     connectionState = .ready
+    
+    // Open L2CAP channel immediately after connection is ready
+    // This ensures we can receive PID configuration from ESP32
+    if l2capPSMCharacteristic != nil {
+      openL2CAPChannel { error in
+        if let error = error {
+          print("Failed to open L2CAP channel after connection: \(error)")
+        } else {
+          print("L2CAP channel opened successfully after connection")
+        }
+      }
+    }
   }
 
   func writeCurrentTime() {

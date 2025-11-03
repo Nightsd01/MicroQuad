@@ -343,6 +343,11 @@ int BLEControllerLargeDataTransmissionHandler::l2capEventCallback(struct ble_l2c
         LOG_ERROR("Failed to allocate initial L2CAP receive buffer for connected channel");
       }
 
+      // Notify that the channel is now connected
+      if (handler->_channelConnectedCallback) {
+        handler->_channelConnectedCallback();
+      }
+
       return 0;
     }
 

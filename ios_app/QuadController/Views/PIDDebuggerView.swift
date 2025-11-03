@@ -149,8 +149,29 @@ struct PIDDebuggerView: View {
   }
 }
 
+// Wrapper view to handle PID controller initialization
+struct PIDPopoverView: View {
+  let bleController: BLEController
+  @State private var pidController: PIDController?
+  
+  var body: some View {
+    Group {
+      if let pidController = pidController {
+        PIDAllAxisView(controller: pidController, initialGains: pidController.gains)
+      } else {
+        Text("Initializing...")
+          .onAppear {
+            let newController = PIDController(controller: bleController)
+            bleController.pidController = newController
+            pidController = newController
+          }
+      }
+    }
+  }
+}
+
 struct PIDAllAxisView: View {
-  let controller : PIDController
+  @ObservedObject var controller : PIDController
   let initialGains : PIDsContainer
   @State var pids : PIDsContainer
   

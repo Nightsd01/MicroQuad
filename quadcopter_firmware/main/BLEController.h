@@ -72,6 +72,7 @@ class BLEController : public NimBLEServerCallbacks, public NimBLECharacteristicC
   BLEController();
   void beginBluetooth(void);
   bool isConnected;
+  bool _pidDataSent = false;  // Track if PID data has been sent this connection
   volatile bool isProcessingBluetoothTransaction;
   void uploadDebugData(uint8_t *data, size_t length);
   void sendTelemetryUpdate(uint8_t *data, size_t size);

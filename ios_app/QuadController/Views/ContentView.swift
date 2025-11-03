@@ -19,10 +19,9 @@ private class PreviousControlValues {
 
 struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
   
-  @ObservedObject var controller = BLEController()
+  @StateObject private var controller = BLEController()
   @ObservedObject var joystickController = BluetoothStickController()
   @ObservedObject var armStatusController = ArmStatusController()
-  var pidCalibrationController : PIDController!
   @ObservedObject var accelGyroCalibrationController = CalibrationController(calibrationType: .AccelerometerGyro)
   @ObservedObject var magnetometerCalibrationController = CalibrationController(calibrationType: .Magnetometer)
   @ObservedObject var magnetometerMotorCalibrationController = CalibrationController(calibrationType: .MagnetometerMotorsCompensation)
@@ -46,19 +45,12 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
     self.init(bleDisabled: false)
   }
   
-  init(bleDisabled : Bool) {
-    pidCalibrationController = PIDController(controller: controller)
-    controller.pidController = pidCalibrationController
-    if (!bleDisabled) {
-      controller.scan()
-      GPSController.shared.provideBLEController(controller)
-    }
-    controller.delegate = self
-    accelGyroCalibrationController.provideBLEController(controller)
-    magnetometerCalibrationController.provideBLEController(controller)
-    magnetometerMotorCalibrationController.provideBLEController(controller)
-    armStatusController.provideBLEController(controller)
-    joystickController.provideBLEController(controller)
+  private let bleDisabledFlag: Bool
+  
+  init(bleDisabled : Bool = false) {
+    self.bleDisabledFlag = bleDisabled
+    
+    // Initialize sticks without accessing controller
     leftStick = ControllerView(
       StickConfiguration(
         identifier: 0,
@@ -80,7 +72,6 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
     leftStick.controlDelegate = self
     rightStick.controlDelegate = self
     joystickController.armStatusListener = armStatusController
-    controller.updateArmStatusListener(armStatusController)
   }
   
   func calibrationButton(type : CalibrationType, typeLabel : String, calibrationController : CalibrationController) -> some View
@@ -129,7 +120,7 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
             showingPIDCalibrationPopover = true
           }
           .popover(isPresented: $showingPIDCalibrationPopover) {
-            PIDAllAxisView(controller: pidCalibrationController, initialGains: pidCalibrationController.gains)
+            PIDPopoverView(bleController: controller)
           }
           Spacer()
           Button("Motor Debug") {
@@ -222,6 +213,20 @@ struct ContentView: View, ControllerViewDelegate, BLEControllerDelegate {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         .padding(.top, 16)
         .padding(.trailing, 16)
+    }
+    .onAppear {
+      // Set up all controller connections when view appears
+      if !bleDisabledFlag {
+        controller.scan()
+        GPSController.shared.provideBLEController(controller)
+      }
+      controller.delegate = self
+      accelGyroCalibrationController.provideBLEController(controller)
+      magnetometerCalibrationController.provideBLEController(controller)
+      magnetometerMotorCalibrationController.provideBLEController(controller)
+      armStatusController.provideBLEController(controller)
+      joystickController.provideBLEController(controller)
+      controller.updateArmStatusListener(armStatusController)
     }
   }
   

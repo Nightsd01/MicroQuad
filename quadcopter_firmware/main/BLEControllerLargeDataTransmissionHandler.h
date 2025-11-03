@@ -45,6 +45,9 @@ class BLEControllerLargeDataTransmissionHandler
     _largeTransferReceivedCallback = callback;
   }
 
+  // Add listener for channel connected events
+  void setChannelConnectedCallback(std::function<void()> callback) { _channelConnectedCallback = callback; }
+
   // Transmission methods
   // Sends a large data blob. The first byte transmitted will be the provided
   // BLELargeDataBlobType so the receiver can identify the payload type.
@@ -100,6 +103,7 @@ class BLEControllerLargeDataTransmissionHandler
 
   // Callbacks
   LargeTransferReceivedCallback _largeTransferReceivedCallback;
+  std::function<void()> _channelConnectedCallback;
 
   // Static instance for callbacks
   static BLEControllerLargeDataTransmissionHandler* _instance;
